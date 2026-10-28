@@ -1,0 +1,30 @@
+services:
+  app:
+    image: soundscape-app
+    build: .
+    command: !reset null
+    ports: !override
+      - "127.0.0.1:3000:3000"
+    volumes: !reset []
+    environment:
+      AUTH_SECRET: ${AUTH_SECRET:?Set AUTH_SECRET in .env}
+    restart: unless-stopped
+
+  postgres:
+    ports: !reset []
+    restart: unless-stopped
+
+  tools:
+    image: soundscape-tools
+    build:
+      context: .
+      target: tools
+    profiles: ["tools"]
+    environment:
+      DATABASE_URL: postgres://soundscape:${POSTGRES_PASSWORD:-soundscape}@postgres:5432/soundscape
+      AUTH_SECRET: ${AUTH_SECRET:?Set AUTH_SECRET in .env}
+      LASTFM_API_KEY: ${LASTFM_API_KEY:-}
+      NEXT_TELEMETRY_DISABLED: "1"
+    depends_on:
+      postgres:
+        condition: service_healthy
