@@ -1,0 +1,41 @@
+{
+  "name": "soundscape",
+  "version": "0.1.0",
+  "private": true,
+  "license": "AGPL-3.0-or-later",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit",
+    "lint": "biome check .",
+    "format": "biome check --write .",
+    "test": "node --import tsx --test --test-reporter=spec tests/*.test.ts",
+    "test:api": "node --import tsx --test --test-reporter=spec tests/api/*.test.ts",
+    "db:init": "tsx scripts/init-postgres.ts",
+    "db:deezer": "tsx scripts/deezer.ts",
+    "db:covers": "tsx scripts/covers.ts",
+    "db:albums": "tsx scripts/albums.ts",
+    "db:genres": "tsx scripts/genres.ts",
+    "db:photos": "tsx scripts/photos.ts",
+    "db:dedupe": "tsx scripts/dedupe.ts",
+    "import:json": "tsx scripts/import-json.ts",
+    "import:listenbrainz": "tsx scripts/import-listenbrainz.ts"
+  },
+  "dependencies": {
+    "bcryptjs": "3.0.3",
+    "next": "16.4.2",
+    "postgres": "3.4.9",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "recharts": "3.10.1"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.5.15",
+    "@types/node": "^22",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "tsx": "4.23.15",
+    "typescript": "5.9.3"
+  }
+}

@@ -1,0 +1,74 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NEXT_TELEMETRY_DISABLED: "1"
+
+jobs:
+  check:
+    name: Typecheck, lint, unit tests and build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build
+
+  api:
+    name: API tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:17-alpine
+        ports:
+          - 5432:5432
+        env:
+          POSTGRES_USER: soundscape
+          POSTGRES_PASSWORD: soundscape
+          POSTGRES_DB: soundscape
+        options: >-
+          --health-cmd "pg_isready -U soundscape -d soundscape"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      DATABASE_URL: postgres://soundscape:soundscape@localhost:5432/soundscape
+      AUTH_SECRET: ci-only-secret-not-used-anywhere-else
+      BASE_URL: http://localhost:3000
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run db:init
+      - run: npm run build
+      - name: Start the app
+        run: |
+          npm start > app.log 2>&1 &
+          for attempt in $(seq 1 30); do
+            curl -sf -o /dev/null "$BASE_URL/1/validate-token?token=ping" && exit 0
+            sleep 1
+          done
+          cat app.log
+          exit 1
+      - run: npm run test:api
+      - name: App log
+        if: failure()
+        run: cat app.log
