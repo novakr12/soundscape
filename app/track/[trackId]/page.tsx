@@ -1,11 +1,15 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import Cover from "@/components/cover";
+import { SongTools } from "@/components/library-tools";
 import { ArtistLink } from "@/components/music-links";
 import PlayButton from "@/components/play-button";
 import { DailyPlaysChart } from "@/components/stats-charts";
+import { isAdmin } from "@/lib/admin";
 import { albumOf } from "@/lib/albums";
+import { trackAlias } from "@/lib/aliases";
+import { otherSongsBy } from "@/lib/library-edits";
 import { currentUserId } from "@/lib/session";
 import { getAlsoPlayed, getTrack, getTrackPlaysPerDay, getYourPlays } from "@/lib/tracks";
 
@@ -28,13 +32,19 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 export default async function TrackPage({ params }: Props) {
   const trackId = decodeURIComponent((await params).trackId);
   const [track, viewer] = await Promise.all([getTrack(trackId), currentUserId()]);
-  if (!track) notFound();
+  if (!track) {
+    const target = await trackAlias(trackId);
+    if (target) redirect(`/track/${encodeURIComponent(target)}`);
+    notFound();
+  }
 
-  const [daily, yourPlays, alsoPlayed, album] = await Promise.all([
+  const admin = isAdmin(viewer);
+  const [daily, yourPlays, alsoPlayed, album, otherSongs] = await Promise.all([
     getTrackPlaysPerDay(trackId),
     viewer ? getYourPlays(viewer, trackId) : null,
     getAlsoPlayed(trackId),
     albumOf(trackId),
+    admin ? otherSongsBy(trackId) : [],
   ]);
   const last30 = daily.reduce((sum, d) => sum + d.plays, 0);
 
@@ -64,6 +74,8 @@ export default async function TrackPage({ params }: Props) {
           {viewer && <PlayButton track={{ trackId, title: track.title, artist: track.artist, cover: track.cover }} />}
         </div>
       </div>
+
+      {admin && <SongTools trackId={trackId} title={track.title} songs={otherSongs} />}
 
       <div className="tiles">
         {tiles.map((tile) => (

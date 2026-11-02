@@ -1,10 +1,13 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { after } from "next/server";
 import Cover from "@/components/cover";
+import { ArtistTools } from "@/components/library-tools";
 import PlayButton from "@/components/play-button";
+import { isAdmin } from "@/lib/admin";
 import { albumsBy } from "@/lib/albums";
+import { artistAlias } from "@/lib/aliases";
 import { ensureArtistInfo } from "@/lib/artist-info";
 import { getArtist, getSimilarArtists, getTopSongs, getYourArtistPlays } from "@/lib/artists";
 import { currentUserId } from "@/lib/session";
@@ -23,7 +26,11 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 export default async function ArtistPage({ params }: Props) {
   const artistId = decodeURIComponent((await params).artistId);
   const [artist, viewer] = await Promise.all([getArtist(artistId), currentUserId()]);
-  if (!artist) notFound();
+  if (!artist) {
+    const target = await artistAlias(artistId);
+    if (target) redirect(`/artist/${encodeURIComponent(target)}`);
+    notFound();
+  }
   if (!artist.infoChecked) after(() => ensureArtistInfo(artistId));
 
   const [songs, similar, yourPlays, albums] = await Promise.all([
@@ -51,6 +58,8 @@ export default async function ArtistPage({ params }: Props) {
           {artist.genres.length > 0 && <p className="muted">{artist.genres.join(" · ")}</p>}
         </div>
       </div>
+
+      {isAdmin(viewer) && <ArtistTools artistId={artistId} name={artist.name} />}
 
       {artist.bio && (
         <p className="artist-bio">

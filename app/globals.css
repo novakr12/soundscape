@@ -828,6 +828,15 @@ header .search {
   text-align: right;
 }
 
+.library-tools {
+  margin: 1rem 0;
+  max-width: 32rem;
+}
+
+.library-tools form {
+  margin-top: 0.75rem;
+}
+
 .artist-bio {
   max-width: 48rem;
   line-height: 1.6;

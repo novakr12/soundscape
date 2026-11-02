@@ -1,5 +1,5 @@
 import { linkAlbums, trackNumber } from "./albums";
-import { trackIdFor } from "./catalog";
+import { resolveTracks } from "./aliases";
 import { type ImportResult, importListens, type Listen } from "./imports";
 import { deleteValues, keys, takeLock } from "./kv";
 import { sql } from "./postgres";
@@ -82,12 +82,18 @@ export async function albumsFromListenBrainz(listenBrainzUser: string): Promise<
   for (;;) {
     const page = await fetchPage(listenBrainzUser, maxTs);
     listens += page.length;
+    const resolved = await resolveTracks(
+      page.map((listen) => ({
+        artist: listen.track_metadata.artist_name ?? "",
+        title: listen.track_metadata.track_name ?? "",
+      })),
+    );
     linked += await linkAlbums(
-      page.flatMap((listen) =>
+      page.flatMap((listen, i) =>
         listen.track_metadata.release_name
           ? [
               {
-                trackId: trackIdFor(listen.track_metadata.artist_name ?? "", listen.track_metadata.track_name ?? ""),
+                trackId: resolved[i].trackId,
                 album: listen.track_metadata.release_name,
                 number: trackNumber(listen.track_metadata.additional_info?.tracknumber),
               },

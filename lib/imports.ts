@@ -1,5 +1,6 @@
 import { linkAlbums } from "./albums";
-import { slug, songArtist, songTitle, trackIdFor } from "./catalog";
+import { resolveTracks } from "./aliases";
+import { songArtist, songTitle } from "./catalog";
 import { deleteValues, keys } from "./kv";
 import { sql } from "./postgres";
 
@@ -72,14 +73,15 @@ export async function importListens(userId: string, listens: Listen[]): Promise<
   const skipped = listens.length - valid.length;
   if (valid.length === 0) return { imported: 0, skipped, catalogNodesCreated: 0 };
 
+  const resolved = await resolveTracks(valid);
   const uniqueTracks = new Map<string, NewTrack>();
-  for (const l of valid) {
-    const trackId = trackIdFor(l.artist, l.title);
+  for (const [i, l] of valid.entries()) {
+    const { trackId, artistId } = resolved[i];
     const seen = uniqueTracks.get(trackId);
     uniqueTracks.set(trackId, {
       trackId,
       title: songTitle(l.title),
-      artistId: slug(songArtist(l.artist)),
+      artistId,
       artist: songArtist(l.artist),
       mbid: seen?.mbid ?? l.mbid ?? null,
       durationMs: seen?.durationMs ?? (l.durationMs ? Math.round(l.durationMs) : null),
@@ -88,17 +90,12 @@ export async function importListens(userId: string, listens: Listen[]): Promise<
   const created = await saveTracks([...uniqueTracks.values()]);
 
   await linkAlbums(
-    valid.flatMap((listen) =>
-      listen.album
-        ? [{ trackId: trackIdFor(listen.artist, listen.title), album: listen.album, number: listen.trackNumber }]
-        : [],
+    valid.flatMap((listen, i) =>
+      listen.album ? [{ trackId: resolved[i].trackId, album: listen.album, number: listen.trackNumber }] : [],
     ),
   );
 
-  const plays = valid.map((listen) => ({
-    trackId: trackIdFor(listen.artist, listen.title),
-    playedAt: listen.playedAt,
-  }));
+  const plays = valid.map((listen, i) => ({ trackId: resolved[i].trackId, playedAt: listen.playedAt }));
 
   for (let i = 0; i < plays.length; i += PLAYS_PER_INSERT) {
     const batch = plays.slice(i, i + PLAYS_PER_INSERT);
