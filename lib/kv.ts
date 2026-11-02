@@ -7,6 +7,7 @@ export const keys = {
   coverProgress: (userId: string) => `covers:progress:${userId}`,
   lastfmProgress: (userId: string) => `lastfm:progress:${userId}`,
   listeningRecord: (userId: string) => `record:${userId}`,
+  yearscape: (userId: string, year: number) => `yearscape:${userId}:${year}`,
   lastBackup: "backup:last",
 };
 
@@ -25,6 +26,10 @@ export async function setValue(key: string, value: unknown, seconds?: number) {
 
 export async function deleteValues(...names: string[]) {
   if (names.length > 0) await sql`DELETE FROM kv WHERE key = ANY(${names})`;
+}
+
+export async function deleteValuesStartingWith(prefix: string) {
+  await sql`DELETE FROM kv WHERE starts_with(key, ${prefix})`;
 }
 
 export async function takeLock(key: string, seconds: number): Promise<boolean> {
