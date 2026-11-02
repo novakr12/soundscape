@@ -12,4 +12,6 @@ export async function register() {
   startGenreFilling();
   const { startArtistPhotoFilling } = await import("./lib/artist-photos");
   startArtistPhotoFilling();
+  const { startArtistInfoFilling } = await import("./lib/artist-info");
+  startArtistInfoFilling();
 }

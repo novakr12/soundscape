@@ -828,6 +828,11 @@ header .search {
   text-align: right;
 }
 
+.artist-bio {
+  max-width: 48rem;
+  line-height: 1.6;
+}
+
 .pager.pages {
   margin-top: 1rem;
 }

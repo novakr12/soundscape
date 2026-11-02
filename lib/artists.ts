@@ -1,4 +1,5 @@
 import { cache } from "react";
+import type { ArtistLink } from "./artist-info";
 import { sql } from "./postgres";
 import { privateUsers } from "./privacy";
 
@@ -10,7 +11,27 @@ export type Artist = {
   plays: number;
   listeners: number;
   songs: number;
+  facts: string[];
+  bio?: string;
+  bioUrl?: string;
+  links: ArtistLink[];
+  infoChecked: boolean;
 };
+
+type Facts = {
+  type: string | null;
+  area: string | null;
+  began: string | null;
+  ended: string | null;
+  hasEnded: boolean;
+};
+
+function artistFacts({ type, area, began, ended, hasEnded }: Facts) {
+  let years: string | null = null;
+  if (hasEnded && began && ended) years = `${began}–${ended}`;
+  else if (!hasEnded && began) years = type === "Person" ? `born ${began}` : `since ${began}`;
+  return [type, area, years].filter((fact): fact is string => Boolean(fact));
+}
 
 export type ArtistSong = {
   trackId: string;
@@ -30,7 +51,8 @@ export type SimilarArtist = {
 
 export const getArtist = cache(async (artistId: string): Promise<Artist | null> => {
   const [row] = await sql`
-    SELECT a.name, a.photo,
+    SELECT a.name, a.photo, a.artist_type, a.area, a.began, a.ended, a.has_ended, a.bio, a.bio_url, a.links,
+           a.info_checked_at IS NOT NULL AS info_checked,
            coalesce((SELECT array_agg(g.genre) FROM artist_genres g WHERE g.artist_id = a.id), '{}') AS genres,
            coalesce(sum(p.plays), 0) AS plays, count(DISTINCT p.user_id) AS listeners, count(DISTINCT p.track_id) AS songs
     FROM artists a
@@ -47,6 +69,17 @@ export const getArtist = cache(async (artistId: string): Promise<Artist | null> 
     plays: row.plays,
     listeners: row.listeners,
     songs: row.songs,
+    facts: artistFacts({
+      type: row.artist_type,
+      area: row.area,
+      began: row.began,
+      ended: row.ended,
+      hasEnded: row.has_ended,
+    }),
+    bio: row.bio ?? undefined,
+    bioUrl: row.bio_url ?? undefined,
+    links: row.links,
+    infoChecked: row.info_checked,
   };
 });
 

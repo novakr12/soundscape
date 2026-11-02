@@ -1,7 +1,7 @@
 import { artistIdFor, slug, songTitle } from "./catalog";
 import { sql } from "./postgres";
 
-const USER_AGENT = "Soundscape/0.1 ( https://github.com/novakr12/soundscape )";
+export const USER_AGENT = "Soundscape/0.1 ( https://github.com/novakr12/soundscape )";
 const RETRY_AFTER_MS = 30 * 24 * 60 * 60 * 1000;
 const RELEASE_GROUPS_TRIED = 5;
 

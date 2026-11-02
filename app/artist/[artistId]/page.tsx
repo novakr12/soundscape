@@ -1,9 +1,11 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { after } from "next/server";
 import Cover from "@/components/cover";
 import PlayButton from "@/components/play-button";
 import { albumsBy } from "@/lib/albums";
+import { ensureArtistInfo } from "@/lib/artist-info";
 import { getArtist, getSimilarArtists, getTopSongs, getYourArtistPlays } from "@/lib/artists";
 import { currentUserId } from "@/lib/session";
 
@@ -22,6 +24,7 @@ export default async function ArtistPage({ params }: Props) {
   const artistId = decodeURIComponent((await params).artistId);
   const [artist, viewer] = await Promise.all([getArtist(artistId), currentUserId()]);
   if (!artist) notFound();
+  if (!artist.infoChecked) after(() => ensureArtistInfo(artistId));
 
   const [songs, similar, yourPlays, albums] = await Promise.all([
     getTopSongs(artistId),
@@ -44,9 +47,33 @@ export default async function ArtistPage({ params }: Props) {
         <div>
           <p className="muted">Artist</p>
           <h1>{artist.name}</h1>
+          {artist.facts.length > 0 && <p className="muted">{artist.facts.join(" · ")}</p>}
           {artist.genres.length > 0 && <p className="muted">{artist.genres.join(" · ")}</p>}
         </div>
       </div>
+
+      {artist.bio && (
+        <p className="artist-bio">
+          {artist.bio}
+          {artist.bioUrl && (
+            <>
+              {" "}
+              <a href={artist.bioUrl} target="_blank" rel="noopener noreferrer">
+                Read more on Wikipedia
+              </a>
+            </>
+          )}
+        </p>
+      )}
+      {artist.links.length > 0 && (
+        <nav className="year-links artist-links" aria-label="Links">
+          {artist.links.map((link) => (
+            <a key={link.url} href={link.url} target="_blank" rel="noopener noreferrer">
+              {link.label}
+            </a>
+          ))}
+        </nav>
+      )}
 
       <div className="tiles">
         {tiles.map((tile) => (
