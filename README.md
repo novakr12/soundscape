@@ -45,6 +45,7 @@ To import from Last.fm, create a free API key at [last.fm/api/account/create](ht
 | `npm run db:albums` | Fill in albums from ListenBrainz and Deezer |
 | `npm run db:genres` | Fill in artist genres from MusicBrainz (new artists also get theirs every hour) |
 | `npm run db:photos` | Fill in artist photos from Deezer (new artists also get theirs every hour) |
+| `npm run db:artist-info` | Fill in artist bios and links from MusicBrainz and Wikipedia (also every hour) |
 | `npm run db:dedupe` | Remove plays counted twice, e.g. from both ListenBrainz and Last.fm (`-- --apply` to remove) |
 | `scripts/update.sh` | Update production: pull, rebuild, restart and wait until it answers |
 | `scripts/backup.sh` / `scripts/restore.sh <file>` | Back up / restore all data |

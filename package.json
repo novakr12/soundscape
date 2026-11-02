@@ -18,6 +18,7 @@
     "db:albums": "tsx scripts/albums.ts",
     "db:genres": "tsx scripts/genres.ts",
     "db:photos": "tsx scripts/photos.ts",
+    "db:artist-info": "tsx scripts/artist-info.ts",
     "db:dedupe": "tsx scripts/dedupe.ts",
     "import:json": "tsx scripts/import-json.ts",
     "import:listenbrainz": "tsx scripts/import-listenbrainz.ts"
