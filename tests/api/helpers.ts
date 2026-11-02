@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { getChartWithTracks } from "../../lib/charts";
-import { deleteValues, keys } from "../../lib/kv";
+import { deleteValues, deleteValuesStartingWith, keys } from "../../lib/kv";
 import { sql } from "../../lib/postgres";
 import { localDay, nextMidnight, startOfDay } from "../../lib/time";
 import { createUser } from "../../lib/users";
@@ -45,6 +45,7 @@ export async function removeTestUser({ userId, artist }: ReturnType<typeof testU
     keys.lastfmProgress(userId),
     keys.listeningRecord(userId),
   );
+  await deleteValuesStartingWith(`yearscape:${userId}:`);
 }
 
 export async function chartEntry(trackId: string, days = [localDay(new Date())]) {

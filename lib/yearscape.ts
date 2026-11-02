@@ -1,11 +1,13 @@
 import { albumsFor, type TopAlbum } from "./albums";
 import { artistIdFor } from "./catalog";
 import { shiftMonth } from "./history";
+import { getValue, keys, setValue } from "./kv";
 import { userMonths as playMonths } from "./months";
 import { sql } from "./postgres";
 import { addDays, localDay, startOfDay } from "./time";
 
 const DEFAULT_SONG_MS = 210_000;
+const CACHE_SECONDS = 24 * 60 * 60;
 const TOP = 5;
 
 export type YearSong = { trackId: string; title: string; artist: string; cover?: string; plays: number };
@@ -183,16 +185,33 @@ async function summarize(plays: Play[], earlierArtists: Set<string>): Promise<Su
   };
 }
 
+async function fingerprint(userId: string, year: number) {
+  const from = startOfDay(`${year}-01-01`);
+  const [row] = await sql`
+    SELECT count(*) FILTER (WHERE played_at >= ${from}) AS plays,
+           coalesce(sum(hashtext(track_id || ' ' || played_at::text)) FILTER (WHERE played_at >= ${from}), 0) AS hash,
+           count(*) FILTER (WHERE played_at < ${from}) AS earlier
+    FROM plays
+    WHERE user_id = ${userId} AND played_at < ${startOfDay(`${year + 1}-01-01`)}`;
+  return `${row.plays}:${row.hash}:${row.earlier}`;
+}
+
 export async function getYearscape(userId: string, year: number, now = new Date()): Promise<Yearscape> {
   const months = await playMonths(userId);
   const years = [...new Set([Number(localDay(now).slice(0, 4)), ...months.map((m) => Number(m.slice(0, 4)))])].sort(
     (a, b) => b - a,
   );
+  const past = year < Number(localDay(now).slice(0, 4));
+  const key = keys.yearscape(userId, year);
+  const print = past ? await fingerprint(userId, year) : "";
+  if (past) {
+    const cached = await getValue<{ print: string; scape: Omit<Yearscape, "years"> }>(key);
+    if (cached?.print === print) return { ...cached.scape, years };
+  }
   const { plays, earlierArtists } = await readPeriod(userId, `${year}-01`, `${year}-12`, `${year}-`);
 
-  return {
+  const scape: Omit<Yearscape, "years"> = {
     year,
-    years,
     ...(await summarize(plays, earlierArtists)),
     months: Array.from({ length: 12 }, (_, i) => {
       const month = `${year}-${String(i + 1).padStart(2, "0")}`;
@@ -205,6 +224,8 @@ export async function getYearscape(userId: string, year: number, now = new Date(
       };
     }),
   };
+  if (past) await setValue(key, { print, scape }, CACHE_SECONDS);
+  return { ...scape, years };
 }
 
 export async function getMonthscape(userId: string, month: string, now = new Date()): Promise<Monthscape> {

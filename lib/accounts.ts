@@ -1,6 +1,6 @@
 import { forgetNavidromeCovers } from "./covers";
 import { removeJellyfin } from "./jellyfin";
-import { deleteValues, keys } from "./kv";
+import { deleteValues, deleteValuesStartingWith, keys } from "./kv";
 import { deleteAllPlays } from "./play-edits";
 import { sql } from "./postgres";
 import { removeRelay } from "./relay";
@@ -18,5 +18,6 @@ export async function deleteAccount(userId: string): Promise<number> {
     keys.lastfmProgress(userId),
     keys.listeningRecord(userId),
   );
+  await deleteValuesStartingWith(`yearscape:${userId}:`);
   return plays;
 }
