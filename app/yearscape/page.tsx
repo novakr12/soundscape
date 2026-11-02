@@ -3,12 +3,14 @@ import Link from "next/link";
 import { ArtistLink, SongLink } from "@/components/music-links";
 import { MonthlyPlaysChart } from "@/components/stats-charts";
 import { visibleFollowing } from "@/lib/feed";
+import { getNavidrome } from "@/lib/navidrome";
 import { requireUserId } from "@/lib/session";
 import { formatListeningTime, localDay } from "@/lib/time";
 import { getYearscape } from "@/lib/yearscape";
 import Discoveries from "./discoveries";
 import ScapeSummary, { plural } from "./scape-summary";
 import ShareCard from "./share-card";
+import YearPlaylist from "./year-playlist";
 
 export const metadata: Metadata = { title: "Yearscape · Soundscape" };
 
@@ -22,7 +24,11 @@ export default async function YearscapePage({ searchParams }: Props) {
   const currentYear = Number(localDay(new Date()).slice(0, 4));
   const requested = Number((await searchParams).year);
   const year = Number.isInteger(requested) && requested >= 2000 && requested <= currentYear ? requested : currentYear;
-  const [scape, friends] = await Promise.all([getYearscape(userId, year), visibleFollowing(userId)]);
+  const [scape, friends, navidrome] = await Promise.all([
+    getYearscape(userId, year),
+    visibleFollowing(userId),
+    getNavidrome(userId),
+  ]);
   const streak = scape.longestStreak;
 
   const tiles = [
@@ -133,6 +139,21 @@ export default async function YearscapePage({ searchParams }: Props) {
                 </p>
                 <Discoveries artists={scape.newArtists} />
               </>
+            )}
+          </section>
+
+          <section>
+            <h2>Your {year} playlist</h2>
+            <p className="muted">
+              Your 50 most played songs of {year}, saved to Navidrome as <strong>Soundscape {year}</strong>. Saving
+              again updates it.
+            </p>
+            {navidrome ? (
+              <YearPlaylist year={year} />
+            ) : (
+              <p className="muted">
+                <Link href="/connect">Connect Navidrome</Link> to save it.
+              </p>
             )}
           </section>
 
