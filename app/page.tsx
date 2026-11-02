@@ -2,12 +2,14 @@ import Link from "next/link";
 import { Lockup } from "@/components/logo";
 import { ArtistLink, SongLink } from "@/components/music-links";
 import PlayButton from "@/components/play-button";
+import WeekRecapView from "@/components/week-recap";
 import { getRecent } from "@/lib/live";
 import { getListeningRecord } from "@/lib/milestones";
 import { onThisDay } from "@/lib/on-this-day";
 import { currentUserId } from "@/lib/session";
 import { signupMode } from "@/lib/signups";
 import { formatClock, localDay } from "@/lib/time";
+import { lastWeekRecap, showWeekRecap } from "@/lib/week-recap";
 
 function plural(count: number, word: string) {
   return `${count.toLocaleString("en")} ${word}${count === 1 ? "" : "s"}`;
@@ -41,10 +43,11 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ d
     );
   }
 
-  const [recent, thatDay, record] = await Promise.all([
+  const [recent, thatDay, record, recap] = await Promise.all([
     getRecent(userId),
     onThisDay(userId),
     getListeningRecord(userId),
+    showWeekRecap() ? lastWeekRecap(userId) : null,
   ]);
   const reachedToday = record.milestones.find(
     (milestone) => milestone.count > 1 && localDay(new Date(milestone.playedAt)) === localDay(new Date()),
@@ -61,6 +64,8 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ d
           {!record.playedToday && " Play something today to keep it going."}
         </p>
       )}
+
+      {recap && <WeekRecapView recap={recap} />}
 
       {thatDay.length > 0 && (
         <section>
