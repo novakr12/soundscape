@@ -1,6 +1,7 @@
 import { findAllInLibrary, getNavidrome, type LibrarySong, NavidromeError, savePlaylist } from "./navidrome";
 import { sql } from "./postgres";
 import { getRecommendations } from "./recommendations";
+import { startOfDay } from "./time";
 import { getWanted, removeWanted } from "./wanted";
 
 export const MIX_SIZE = 25;
@@ -119,4 +120,38 @@ export async function checkWantedInNavidrome(userId: string): Promise<LibrarySon
   return wanted
     .filter((song) => found.has(song.trackId))
     .map(({ trackId, title, artist }) => ({ trackId, title, artist }));
+}
+
+export const YEAR_PLAYLIST_SIZE = 50;
+
+export function yearPlaylistName(year: number) {
+  return `Soundscape ${year}`;
+}
+
+export async function yearTopSongs(userId: string, year: number, limit = YEAR_PLAYLIST_SIZE): Promise<LibrarySong[]> {
+  const rows = await sql`
+    SELECT p.track_id, t.title, a.name AS artist
+    FROM plays p JOIN tracks t ON t.id = p.track_id JOIN artists a ON a.id = t.artist_id
+    WHERE p.user_id = ${userId}
+      AND p.played_at >= ${startOfDay(`${year}-01-01`)} AND p.played_at < ${startOfDay(`${year + 1}-01-01`)}
+    GROUP BY p.track_id, t.id, a.id
+    ORDER BY count(*) DESC, min(p.played_at)
+    LIMIT ${limit}`;
+  return rows.map((row) => ({ trackId: row.track_id, title: row.title, artist: row.artist }));
+}
+
+export type SavedYear = { playlist: string; songs: number; found: number; missing: LibrarySong[] };
+
+export async function saveYearToNavidrome(userId: string, year: number): Promise<SavedYear> {
+  const server = await connected(userId);
+  const songs = await yearTopSongs(userId, year);
+  const found = await findAllInLibrary(server, songs);
+  const songIds = songs.flatMap((song) => found.get(song.trackId) ?? []);
+  if (songIds.length > 0) await savePlaylist(server, yearPlaylistName(year), songIds);
+  return {
+    playlist: yearPlaylistName(year),
+    songs: songs.length,
+    found: songIds.length,
+    missing: songs.filter((song) => !found.has(song.trackId)),
+  };
 }

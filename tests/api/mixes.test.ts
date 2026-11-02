@@ -5,7 +5,14 @@ import type { AddressInfo } from "node:net";
 import { after, before, describe, it } from "node:test";
 import { trackIdFor } from "../../lib/catalog";
 import { importListens } from "../../lib/imports";
-import { checkWantedInNavidrome, getDiscoverMix, getRediscoverMix, saveMixToNavidrome } from "../../lib/mixes";
+import {
+  checkWantedInNavidrome,
+  getDiscoverMix,
+  getRediscoverMix,
+  saveMixToNavidrome,
+  saveYearToNavidrome,
+  yearTopSongs,
+} from "../../lib/mixes";
 import { getNavidrome, NavidromeError, saveNavidrome } from "../../lib/navidrome";
 import { sql } from "../../lib/postgres";
 import { addWanted, getWanted } from "../../lib/wanted";
@@ -15,6 +22,7 @@ process.env.AUTH_SECRET ??= "test-only-secret";
 
 const user = testUser();
 const friend = testUser();
+const listener = testUser();
 const band = `${user.artist} Band`;
 const duo = `${user.artist} Duo`;
 const now = new Date();
@@ -80,6 +88,14 @@ before(async () => {
     ...played(duo, "Recent", [5, 6, 7, 8, 9]),
     ...played(duo, "Only Once", [365]),
   ]);
+  const in2024 = (artist: string, title: string, count: number) =>
+    Array.from({ length: count }, (_, i) => ({ artist, title, playedAt: new Date(Date.UTC(2024, 4, 1 + i, 12)) }));
+  await createTestUser(listener.userId);
+  await importListens(listener.userId, [
+    ...in2024(listener.artist, "Year Opener", 3),
+    ...in2024(listener.artist, "Year Middle", 2),
+    ...in2024(listener.artist, "Not Owned", 1),
+  ]);
   await importListens(friend.userId, [
     ...played(duo, "Recent", [1]),
     ...played(duo, "Friend Pick", [1, 2]),
@@ -93,6 +109,7 @@ after(async () => {
     await removeTestUser({ ...user, artist });
     await removeTestUser({ ...friend, artist });
   }
+  await removeTestUser(listener);
   await closeConnections();
 });
 
@@ -178,5 +195,40 @@ describe("mixes", () => {
     const rediscover = [...playlists.values()].find((p) => p.name === "Soundscape Rediscover");
     assert.deepEqual(rediscover?.songs, ["nd-1", "nd-2", "nd-4", "nd-6"]);
     assert.deepEqual(await getWanted(user.userId), []);
+  });
+});
+
+describe("Yearscape playlist", () => {
+  it("picks a year's most played songs", async () => {
+    assert.deepEqual(
+      (await yearTopSongs(listener.userId, 2024)).map((song) => song.title),
+      ["Year Opener", "Year Middle", "Not Owned"],
+    );
+  });
+
+  it("saves the songs Navidrome has, in order, and names the missing ones", async () => {
+    library.push(
+      { id: "nd-y1", title: "Year Opener", artist: listener.artist },
+      { id: "nd-y2", title: "Year Middle", artist: listener.artist },
+    );
+    await assert.rejects(saveYearToNavidrome(listener.userId, 2024), /Connect Navidrome/);
+    await saveNavidrome(listener.userId, url, "dj", "secret");
+    const saved = await saveYearToNavidrome(listener.userId, 2024);
+    assert.equal(saved.playlist, "Soundscape 2024");
+    assert.deepEqual([saved.songs, saved.found], [3, 2]);
+    assert.deepEqual(
+      saved.missing.map((song) => song.title),
+      ["Not Owned"],
+    );
+    const playlist = [...playlists.values()].find((p) => p.name === "Soundscape 2024");
+    assert.deepEqual(playlist?.songs, ["nd-y1", "nd-y2"]);
+  });
+
+  it("updates the same playlist when saved again", async () => {
+    library.push({ id: "nd-y3", title: "Not Owned", artist: listener.artist });
+    await saveYearToNavidrome(listener.userId, 2024);
+    const years = [...playlists.values()].filter((p) => p.name === "Soundscape 2024");
+    assert.equal(years.length, 1);
+    assert.deepEqual(years[0].songs, ["nd-y1", "nd-y2", "nd-y3"]);
   });
 });
