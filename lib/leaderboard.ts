@@ -12,7 +12,7 @@ export type LeaderboardRow = {
 
 export type Leaderboard = { rows: LeaderboardRow[]; lastWeek?: LeaderboardRow };
 
-async function ranking(userIds: string[], from: Date, to: Date): Promise<LeaderboardRow[]> {
+export async function ranking(userIds: string[], from: Date, to: Date): Promise<LeaderboardRow[]> {
   const rows = await sql`
     WITH counts AS (
       SELECT p.user_id, t.artist_id, count(*) AS plays,
