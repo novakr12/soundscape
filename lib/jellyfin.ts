@@ -1,4 +1,4 @@
-import { trackIdFor } from "./catalog";
+import { resolveTrackId } from "./aliases";
 import { findTrackDetails } from "./deezer";
 import {
   addListeningDetails,
@@ -138,7 +138,7 @@ export async function applyPlayback(userId: string, playback: Playback | null, n
     return;
   }
 
-  const trackId = trackIdFor(playback.artist, playback.title);
+  const trackId = await resolveTrackId(playback.artist, playback.title);
   const sameTrack = fromJellyfin && current.trackId === trackId;
   const unchanged =
     sameTrack &&

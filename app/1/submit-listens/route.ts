@@ -1,6 +1,7 @@
 import { after, NextResponse } from "next/server";
 import { trackNumber } from "@/lib/albums";
-import { songArtist, songTitle, trackIdFor } from "@/lib/catalog";
+import { resolveTrackId, resolveTracks } from "@/lib/aliases";
+import { songArtist, songTitle } from "@/lib/catalog";
 import { findMissingCovers } from "@/lib/covers";
 import { findTrackDetails } from "@/lib/deezer";
 import { importListens, type Listen } from "@/lib/imports";
@@ -59,7 +60,7 @@ export async function POST(request: Request) {
     if (!artist || !title) return error(400, "artist_name and track_name are required.");
     const info = metadata.additional_info ?? {};
     const durationMs = durationMsOf(info);
-    const trackId = trackIdFor(artist, title);
+    const trackId = await resolveTrackId(artist, title);
     if ((await getListening(userId))?.source === "jellyfin") {
       after(() => relaySubmission(userId, body));
       return NextResponse.json({ status: "ok" });
@@ -90,10 +91,11 @@ export async function POST(request: Request) {
   after(() => relaySubmission(userId, body));
 
   const recent = listens.filter((l) => l.artist && l.title && Date.now() - l.playedAt.getTime() < LIVE_WINDOW_MS);
-  for (const listen of recent) {
+  const recentIds = await resolveTracks(recent);
+  for (const [i, listen] of recent.entries()) {
     await publishPlay({
       userId,
-      trackId: trackIdFor(listen.artist, listen.title),
+      trackId: recentIds[i].trackId,
       title: songTitle(listen.title),
       artist: songArtist(listen.artist),
       playedAt: listen.playedAt.toISOString(),

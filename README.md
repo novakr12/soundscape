@@ -27,7 +27,7 @@ Then open the app, sign up, and follow the **Connect** page to point your player
 
 To choose who can create accounts, set `SIGNUPS` in `.env`: `open` (anyone, the default), `invite` (only with an invite link, which any member can create in Settings) or `closed`.
 
-To see the admin page (accounts, library status, backups and maintenance buttons), add your username to `ADMIN_USERS` in `.env`, for example `ADMIN_USERS=admin`.
+To see the admin page (accounts, library status, backups and maintenance buttons), add your username to `ADMIN_USERS` in `.env`, for example `ADMIN_USERS=admin`. Admins can also rename and merge artists and songs from their pages; plays sent later under the old name follow automatically.
 
 Soundscape used to keep its data in Cassandra, Neo4j and Redis because it started as a university project. This is not the case anymore, now it uses PostgreSQL.
 

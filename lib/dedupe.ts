@@ -1,4 +1,4 @@
-import { trackIdFor } from "./catalog";
+import { resolveTracks } from "./aliases";
 import type { Listen } from "./imports";
 import { deletePlay } from "./play-edits";
 import { sql } from "./postgres";
@@ -66,8 +66,9 @@ export async function withoutKnownPlays(userId: string, listens: Listen[]): Prom
   for (const row of rows) {
     known.set(row.track_id, [...(known.get(row.track_id) ?? []), row.played_at.getTime()]);
   }
-  return listens.filter((listen) => {
-    const trackId = trackIdFor(listen.artist, listen.title);
+  const resolved = await resolveTracks(listens);
+  return listens.filter((listen, i) => {
+    const trackId = resolved[i].trackId;
     const plays = known.get(trackId) ?? [];
     if (plays.some((time) => Math.abs(time - listen.playedAt.getTime()) <= SAME_PLAY_MS)) return false;
     known.set(trackId, [...plays, listen.playedAt.getTime()]);
