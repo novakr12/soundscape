@@ -50,6 +50,11 @@ describe("GET /1/validate-token", () => {
     assert.deepEqual(await response.json(), { code: 200, message: "Token valid.", valid: true, user_name: userId });
   });
 
+  it("accepts the lowercase token header Pano Scrobbler sends", async () => {
+    const response = await fetch(`${BASE_URL}/1/validate-token`, { headers: { Authorization: `token ${token}` } });
+    assert.equal((await response.json()).valid, true);
+  });
+
   it("accepts the token as a query parameter", async () => {
     const response = await fetch(`${BASE_URL}/1/validate-token?token=${token}`);
     assert.equal((await response.json()).valid, true);

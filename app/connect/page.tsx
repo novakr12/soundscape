@@ -30,10 +30,10 @@ export default async function ConnectPage() {
 
   return (
     <>
-      <h1>Connect a music server</h1>
+      <h1>Connect a music player</h1>
       <p className="muted">
-        Navidrome and Jellyfin can send what you play to Soundscape, the same way they send it to ListenBrainz. Plays
-        appear in your history and on the live charts as they happen.
+        Navidrome, Jellyfin, your phone and your browser can send what you play to Soundscape, the same way they send it
+        to ListenBrainz. Plays appear in your history and on the live charts as they happen.
       </p>
       <p className="muted">
         In the steps below, replace <code>{ADDRESS}</code> with the address you open Soundscape at, for example{" "}
@@ -108,8 +108,55 @@ export default async function ConnectPage() {
         </ol>
       </section>
 
+      <section>
+        <h2>Android phone: Pano Scrobbler</h2>
+        <p className="muted">
+          Pano Scrobbler picks up what any music app on your phone plays, including Spotify, YouTube Music and local
+          players.
+        </p>
+        <ol>
+          <li>
+            In Pano Scrobbler&apos;s settings, open <strong>Services</strong> and add a{" "}
+            <strong>ListenBrainz-like instance</strong>.
+          </li>
+          <li>
+            Set <strong>API URL</strong> to <code>{ADDRESS}/</code>, with the slash at the end and without{" "}
+            <code>/1</code>.
+          </li>
+          <li>
+            Paste your token as the <strong>Authentication token</strong> and tap <strong>Verify</strong>.
+          </li>
+        </ol>
+        <p className="muted">
+          Only scrobbling goes to Soundscape. Pano&apos;s own charts and history screens may say the server doesn&apos;t
+          support them; use Soundscape for those.
+        </p>
+      </section>
+
+      <section>
+        <h2>Browser: Web Scrobbler</h2>
+        <p className="muted">
+          The Web Scrobbler extension for Chrome and Firefox picks up music played in the browser, like YouTube,
+          SoundCloud and Bandcamp.
+        </p>
+        <ol>
+          <li>
+            Open the extension&apos;s options, go to <strong>Accounts</strong>, and open the <strong>Properties</strong>{" "}
+            of ListenBrainz.
+          </li>
+          <li>
+            Set <strong>API URL</strong> to <code>{ADDRESS}/1/submit-listens</code>, the full address this time.
+          </li>
+          <li>
+            Paste your token as the <strong>Token</strong> and save.
+          </li>
+        </ol>
+        <p className="muted">Loving a song in Web Scrobbler still goes to ListenBrainz itself, not to Soundscape.</p>
+      </section>
+
       <p className="muted">
-        If Navidrome or Jellyfin runs in Docker, use your computer&apos;s network address instead of localhost.
+        If Navidrome or Jellyfin runs in Docker, use your computer&apos;s network address instead of localhost. Phones
+        and browsers need an address they can reach from wherever they are, like your Tailscale address.
       </p>
 
       <section id="navidrome-library">
