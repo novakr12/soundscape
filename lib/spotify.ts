@@ -1,9 +1,6 @@
-export const MIN_PLAYED_MS = 30_000;
-export const SPOTIFY_BATCH = 1000;
-const MAX_TEXT = 300;
+import { type FileListen, MIN_PLAYED_MS, text } from "./file-import";
 
-export type SpotifyListen = { artist: string; title: string; album?: string; playedAt: number };
-export type SpotifyHistory = { listens: SpotifyListen[]; podcasts: number; short: number; private: number };
+export type SpotifyHistory = { listens: FileListen[]; podcasts: number; short: number; private: number };
 
 type ExtendedEntry = {
   ts?: string;
@@ -17,10 +14,6 @@ type ExtendedEntry = {
 };
 
 type AccountEntry = { endTime?: string; artistName?: string; trackName?: string; msPlayed?: number };
-
-function text(value: unknown) {
-  return typeof value === "string" ? value.trim().slice(0, MAX_TEXT) : "";
-}
 
 export function readSpotifyHistory(data: unknown): SpotifyHistory {
   const history: SpotifyHistory = { listens: [], podcasts: 0, short: 0, private: 0 };

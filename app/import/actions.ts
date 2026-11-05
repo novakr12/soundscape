@@ -4,12 +4,12 @@ import { revalidatePath } from "next/cache";
 import { after } from "next/server";
 import { type CoverProgress, findCoversAfterImport, getCoverProgress, startCoverSearch } from "@/lib/covers";
 import { withoutKnownPlays } from "@/lib/dedupe";
+import { FILE_BATCH, type FileListen, MAX_TEXT } from "@/lib/file-import";
 import { importListens } from "@/lib/imports";
 import { deleteValues, keys, takeLock } from "@/lib/kv";
 import { getLastfmProgress, type LastfmProgress, runLastfmImport, startLastfmImport } from "@/lib/lastfm";
 import { ImportError, importFromListenBrainz, MAX_LISTENS_PER_IMPORT } from "@/lib/listenbrainz";
 import { requireUserId } from "@/lib/session";
-import { SPOTIFY_BATCH, type SpotifyListen } from "@/lib/spotify";
 
 export type ImportFormState = {
   listenBrainzUser?: string;
@@ -75,13 +75,12 @@ export async function coverProgress(): Promise<CoverProgress | null> {
   return getCoverProgress(await requireUserId());
 }
 
-export type SpotifyBatchResult = { imported: number; skipped: number; error?: string };
+export type FileBatchResult = { imported: number; skipped: number; error?: string };
 
-const SPOTIFY_LOCK_SECONDS = 5 * 60;
-const MAX_TEXT = 300;
+const FILE_LOCK_SECONDS = 5 * 60;
 
 function cleanListen(value: unknown) {
-  const listen = value as Partial<SpotifyListen> | null;
+  const listen = value as Partial<FileListen> | null;
   const artist = typeof listen?.artist === "string" ? listen.artist.trim().slice(0, MAX_TEXT) : "";
   const title = typeof listen?.title === "string" ? listen.title.trim().slice(0, MAX_TEXT) : "";
   const playedAt = Number(listen?.playedAt);
@@ -90,12 +89,12 @@ function cleanListen(value: unknown) {
   return { artist, title, playedAt: new Date(playedAt), album: album || undefined };
 }
 
-export async function importSpotifyBatch(batch: unknown): Promise<SpotifyBatchResult> {
+export async function importFileBatch(batch: unknown): Promise<FileBatchResult> {
   const userId = await requireUserId();
-  if (!Array.isArray(batch) || batch.length > SPOTIFY_BATCH) {
+  if (!Array.isArray(batch) || batch.length > FILE_BATCH) {
     return { imported: 0, skipped: 0, error: "That batch of plays wasn't valid." };
   }
-  if (!(await takeLock(keys.importLock(userId), SPOTIFY_LOCK_SECONDS))) {
+  if (!(await takeLock(keys.importLock(userId), FILE_LOCK_SECONDS))) {
     return { imported: 0, skipped: 0, error: "Another import is running for your account. Try again when it's done." };
   }
   try {
@@ -108,7 +107,7 @@ export async function importSpotifyBatch(batch: unknown): Promise<SpotifyBatchRe
   }
 }
 
-export async function finishSpotifyImport() {
+export async function finishFileImport() {
   const userId = await requireUserId();
   const progress = await startCoverSearch(userId);
   if (progress.total > 0) after(() => findCoversAfterImport(userId, progress));
