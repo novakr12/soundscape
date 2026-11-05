@@ -384,6 +384,8 @@ header a[aria-current="page"] {
 
 .account {
   white-space: nowrap;
+  flex-wrap: wrap;
+  row-gap: 0.25rem;
 }
 
 .now-listening {
@@ -1382,4 +1384,41 @@ tr.selected {
 
 .facts dd {
   margin: 0;
+}
+
+.badge {
+  display: inline-block;
+  min-width: 1.25rem;
+  margin-left: 0.4rem;
+  padding: 0 0.35rem;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--bg);
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.25rem;
+  text-align: center;
+}
+
+.notifications {
+  list-style: none;
+  padding: 0;
+}
+
+.notifications li {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.6rem 0.75rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--muted) 20%, transparent);
+}
+
+.notifications li.unread {
+  border-left: 3px solid var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+
+.notifications time {
+  flex-shrink: 0;
+  font-size: 0.85rem;
 }

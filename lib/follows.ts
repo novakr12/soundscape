@@ -1,3 +1,4 @@
+import { notifyFollow } from "./notifications";
 import { sql } from "./postgres";
 import { isPrivate } from "./privacy";
 import { userExists } from "./users";
@@ -8,7 +9,9 @@ export async function follow(follower: string, followee: string): Promise<string
   if (follower === followee) return "You can't follow yourself.";
   if (!(await userExists(followee))) return "That user doesn't exist.";
   if (await isPrivate(followee)) return "This profile is private.";
-  await sql`INSERT INTO follows (follower, followee) VALUES (${follower}, ${followee}) ON CONFLICT DO NOTHING`;
+  const added = await sql`
+    INSERT INTO follows (follower, followee) VALUES (${follower}, ${followee}) ON CONFLICT DO NOTHING RETURNING 1`;
+  if (added.length > 0) await notifyFollow(follower, followee);
   return null;
 }
 

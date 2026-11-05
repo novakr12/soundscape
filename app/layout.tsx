@@ -6,6 +6,7 @@ import Credit from "@/components/credit";
 import NavLink from "@/components/nav-link";
 import { PlayerProvider } from "@/components/player";
 import { isAdmin } from "@/lib/admin";
+import { unreadCount } from "@/lib/notifications";
 import { currentUserId, logOut } from "@/lib/session";
 import { signupMode } from "@/lib/signups";
 import "./globals.css";
@@ -19,6 +20,7 @@ export const metadata: Metadata = {
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const username = await currentUserId();
+  const unread = username ? await unreadCount(username) : 0;
 
   async function logout() {
     "use server";
@@ -50,6 +52,14 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             {username ? (
               <>
                 <NavLink href={`/u/${username}`}>{username}</NavLink>
+                <NavLink href="/notifications">
+                  Notifications
+                  {unread > 0 && (
+                    <span className="badge" role="status" aria-label={`${unread} unread`}>
+                      {unread > 99 ? "99+" : unread}
+                    </span>
+                  )}
+                </NavLink>
                 <NavLink href="/settings">Settings</NavLink>
                 {isAdmin(username) && <NavLink href="/admin">Admin</NavLink>}
                 <form action={logout}>

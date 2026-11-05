@@ -7,6 +7,7 @@ export const keys = {
   coverProgress: (userId: string) => `covers:progress:${userId}`,
   lastfmProgress: (userId: string) => `lastfm:progress:${userId}`,
   listeningRecord: (userId: string) => `record:${userId}`,
+  leaderboardAbove: (userId: string) => `leaderboard:above:${userId}`,
   yearscape: (userId: string, year: number) => `yearscape:${userId}:${year}`,
   lastBackup: "backup:last",
 };

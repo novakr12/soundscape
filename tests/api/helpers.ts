@@ -44,6 +44,7 @@ export async function removeTestUser({ userId, artist }: ReturnType<typeof testU
     keys.coverProgress(userId),
     keys.lastfmProgress(userId),
     keys.listeningRecord(userId),
+    keys.leaderboardAbove(userId),
   );
   await deleteValuesStartingWith(`yearscape:${userId}:`);
 }

@@ -2,7 +2,9 @@ import { getValue, keys, setValue } from "./kv";
 import { sql } from "./postgres";
 import { addDays, localDay } from "./time";
 
-const MILESTONES = [1, 100, 500, 1_000, 2_500, 5_000, 10_000, 25_000, 50_000, 100_000, 250_000, 500_000, 1_000_000];
+export const MILESTONES = [
+  1, 100, 500, 1_000, 2_500, 5_000, 10_000, 25_000, 50_000, 100_000, 250_000, 500_000, 1_000_000,
+];
 const CACHE_SECONDS = 10 * 60;
 
 export type Milestone = { count: number; playedAt: string; trackId: string; title: string; artist: string };

@@ -18,4 +18,6 @@ export async function register() {
   startArtistPhotoFilling();
   const { startArtistInfoFilling } = await import("./lib/artist-info");
   startArtistInfoFilling();
+  const { startNotificationChecks } = await import("./lib/notifications");
+  startNotificationChecks();
 }
