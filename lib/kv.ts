@@ -61,16 +61,3 @@ export async function removeExpired() {
   await sql`DELETE FROM cover_cache WHERE expires_at <= now()`;
   await sql`DELETE FROM sessions WHERE expires_at <= now()`;
 }
-
-const CLEAN_EVERY_MS = 10 * 60 * 1000;
-const globalForCleanup = globalThis as unknown as { kvCleanup?: boolean };
-
-export function startCleanup() {
-  if (globalForCleanup.kvCleanup) return;
-  globalForCleanup.kvCleanup = true;
-  setInterval(() => {
-    removeExpired().catch((error) =>
-      console.warn(`Cleanup: ${error instanceof Error ? error.message : String(error)}`),
-    );
-  }, CLEAN_EVERY_MS);
-}

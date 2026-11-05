@@ -4,8 +4,12 @@ export async function register() {
   const { sql } = await import("./lib/postgres");
   const applied = await migrate(sql);
   if (applied.length > 0) console.log(`PostgreSQL: applied ${applied.join(", ")}`);
-  const { startCleanup } = await import("./lib/kv");
-  startCleanup();
+  const { removeExpired } = await import("./lib/kv");
+  const { every } = await import("./lib/jobs");
+  every("cleanup", 10 * 60 * 1000, async () => {
+    await removeExpired();
+    return undefined;
+  });
   const { startJellyfinPolling } = await import("./lib/jellyfin");
   startJellyfinPolling();
   const { startGenreFilling } = await import("./lib/genres");

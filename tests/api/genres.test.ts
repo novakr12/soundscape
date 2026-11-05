@@ -104,7 +104,7 @@ describe("genres", () => {
     down = true;
     const summary = await fillGenres({ userId: user.userId });
     down = false;
-    assert.deepEqual(summary, { checked: 0, found: 0, unreachable: true });
+    assert.deepEqual(summary, { checked: 0, found: 0, unreachable: true, reason: "MusicBrainz answered with 500" });
     assert.deepEqual(await genresOf(a), []);
   });
 

@@ -1,11 +1,19 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { admins, getAccounts, getLastBackup, getLibraryStatus, isAdmin } from "@/lib/admin";
+import {
+  admins,
+  getAccounts,
+  getJobStatus,
+  getLastBackup,
+  getLibraryStatus,
+  isAdmin,
+  type JobStatus,
+} from "@/lib/admin";
 import { lastfmConfigured } from "@/lib/lastfm";
 import { currentUserId } from "@/lib/session";
 import { signupMode } from "@/lib/signups";
-import { formatDateTime } from "@/lib/time";
+import { formatDateTime, formatTimeAgo } from "@/lib/time";
 import Maintenance from "./maintenance";
 
 export const metadata: Metadata = { title: "Admin · Soundscape" };
@@ -16,9 +24,32 @@ function share(part: number, whole: number) {
   return whole === 0 ? "–" : `${Math.round((part / whole) * 100)}%`;
 }
 
+function jobResult({ last }: JobStatus) {
+  if (!last) return <span className="muted">Waiting for its first run</span>;
+  if (last.error) return <span className="error">Failed: {last.error}</span>;
+  if (last.unreachable)
+    return <span className="error">Stopped: {last.reason ?? "a service it uses was unreachable"}</span>;
+  if (last.checked === undefined) return "Done";
+  if (last.checked === 0) return <span className="muted">Nothing to do</span>;
+  return `Checked ${last.checked.toLocaleString("en")}, found ${(last.found ?? 0).toLocaleString("en")}`;
+}
+
+function lastRunText(job: JobStatus, now: Date) {
+  if (!job.last) return "–";
+  const at = new Date(job.last.at);
+  const late = now.getTime() - at.getTime() > 3 * job.everyMinutes * 60_000;
+  return `${formatTimeAgo(at, now)}${late ? " · late" : ""}`;
+}
+
 export default async function AdminPage() {
   if (!isAdmin(await currentUserId())) notFound();
-  const [accounts, library, backup] = await Promise.all([getAccounts(), getLibraryStatus(), getLastBackup()]);
+  const [accounts, library, backup, status] = await Promise.all([
+    getAccounts(),
+    getLibraryStatus(),
+    getLastBackup(),
+    getJobStatus(),
+  ]);
+  const now = new Date();
   const backupOld = !backup || Date.now() - backup.at.getTime() > BACKUP_OLD_MS;
 
   const tiles = [
@@ -82,6 +113,43 @@ export default async function AdminPage() {
         <p className="muted">
           Fill in more with <code>npm run db:covers</code>, <code>npm run db:albums</code> and{" "}
           <code>npm run db:genres</code>.
+        </p>
+      </section>
+
+      <section>
+        <h2>Background jobs</h2>
+        <div className="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>Job</th>
+                <th>Last run</th>
+                <th>Result</th>
+                <th>Waiting</th>
+              </tr>
+            </thead>
+            <tbody>
+              {status.jobs.map((job) => (
+                <tr key={job.name}>
+                  <td>
+                    {job.label}
+                    <small className="muted">
+                      {" "}
+                      · every {job.everyMinutes === 60 ? "hour" : `${job.everyMinutes} min`}
+                    </small>
+                  </td>
+                  <td className="muted">{lastRunText(job, now)}</td>
+                  <td>{jobResult(job)}</td>
+                  <td>{job.waiting === undefined ? "–" : job.waiting.toLocaleString("en")}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <p className="muted">
+          {status.relayQueued > 0
+            ? `${status.relayQueued.toLocaleString("en")} listens are waiting to be forwarded to ListenBrainz.`
+            : "No listens are waiting to be forwarded to ListenBrainz."}
         </p>
       </section>
 

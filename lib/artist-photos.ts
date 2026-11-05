@@ -1,11 +1,12 @@
 import { type ArtistPhoto, findDeezerArtist } from "./deezer";
+import { every } from "./jobs";
 import { sql } from "./postgres";
 
 const RETRY_AFTER_MS = 30 * 24 * 60 * 60 * 1000;
 const FILL_EVERY_MS = 60 * 60 * 1000;
 const FILL_PER_RUN = 100;
 
-export type PhotoSummary = { checked: number; found: number; unreachable: boolean };
+export type PhotoSummary = { checked: number; found: number; unreachable: boolean; reason?: string };
 
 export async function fillArtistPhotos({
   limit = 50,
@@ -30,8 +31,10 @@ export async function fillArtistPhotos({
     let match: ArtistPhoto | null;
     try {
       match = await findDeezerArtist(row.name);
-    } catch {
+    } catch (error) {
       summary.unreachable = true;
+      summary.reason =
+        error instanceof Error && error.message.startsWith("Deezer") ? error.message : "Deezer is unreachable";
       break;
     }
     summary.checked++;
@@ -44,21 +47,6 @@ export async function fillArtistPhotos({
   return summary;
 }
 
-const globalForPhotos = globalThis as unknown as { photoFilling?: boolean };
-
 export function startArtistPhotoFilling() {
-  if (globalForPhotos.photoFilling) return;
-  globalForPhotos.photoFilling = true;
-  let running = false;
-  setInterval(async () => {
-    if (running) return;
-    running = true;
-    try {
-      await fillArtistPhotos({ limit: FILL_PER_RUN });
-    } catch (error) {
-      console.warn(`Artist photos: ${error instanceof Error ? error.message : String(error)}`);
-    } finally {
-      running = false;
-    }
-  }, FILL_EVERY_MS);
+  every("artist-photos", FILL_EVERY_MS, () => fillArtistPhotos({ limit: FILL_PER_RUN }));
 }

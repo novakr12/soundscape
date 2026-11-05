@@ -1,4 +1,5 @@
 import { musicBrainz, Unreachable, USER_AGENT } from "./coverartarchive";
+import { every } from "./jobs";
 import { sql } from "./postgres";
 
 const RECHECK_MS = 90 * 24 * 60 * 60 * 1000;
@@ -38,7 +39,7 @@ export type ArtistInfo = {
   links: ArtistLink[];
 };
 
-export type InfoSummary = { checked: number; withBio: number; unreachable: boolean };
+export type InfoSummary = { checked: number; withBio: number; unreachable: boolean; reason?: string };
 
 function webUrl(text: string) {
   try {
@@ -146,6 +147,7 @@ export async function fillArtistInfo({
     } catch (error) {
       if (!(error instanceof Unreachable)) throw error;
       summary.unreachable = true;
+      summary.reason = error.message;
       break;
     }
     summary.checked++;
@@ -165,21 +167,9 @@ export async function ensureArtistInfo(artistId: string, now = Date.now()) {
   }
 }
 
-const globalForInfo = globalThis as unknown as { artistInfoFilling?: boolean };
-
 export function startArtistInfoFilling() {
-  if (globalForInfo.artistInfoFilling) return;
-  globalForInfo.artistInfoFilling = true;
-  let running = false;
-  setInterval(async () => {
-    if (running) return;
-    running = true;
-    try {
-      await fillArtistInfo({ limit: FILL_PER_RUN });
-    } catch (error) {
-      console.warn(`Artist info: ${error instanceof Error ? error.message : String(error)}`);
-    } finally {
-      running = false;
-    }
-  }, FILL_EVERY_MS);
+  every("artist-info", FILL_EVERY_MS, async () => {
+    const { checked, withBio, unreachable, reason } = await fillArtistInfo({ limit: FILL_PER_RUN });
+    return { checked, found: withBio, unreachable, reason };
+  });
 }

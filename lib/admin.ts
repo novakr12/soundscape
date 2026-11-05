@@ -1,3 +1,4 @@
+import { type JobRun, lastRun } from "./jobs";
 import { getValue, keys } from "./kv";
 import type { RecentPlay } from "./live";
 import { sql } from "./postgres";
@@ -92,4 +93,38 @@ export async function getLastBackup(): Promise<Backup | null> {
   const [at, file, size] = value.split("|");
   const date = new Date(at);
   return Number.isNaN(date.getTime()) ? null : { at: date, file: file ?? "", size: size ?? "" };
+}
+
+export type JobStatus = { name: string; label: string; everyMinutes: number; last: JobRun | null; waiting?: number };
+
+const JOBS = [
+  { name: "genres", label: "Genres from MusicBrainz", everyMinutes: 60 },
+  { name: "artist-photos", label: "Artist photos from Deezer", everyMinutes: 60 },
+  { name: "artist-info", label: "Artist info from MusicBrainz and Wikipedia", everyMinutes: 60 },
+  { name: "cleanup", label: "Removing expired sessions and caches", everyMinutes: 10 },
+];
+
+export async function getJobStatus(): Promise<{ jobs: JobStatus[]; relayQueued: number }> {
+  const [[waiting], runs] = await Promise.all([
+    sql`
+      WITH played AS (
+        SELECT DISTINCT a.id, a.mbid, a.genres_checked_at, a.photo_checked_at, a.info_checked_at
+        FROM user_track_plays p JOIN tracks t ON t.id = p.track_id JOIN artists a ON a.id = t.artist_id
+      )
+      SELECT count(*) FILTER (WHERE genres_checked_at IS NULL) AS genres,
+             count(*) FILTER (WHERE photo_checked_at IS NULL) AS photos,
+             count(*) FILTER (WHERE mbid IS NOT NULL AND info_checked_at IS NULL) AS info,
+             (SELECT count(*) FROM relay_queue) AS relay
+      FROM played`,
+    Promise.all(JOBS.map((job) => lastRun(job.name))),
+  ]);
+  const backlog: Record<string, number> = {
+    genres: waiting.genres,
+    "artist-photos": waiting.photos,
+    "artist-info": waiting.info,
+  };
+  return {
+    jobs: JOBS.map((job, i) => ({ ...job, last: runs[i], waiting: backlog[job.name] })),
+    relayQueued: waiting.relay,
+  };
 }

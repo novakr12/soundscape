@@ -120,7 +120,12 @@ describe("artist photos", () => {
   it("stops without marking anything when Deezer is unreachable", async () => {
     await importListens(user.userId, [{ artist: later, title: "Song", playedAt: new Date(Date.now() - 60_000) }]);
     process.env.DEEZER_API_URL = "http://127.0.0.1:9";
-    assert.deepEqual(await fillArtistPhotos({ userId: user.userId }), { checked: 0, found: 0, unreachable: true });
+    assert.deepEqual(await fillArtistPhotos({ userId: user.userId }), {
+      checked: 0,
+      found: 0,
+      unreachable: true,
+      reason: "Deezer is unreachable",
+    });
     assert.equal((await stored(later)).photo_checked_at, null);
   });
 });

@@ -1,4 +1,5 @@
 import { musicBrainz, Unreachable } from "./coverartarchive";
+import { every } from "./jobs";
 import { sql } from "./postgres";
 
 const MAX_GENRES = 5;
@@ -9,7 +10,7 @@ const RETRY_AFTER_MS = 90 * 24 * 60 * 60 * 1000;
 type Credit = { name?: string; artist?: { id: string; name: string } };
 type Genre = { name: string; count?: number };
 
-export type GenreSummary = { checked: number; found: number; unreachable: boolean };
+export type GenreSummary = { checked: number; found: number; unreachable: boolean; reason?: string };
 
 function normalize(text: string) {
   return text
@@ -63,23 +64,8 @@ export async function findArtistGenres(name: string, recordings: string[] = []) 
 const FILL_EVERY_MS = 60 * 60 * 1000;
 const FILL_PER_RUN = 100;
 
-const globalForGenres = globalThis as unknown as { genreFilling?: boolean };
-
 export function startGenreFilling() {
-  if (globalForGenres.genreFilling) return;
-  globalForGenres.genreFilling = true;
-  let running = false;
-  setInterval(async () => {
-    if (running) return;
-    running = true;
-    try {
-      await fillGenres({ limit: FILL_PER_RUN });
-    } catch (error) {
-      console.warn(`Genres: ${error instanceof Error ? error.message : String(error)}`);
-    } finally {
-      running = false;
-    }
-  }, FILL_EVERY_MS);
+  every("genres", FILL_EVERY_MS, () => fillGenres({ limit: FILL_PER_RUN }));
 }
 
 export async function fillGenres({
@@ -111,6 +97,7 @@ export async function fillGenres({
     } catch (error) {
       if (!(error instanceof Unreachable)) throw error;
       summary.unreachable = true;
+      summary.reason = error.message;
       break;
     }
     summary.checked++;
