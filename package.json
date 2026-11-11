@@ -32,7 +32,7 @@
     "recharts": "3.10.1"
   },
   "devDependencies": {
-    "@biomejs/biome": "2.6.4",
+    "@biomejs/biome": "2.6.6",
     "@types/node": "^24",
     "@types/react": "^19",
     "@types/react-dom": "^19",
