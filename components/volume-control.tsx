@@ -51,6 +51,17 @@ export default function VolumeControl({ audio }: { audio: RefObject<HTMLAudioEle
   }, []);
 
   useEffect(() => {
+    const element = audio.current;
+    if (!element || !ready) return;
+    const follow = () => {
+      setVolume(element.volume);
+      setMuted(element.muted);
+    };
+    element.addEventListener("volumechange", follow);
+    return () => element.removeEventListener("volumechange", follow);
+  }, [audio, ready]);
+
+  useEffect(() => {
     if (!ready) return;
     if (audio.current) {
       audio.current.volume = volume;
@@ -87,6 +98,7 @@ export default function VolumeControl({ audio }: { audio: RefObject<HTMLAudioEle
         step={0.05}
         value={level}
         aria-label="Volume"
+        style={{ "--fill": `${Math.round(level * 100)}%` } as React.CSSProperties}
         onChange={(event) => {
           setVolume(Number(event.target.value));
           setMuted(false);
