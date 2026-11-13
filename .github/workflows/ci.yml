@@ -72,3 +72,52 @@ jobs:
       - name: App log
         if: failure()
         run: cat app.log
+
+  docker:
+    name: Docker image and browser smoke test
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:17-alpine
+        ports:
+          - 5432:5432
+        env:
+          POSTGRES_USER: soundscape
+          POSTGRES_PASSWORD: soundscape
+          POSTGRES_DB: soundscape
+        options: >-
+          --health-cmd "pg_isready -U soundscape -d soundscape"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      BASE_URL: http://localhost:3000
+      E2E_USER: e2eadmin
+    steps:
+      - uses: actions/checkout@v5
+      - name: Build the image
+        run: docker build -t soundscape .
+      - name: Start the image
+        run: |
+          docker run -d --name soundscape --network host \
+            -e DATABASE_URL=postgres://soundscape:soundscape@localhost:5432/soundscape \
+            -e AUTH_SECRET=ci-only-secret-not-used-anywhere-else \
+            -e ADMIN_USERS=e2eadmin \
+            soundscape
+          for attempt in $(seq 1 60); do
+            curl -sf -o /dev/null "$BASE_URL/health" && exit 0
+            sleep 2
+          done
+          docker logs soundscape
+          exit 1
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e
+      - name: App log
+        if: failure()
+        run: docker logs soundscape

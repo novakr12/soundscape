@@ -38,6 +38,7 @@ To import from Last.fm, create a free API key at [last.fm/api/account/create](ht
 | Command | What it does |
 |---|---|
 | `npm test` / `npm run test:api` | Unit / API tests |
+| `npm run test:e2e` | Browser smoke test against a running server (`BASE_URL`, needs `npx playwright install chromium` once) |
 | `npm run lint` / `npm run format` | Check / fix formatting and lint rules with Biome |
 | `npm run db:covers` | Fill in missing album covers |
 | `npm run db:albums` | Fill in albums from ListenBrainz and Deezer |
