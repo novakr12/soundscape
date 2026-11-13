@@ -1507,3 +1507,33 @@ tr.selected {
   align-items: center;
   gap: 0.35rem;
 }
+
+.chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1rem;
+  margin: 0 0 0.5rem;
+  padding: 0;
+  list-style: none;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.chart-legend li {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.legend-bar {
+  width: 10px;
+  height: 12px;
+  border-radius: 2px 2px 0 0;
+  background: var(--series-1);
+}
+
+.legend-line {
+  width: 16px;
+  height: 2px;
+  background: var(--chart-axis);
+}

@@ -1,8 +1,9 @@
 import AlbumList from "@/components/album-list";
 import ListeningHeatmap from "@/components/listening-heatmap";
 import { ArtistLink } from "@/components/music-links";
-import { DailyPlaysChart, RankedBarChart } from "@/components/stats-charts";
+import { DailyPlaysChart, ListeningClockChart, RankedBarChart } from "@/components/stats-charts";
 import { topAlbums } from "@/lib/albums";
+import { getListeningClock, type ListeningClock } from "@/lib/listening-clock";
 import {
   getListeningHeatmap,
   getListeningTime,
@@ -54,6 +55,48 @@ function HeatmapTable({ grid }: { grid: number[][] }) {
   );
 }
 
+const clockHour = (hour: number) => `${String(hour).padStart(2, "0")}:00`;
+const share = (value: number) => `${Math.round(value * 1000) / 10}%`;
+
+function clockSummary(clock: ListeningClock) {
+  const article = clock.kind === "early bird" || clock.kind === "evening listener" ? "an" : "a";
+  const parts = [
+    `Your busiest hour is ${clockHour(clock.peakHour)}, so you're ${article} ${clock.kind}.`,
+    `${clock.busiestDay} is your busiest day, and ${Math.round(clock.weekendShare * 100)}% of your plays are at the weekend.`,
+  ];
+  if (clock.followingPeakHour !== undefined) {
+    parts.push(`People you follow listen most at ${clockHour(clock.followingPeakHour)}.`);
+  }
+  return parts.join(" ");
+}
+
+function ClockTable({ clock }: { clock: ListeningClock }) {
+  const comparing = clock.followingPeakHour !== undefined;
+  return (
+    <details>
+      <summary className="muted">Show as table</summary>
+      <table>
+        <thead>
+          <tr>
+            <th>Hour</th>
+            <th>You</th>
+            {comparing && <th>People you follow</th>}
+          </tr>
+        </thead>
+        <tbody>
+          {clock.hours.map((hour) => (
+            <tr key={hour.hour}>
+              <td>{clockHour(hour.hour)}</td>
+              <td>{share(hour.you)}</td>
+              {comparing && <td>{share(hour.following ?? 0)}</td>}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </details>
+  );
+}
+
 function DataTable({ rows, label, artists = false }: { rows: RankedItem[]; label: string; artists?: boolean }) {
   return (
     <details>
@@ -89,6 +132,7 @@ export default async function StatsView({ userId }: { userId: string }) {
     topAlbums(userId),
   ]);
   const yearPlays = heatmap.flat().reduce((sum, plays) => sum + plays, 0);
+  const clock = await getListeningClock(userId, heatmap);
   const last30 = daily.reduce((sum, d) => sum + d.plays, 0);
 
   const tiles = [
@@ -137,6 +181,21 @@ export default async function StatsView({ userId }: { userId: string }) {
         )}
         <HeatmapTable grid={heatmap} />
       </section>
+
+      {clock && (
+        <section className="chart-card">
+          <h2>Listening clock</h2>
+          <p className="muted">
+            Share of your plays in each hour of the day, past 12 months
+            {clock.following > 0 &&
+              `, next to the average of ${clock.following} ${clock.following === 1 ? "person" : "people"} you follow`}
+            .
+          </p>
+          <p>{clockSummary(clock)}</p>
+          <ListeningClockChart data={clock.hours} />
+          <ClockTable clock={clock} />
+        </section>
+      )}
 
       <div className="columns">
         <section className="chart-card">
