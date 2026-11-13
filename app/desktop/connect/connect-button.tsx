@@ -3,8 +3,6 @@
 import { useState } from "react";
 import { connectDesktop } from "./actions";
 
-export const APP_SCHEME = "soundscape-desktop";
-
 export default function ConnectButton({ device }: { device: string }) {
   const [state, setState] = useState<{ busy?: boolean; error?: string; sent?: boolean }>({});
 
@@ -13,7 +11,7 @@ export default function ConnectButton({ device }: { device: string }) {
     const result = await connectDesktop(device);
     if (!result.token || !result.user) return setState({ error: result.error ?? "Something went wrong." });
     const params = new URLSearchParams({ token: result.token, user: result.user });
-    window.location.href = `${APP_SCHEME}://connected?${params}`;
+    window.location.href = `/desktop/connected#${params}`;
     setState({ sent: true });
   }
 

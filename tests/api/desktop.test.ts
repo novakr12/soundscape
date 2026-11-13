@@ -43,6 +43,12 @@ describe("desktop app API", () => {
     assert.equal(location.searchParams.get("next"), "/desktop/connect?device=My+laptop");
   });
 
+  it("has a page the app watches for to pick up its token", async () => {
+    const response = await fetch(`${BASE_URL}/desktop/connected`);
+    assert.equal(response.status, 200);
+    assert.match(await response.text(), /Desktop app connected/);
+  });
+
   it("gives the app its notifications as text, newer than the last one it saw", async () => {
     assert.equal((await notifications()).status, 401);
     assert.equal((await notifications("Token not-a-real-token")).status, 401);
