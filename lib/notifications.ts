@@ -43,8 +43,13 @@ export async function notifyFollow(follower: string, followee: string) {
   return add({ userId: followee, kind: "follow", otherUser: follower, dedupe: `follow:${follower}` });
 }
 
+const visible = sql`(n.other_user IS NULL OR n.kind = 'follow' OR NOT EXISTS (
+  SELECT 1 FROM users u WHERE u.username = n.other_user AND u.is_private))`;
+
 export async function unreadCount(userId: string): Promise<number> {
-  const [row] = await sql`SELECT count(*) AS unread FROM notifications WHERE user_id = ${userId} AND read_at IS NULL`;
+  const [row] = await sql`
+    SELECT count(*) AS unread FROM notifications n
+    WHERE n.user_id = ${userId} AND n.read_at IS NULL AND ${visible}`;
   return Number(row.unread);
 }
 
@@ -52,8 +57,7 @@ export async function listNotifications(userId: string, limit = PAGE_SIZE): Prom
   const rows = await sql`
     SELECT n.id, n.kind, n.other_user, n.count, n.created_at, n.read_at
     FROM notifications n
-    LEFT JOIN users u ON u.username = n.other_user
-    WHERE n.user_id = ${userId} AND (n.other_user IS NULL OR NOT u.is_private OR n.kind = 'follow')
+    WHERE n.user_id = ${userId} AND ${visible}
     ORDER BY n.created_at DESC, n.id DESC
     LIMIT ${limit}`;
   return rows.map((row) => ({

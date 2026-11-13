@@ -50,13 +50,18 @@ async function readSpotify(files: File[], reading: (name: string) => void): Prom
   };
 }
 
-async function readApple(files: File[], reading: (name: string) => void): Promise<Read> {
-  const contents = [];
-  for (const file of files) {
-    reading(file.name);
-    contents.push({ name: file.name, text: await file.text() });
+async function* textOf(file: File, reading: (name: string) => void) {
+  reading(file.name);
+  const reader = file.stream().pipeThrough(new TextDecoderStream()).getReader();
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) return;
+    yield value;
   }
-  const history = readAppleMusicFiles(contents);
+}
+
+async function readApple(files: File[], reading: (name: string) => void): Promise<Read> {
+  const history = await readAppleMusicFiles(files.map((file) => ({ name: file.name, chunks: textOf(file, reading) })));
   return {
     listens: history.listens,
     leftOut: [

@@ -89,8 +89,10 @@ describe("notifications", () => {
       [[friend.userId, false]],
     );
 
+    const unreadBefore = await unreadCount(me.userId);
     await setPrivate(friend.userId, true);
     assert.equal((await listNotifications(me.userId)).filter((n) => n.kind === "passed").length, 0);
+    assert.equal(await unreadCount(me.userId), unreadBefore - 1);
     await setPrivate(friend.userId, false);
   });
 
