@@ -50,6 +50,13 @@ export async function revokeToken(userId: string, id: number) {
   return rows.length > 0;
 }
 
+export async function revokeAuthorization(header: string | null): Promise<boolean> {
+  const match = header?.match(/^token\s+(\S+)$/i);
+  if (!match) return false;
+  const rows = await sql`DELETE FROM api_tokens WHERE token = ${hash(match[1])} RETURNING 1`;
+  return rows.length > 0;
+}
+
 export async function userForAuthorization(header: string | null, userAgent?: string | null): Promise<string | null> {
   const match = header?.match(/^token\s+(\S+)$/i);
   if (!match) return null;

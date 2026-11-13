@@ -3,11 +3,12 @@
 import { useActionState } from "react";
 import { type LoginState, login } from "./actions";
 
-export default function LoginForm() {
+export default function LoginForm({ next }: { next?: string }) {
   const [state, action, pending] = useActionState<LoginState, FormData>(login, {});
 
   return (
     <form action={action} className="stack">
+      {next && <input type="hidden" name="next" value={next} />}
       <label>
         Username
         <input name="username" defaultValue={state.username} required autoComplete="username" />

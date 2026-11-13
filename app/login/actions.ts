@@ -2,6 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { clearLoginFailures, isLoginLocked, recordLoginFailure } from "@/lib/live";
+import { safeNext } from "@/lib/safe-next";
 import { logIn } from "@/lib/session";
 import { verifyPassword } from "@/lib/users";
 
@@ -26,5 +27,5 @@ export async function login(_previous: LoginState, formData: FormData): Promise<
   }
   await clearLoginFailures(username);
   await logIn(username);
-  redirect("/");
+  redirect(safeNext(formData.get("next")));
 }
