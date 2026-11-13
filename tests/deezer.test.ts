@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { afterEach, describe, it, mock } from "node:test";
-import { findDeezerTrack } from "../lib/deezer";
+import { findDeezerTrack, normalize } from "../lib/deezer";
 
 type Song = { id: number; title: string; artist: string; album?: string };
 
@@ -128,5 +128,13 @@ describe("findDeezerTrack", () => {
   it("throws when Deezer reports an error", async () => {
     mock.method(globalThis, "fetch", async () => Response.json({ error: { message: "Quota limit exceeded" } }));
     await assert.rejects(findDeezerTrack("Radiohead", "Creep"), /Quota limit exceeded/);
+  });
+});
+
+describe("normalize", () => {
+  it("drops accents instead of splitting words at them", () => {
+    assert.equal(normalize("Björk"), normalize("Bjork"));
+    assert.equal(normalize("Jóga"), "joga");
+    assert.equal(normalize("Beyoncé"), "beyonce");
   });
 });

@@ -20,10 +20,12 @@ async function moveTrack(tx: Tx, fromId: string, intoId: string, artistId: strin
   await tx`
     INSERT INTO tracks (id, title, artist_id, album_id, album_source, track_number, duration_ms, mbid, cover,
                         deezer_id, deezer_missing, deezer_album_missing, navidrome_cover, navidrome_user,
-                        navidrome_checked_at, cover_art_checked_at, cover_art_release_group)
+                        navidrome_checked_at, cover_art_checked_at, cover_art_release_group, apple_preview,
+                        apple_checked_at)
     SELECT ${intoId}, coalesce(${title ?? null}, title), ${artistId}, album_id, album_source, track_number,
            duration_ms, mbid, cover, deezer_id, deezer_missing, deezer_album_missing, navidrome_cover,
-           navidrome_user, navidrome_checked_at, cover_art_checked_at, cover_art_release_group
+           navidrome_user, navidrome_checked_at, cover_art_checked_at, cover_art_release_group, apple_preview,
+           apple_checked_at
     FROM tracks WHERE id = ${fromId}
     ON CONFLICT (id) DO NOTHING`;
   await tx`

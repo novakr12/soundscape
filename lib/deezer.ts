@@ -28,16 +28,17 @@ export type DeezerMatch = {
   album?: string;
 };
 
-function normalize(text: string) {
+export function normalize(text: string) {
   return text
     .toLowerCase()
     .normalize("NFKD")
+    .replace(/\p{M}/gu, "")
     .replace(/['’]/g, "")
     .replace(/[^a-z0-9]+/g, " ")
     .trim();
 }
 
-function mainArtist(artist: string) {
+export function mainArtist(artist: string) {
   return artist.split(/\s*(?:,|&|;|\/|\bx\b|\bfeat\.?|\bft\.?|\bfeaturing\b)\s*/i)[0];
 }
 
@@ -45,7 +46,7 @@ function withoutFeatures(title: string) {
   return title.replace(/\s*[([]?\s*(?:feat\.?|ft\.?|featuring|prod\.?|produced by)\s.*$/i, "");
 }
 
-function mainTitle(title: string) {
+export function mainTitle(title: string) {
   const clean = withoutFeatures(title);
   return clean.split(/\s+-\s+|\s*[([]/)[0].trim() || clean;
 }

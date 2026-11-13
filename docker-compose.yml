@@ -16,6 +16,7 @@ services:
       SIGNUPS: ${SIGNUPS:-open}
       ADMIN_USERS: ${ADMIN_USERS:-}
       PUSH_CONTACT: ${PUSH_CONTACT:-}
+      APPLE_MUSIC_COUNTRY: ${APPLE_MUSIC_COUNTRY:-}
       NEXT_TELEMETRY_DISABLED: "1"
     depends_on:
       postgres:
