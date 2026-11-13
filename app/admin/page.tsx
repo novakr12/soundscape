@@ -10,10 +10,12 @@ import {
   isAdmin,
   type JobStatus,
 } from "@/lib/admin";
+import { recentErrors } from "@/lib/errors";
 import { lastfmConfigured } from "@/lib/lastfm";
 import { currentUserId } from "@/lib/session";
 import { signupMode } from "@/lib/signups";
 import { formatDateTime, formatTimeAgo } from "@/lib/time";
+import { clearServerErrors } from "./actions";
 import Maintenance from "./maintenance";
 
 export const metadata: Metadata = { title: "Admin · Soundscape" };
@@ -43,11 +45,12 @@ function lastRunText(job: JobStatus, now: Date) {
 
 export default async function AdminPage() {
   if (!isAdmin(await currentUserId())) notFound();
-  const [accounts, library, backup, status] = await Promise.all([
+  const [accounts, library, backup, status, errors] = await Promise.all([
     getAccounts(),
     getLibraryStatus(),
     getLastBackup(),
     getJobStatus(),
+    recentErrors(),
   ]);
   const now = new Date();
   const backupOld = !backup || Date.now() - backup.at.getTime() > BACKUP_OLD_MS;
@@ -150,6 +153,43 @@ export default async function AdminPage() {
           {status.relayQueued > 0
             ? `${status.relayQueued.toLocaleString("en")} listens are waiting to be forwarded to ListenBrainz.`
             : "No listens are waiting to be forwarded to ListenBrainz."}
+        </p>
+      </section>
+
+      <section>
+        <h2>Recent errors</h2>
+        {errors.length === 0 ? (
+          <p className="muted">No errors in the last 30 days.</p>
+        ) : (
+          <>
+            <ul className="errors">
+              {errors.map((error) => (
+                <li key={`${error.source}\n${error.message}`}>
+                  <details>
+                    <summary>
+                      <span className="error">{error.message}</span>
+                      <small className="muted">
+                        {" "}
+                        · {error.source}
+                        {error.count > 1 &&
+                          ` · ${error.count.toLocaleString("en")} times since ${formatDateTime(error.firstAt)}`}{" "}
+                        · last {formatTimeAgo(error.lastAt, now)}
+                      </small>
+                    </summary>
+                    {error.digest && <p className="muted">Digest {error.digest}</p>}
+                    {error.stack && <pre>{error.stack}</pre>}
+                  </details>
+                </li>
+              ))}
+            </ul>
+            <form action={clearServerErrors}>
+              <button type="submit">Clear the list</button>
+            </form>
+          </>
+        )}
+        <p className="muted">
+          Errors from pages and background jobs are kept for 30 days. When someone sees an error page, its digest
+          matches one here.
         </p>
       </section>
 

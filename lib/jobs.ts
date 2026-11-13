@@ -1,3 +1,4 @@
+import { recordError } from "./errors";
 import { getValue, setValue } from "./kv";
 
 const FIRST_RUN_DELAY_MS = 60 * 1000;
@@ -16,6 +17,7 @@ export async function runJob(name: string, work: () => Promise<JobResult | undef
     const message = error instanceof Error ? error.message : String(error);
     await setValue(key(name), { at, ms: Date.now() - at, error: message } satisfies JobRun).catch(() => {});
     console.warn(`${name}: ${message}`);
+    await recordError(`job ${name}`, error);
   }
 }
 

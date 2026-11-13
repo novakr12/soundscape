@@ -3,8 +3,15 @@
 import { revalidatePath } from "next/cache";
 import { isAdmin } from "@/lib/admin";
 import { findDuplicatePlays, removeDuplicatePlays, usersWithPlays } from "@/lib/dedupe";
+import { clearErrors } from "@/lib/errors";
 import { LibraryEditError, mergeArtist, mergeSong, renameArtist, renameSong } from "@/lib/library-edits";
 import { currentUserId } from "@/lib/session";
+
+export async function clearServerErrors() {
+  if (!(await allowed())) return;
+  await clearErrors();
+  revalidatePath("/admin");
+}
 
 export type DuplicatesResult = { error?: string; users?: { username: string; duplicates: number }[]; removed?: number };
 

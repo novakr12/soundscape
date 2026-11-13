@@ -1422,3 +1422,27 @@ tr.selected {
   flex-shrink: 0;
   font-size: 0.85rem;
 }
+
+.errors {
+  list-style: none;
+  padding: 0;
+}
+
+.errors li {
+  padding: 0.5rem 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--muted) 20%, transparent);
+}
+
+.errors summary {
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+
+.errors pre {
+  overflow-x: auto;
+  max-height: 20rem;
+  padding: 0.75rem;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--muted) 12%, transparent);
+  font-size: 0.8rem;
+}
