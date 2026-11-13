@@ -1476,3 +1476,34 @@ tr.selected {
 .token-form {
   margin-top: 1rem;
 }
+
+.now-playing-preview {
+  width: 100%;
+  max-width: 440px;
+  height: auto;
+}
+
+.theme-choice {
+  display: flex;
+  gap: 1rem;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.theme-choice legend {
+  float: left;
+  margin-right: 0.5rem;
+}
+
+.snippet {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.theme-choice label {
+  flex-direction: row;
+  align-items: center;
+  gap: 0.35rem;
+}

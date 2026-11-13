@@ -110,6 +110,15 @@ describe("smoke test", () => {
     await open(new URL(page.url()).pathname);
   });
 
+  it("draws the now playing image and the Yearscape card", async () => {
+    const nowPlaying = await page.request.get(`${BASE_URL}/u/${USERNAME}/now-playing.png`);
+    assert.equal(nowPlaying.status(), 200);
+    assert.equal(nowPlaying.headers()["content-type"], "image/png");
+    const card = await page.request.get(`${BASE_URL}/yearscape/card`);
+    assert.equal(card.status(), 200);
+    assert.equal(card.headers()["content-type"], "image/png");
+  });
+
   it("opens the admin page", async () => {
     await open("/admin");
   });

@@ -8,6 +8,7 @@ import ChangePasswordForm from "./change-password-form";
 import DeleteAccountForm from "./delete-account-form";
 import DeleteHistoryForm from "./delete-history-form";
 import InviteForm from "./invite-form";
+import NowPlayingShare from "./now-playing-share";
 import PushSettings from "./push-settings";
 
 export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ password?: string }> }) {
@@ -50,6 +51,16 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
           leaderboard and when you reach a play milestone. Turn it on separately on each device.
         </p>
         <PushSettings publicKey={keys.publicKey} devices={devices} />
+      </section>
+
+      <section>
+        <h2>Now playing image</h2>
+        <p className="muted">
+          A small picture of what you&apos;re listening to, or the last song you played. Put it on a GitHub profile, a
+          website or a forum signature; it updates whenever someone opens the page.
+          {hidden && " Your profile is private, so the picture only says that."}
+        </p>
+        <NowPlayingShare username={userId} />
       </section>
 
       {signupMode() === "invite" && (
