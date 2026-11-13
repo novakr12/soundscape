@@ -1537,3 +1537,39 @@ tr.selected {
   height: 2px;
   background: var(--chart-axis);
 }
+
+.volume {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-shrink: 0;
+}
+
+.volume input[type="range"] {
+  width: 6rem;
+  accent-color: var(--accent);
+}
+
+.icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--fg);
+  cursor: pointer;
+}
+
+.icon-button:hover {
+  background: color-mix(in srgb, var(--muted) 15%, transparent);
+}
+
+@media (max-width: 600px) {
+  .volume {
+    display: none;
+  }
+}

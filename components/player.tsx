@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useRef, useState } from "react";
 import { ArtistLink, SongLink } from "./music-links";
+import VolumeControl from "./volume-control";
 
 export type PlayerTrack = {
   trackId: string;
@@ -56,6 +57,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
           {error && <span className="error">{error}</span>}
         </div>
         <audio ref={audioRef} controls onError={() => current && setError("Preview unavailable for this track")} />
+        <VolumeControl audio={audioRef} />
       </div>
     </PlayerContext.Provider>
   );
