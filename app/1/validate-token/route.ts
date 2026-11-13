@@ -8,7 +8,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ code: 400, error: "You need to provide an Authorization header." }, { status: 400 });
   }
 
-  const userId = await userForAuthorization(header);
+  const userId = await userForAuthorization(header, request.headers.get("user-agent"));
   return NextResponse.json(
     userId
       ? { code: 200, message: "Token valid.", valid: true, user_name: userId }

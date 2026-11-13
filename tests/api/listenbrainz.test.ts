@@ -5,7 +5,7 @@ import { getHistory } from "../../lib/history";
 import { getRecent } from "../../lib/live";
 import { sql } from "../../lib/postgres";
 import { monthBucket } from "../../lib/time";
-import { rotateToken } from "../../lib/tokens";
+import { createToken } from "../../lib/tokens";
 import { chartEntry, closeConnections, createTestUser, removeTestUser, testUser } from "./helpers";
 
 const BASE_URL = process.env.BASE_URL ?? "http://localhost:3000";
@@ -36,7 +36,7 @@ async function listenCount(title: string) {
 
 before(async () => {
   await createTestUser(userId);
-  token = await rotateToken(userId);
+  token = await createToken(userId, "Test");
 });
 
 after(async () => {

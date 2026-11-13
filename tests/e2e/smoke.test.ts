@@ -69,11 +69,10 @@ describe("smoke test", () => {
 
   it("sends plays with a scrobbling token", async () => {
     await open("/connect");
-    if ((await page.locator("code.token").count()) === 0) {
-      await page.getByRole("button", { name: /Generate token/ }).click();
-      await page.locator("code.token").waitFor({ timeout: 30_000 });
-    }
-    const token = ((await page.locator("code.token").textContent()) ?? "").trim();
+    await page.fill('input[name="name"]', "Smoke test");
+    await page.getByRole("button", { name: "Create token" }).click();
+    await page.locator(".new-token code.token").waitFor({ timeout: 30_000 });
+    const token = ((await page.locator(".new-token code.token").textContent()) ?? "").trim();
     const now = Math.floor(Date.now() / 1000);
     const payload = [1, 2, 3, 4, 5, 6].map((n) => ({
       listened_at: now - n * 300,
@@ -85,6 +84,13 @@ describe("smoke test", () => {
       body: JSON.stringify({ listen_type: "import", payload }),
     });
     assert.equal(response.status, 200, await response.text());
+
+    await open("/connect");
+    const row = page.locator("tr", { hasText: "Smoke test" }).first();
+    assert.match((await row.textContent()) ?? "", /node/i);
+    page.once("dialog", (dialog) => dialog.accept());
+    await row.getByRole("button", { name: "Revoke Smoke test" }).click();
+    await row.waitFor({ state: "detached", timeout: 30_000 });
   });
 
   for (const path of PAGES) {

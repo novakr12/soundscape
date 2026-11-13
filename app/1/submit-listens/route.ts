@@ -36,7 +36,7 @@ function error(code: number, message: string) {
 }
 
 export async function POST(request: Request) {
-  const userId = await userForAuthorization(request.headers.get("authorization"));
+  const userId = await userForAuthorization(request.headers.get("authorization"), request.headers.get("user-agent"));
   if (!userId) return error(401, "Invalid authorization token.");
 
   const body = await request.json().catch(() => null);

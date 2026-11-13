@@ -1446,3 +1446,33 @@ tr.selected {
   background: color-mix(in srgb, var(--muted) 12%, transparent);
   font-size: 0.8rem;
 }
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.tokens td {
+  vertical-align: top;
+}
+
+.tokens .user-agent {
+  display: block;
+  max-width: 22rem;
+  overflow-wrap: anywhere;
+}
+
+.new-token {
+  margin-top: 1rem;
+  padding: 0.75rem 1rem;
+  border-left: 3px solid var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+
+.token-form {
+  margin-top: 1rem;
+}

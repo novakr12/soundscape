@@ -11,7 +11,7 @@ import { sql } from "../../lib/postgres";
 import { setPrivate } from "../../lib/privacy";
 import { sessionUser, startSession } from "../../lib/sessions";
 import { monthBucket } from "../../lib/time";
-import { rotateToken, userForAuthorization } from "../../lib/tokens";
+import { createToken, userForAuthorization } from "../../lib/tokens";
 import { createUser, userExists } from "../../lib/users";
 import { addWanted } from "../../lib/wanted";
 import { closeConnections, createTestUser, removeTestUser, testUser } from "./helpers";
@@ -28,7 +28,7 @@ before(async () => {
     { artist: user.artist, title: "Leaving", playedAt: new Date(Date.now() - 60_000) },
     { artist: user.artist, title: "Leaving", playedAt: new Date(Date.now() - 120_000) },
   ]);
-  token = await rotateToken(user.userId);
+  token = await createToken(user.userId, "Test");
   session = await startSession(user.userId);
   await setPrivate(user.userId, true);
   await addWanted(user.userId, trackIdFor(user.artist, "Leaving"));

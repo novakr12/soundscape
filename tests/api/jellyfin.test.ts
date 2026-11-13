@@ -7,7 +7,7 @@ import { importListens } from "../../lib/imports";
 import { getJellyfin, playbackFor, pollJellyfin, removeJellyfin, saveJellyfin } from "../../lib/jellyfin";
 import { getListening, USER_CHANNEL } from "../../lib/live";
 import { sql } from "../../lib/postgres";
-import { rotateToken } from "../../lib/tokens";
+import { createToken } from "../../lib/tokens";
 import { closeConnections, createTestUser, removeTestUser, testUser } from "./helpers";
 
 process.env.AUTH_SECRET ??= "test-only-secret";
@@ -165,7 +165,7 @@ describe("Jellyfin playback", () => {
   });
 
   it("ignores the plugin's playing now while Jellyfin reports the position", async () => {
-    const response = await nowPlaying(await rotateToken(user.userId));
+    const response = await nowPlaying(await createToken(user.userId, "Test"));
     assert.equal(response.status, 200);
     assert.equal((await getListening(user.userId))?.trackId, trackId);
   });
@@ -194,7 +194,7 @@ describe("Jellyfin playback", () => {
     assert.equal(await poll(), null);
     assert.ok(announced(), `published ${published}`);
 
-    const response = await nowPlaying(await rotateToken(user.userId));
+    const response = await nowPlaying(await createToken(user.userId, "Test"));
     assert.equal(response.status, 200);
     assert.equal((await getListening(user.userId))?.title, "Another Song");
     assert.equal(await poll().then((l) => l?.title), "Another Song");

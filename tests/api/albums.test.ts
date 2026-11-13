@@ -19,7 +19,7 @@ import { albumsFromListenBrainz } from "../../lib/listenbrainz";
 import { sql } from "../../lib/postgres";
 import { searchAlbums } from "../../lib/search";
 import { localDay } from "../../lib/time";
-import { rotateToken } from "../../lib/tokens";
+import { createToken } from "../../lib/tokens";
 import { ensureTracklist } from "../../lib/tracklists";
 import { getYearscape } from "../../lib/yearscape";
 import { closeConnections, createTestUser, removeTestUser, testUser } from "./helpers";
@@ -100,7 +100,7 @@ before(async () => {
     { artist: user.artist, title: "Closer", playedAt: playedAt(4) },
     { artist: user.artist, title: "Closer", playedAt: playedAt(3) },
   ]);
-  token = await rotateToken(user.userId);
+  token = await createToken(user.userId, "Test");
 });
 
 after(async () => {

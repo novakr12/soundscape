@@ -1,32 +1,30 @@
-import { revalidatePath } from "next/cache";
 import Link from "next/link";
 import { getJellyfin } from "@/lib/jellyfin";
 import { getNavidrome } from "@/lib/navidrome";
 import { getRelay, queuedForUser } from "@/lib/relay";
 import { requireUserId } from "@/lib/session";
-import { getToken, rotateToken } from "@/lib/tokens";
+import { formatDateTime, formatTimeAgo } from "@/lib/time";
+import { listTokens } from "@/lib/tokens";
 import { disconnectJellyfin, disconnectNavidrome, stopRelay } from "./actions";
 import JellyfinForm from "./jellyfin-form";
 import NavidromeForm from "./navidrome-form";
 import RelayForm from "./relay-form";
+import RevokeButton from "./revoke-button";
+import TokenForm from "./token-form";
 
 const ADDRESS = "https://your-soundscape-address";
 
 export default async function ConnectPage() {
   const userId = await requireUserId();
-  const [token, relay, queued, navidrome, jellyfin] = await Promise.all([
-    getToken(userId),
+  const [tokens, relay, queued, navidrome, jellyfin] = await Promise.all([
+    listTokens(userId),
     getRelay(userId),
     queuedForUser(userId),
     getNavidrome(userId),
     getJellyfin(userId),
   ]);
 
-  async function generateToken() {
-    "use server";
-    await rotateToken(await requireUserId());
-    revalidatePath("/connect");
-  }
+  const now = new Date();
 
   return (
     <>
@@ -41,12 +39,46 @@ export default async function ConnectPage() {
       </p>
 
       <section>
-        <h2>Your token</h2>
-        {token ? <code className="token">{token}</code> : <p className="muted">You have no token yet.</p>}
-        <form action={generateToken}>
-          <button type="submit">{token ? "Generate a new token" : "Generate token"}</button>
-        </form>
-        {token && <p className="muted">A new token disconnects servers that use the old one.</p>}
+        <h2>Tokens</h2>
+        <p className="muted">
+          Make one token for each app or device, so you can see which ones still send plays and revoke one without
+          touching the others.
+        </p>
+        {tokens.length > 0 && (
+          <div className="table-scroll">
+            <table className="tokens">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Created</th>
+                  <th>Last used</th>
+                  <th>
+                    <span className="visually-hidden">Revoke</span>
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {tokens.map((token) => (
+                  <tr key={token.id}>
+                    <td>
+                      {token.name}
+                      {token.hint && <small className="muted"> · ends in {token.hint}</small>}
+                    </td>
+                    <td className="muted">{formatDateTime(token.createdAt)}</td>
+                    <td>
+                      {token.lastUsedAt ? formatTimeAgo(token.lastUsedAt, now) : <span className="muted">Never</span>}
+                      {token.lastUsedBy && <small className="muted user-agent">{token.lastUsedBy}</small>}
+                    </td>
+                    <td>
+                      <RevokeButton id={token.id} name={token.name} />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        <TokenForm />
       </section>
 
       <section>

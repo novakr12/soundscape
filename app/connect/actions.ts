@@ -7,6 +7,28 @@ import { JellyfinError, removeJellyfin, saveJellyfin } from "@/lib/jellyfin";
 import { NavidromeError, removeNavidrome, saveNavidrome } from "@/lib/navidrome";
 import { RelayError, removeRelay, saveRelay } from "@/lib/relay";
 import { requireUserId } from "@/lib/session";
+import { createToken, revokeToken, TokenError } from "@/lib/tokens";
+
+export type TokenFormState = { error?: string; token?: string; name?: string };
+
+export async function createDeviceToken(_previous: TokenFormState, formData: FormData): Promise<TokenFormState> {
+  const userId = await requireUserId();
+  const name = String(formData.get("name") ?? "");
+  try {
+    const token = await createToken(userId, name);
+    revalidatePath("/connect");
+    return { token, name: name.replace(/\s+/g, " ").trim() };
+  } catch (error) {
+    if (error instanceof TokenError) return { error: error.message };
+    throw error;
+  }
+}
+
+export async function revokeDeviceToken(formData: FormData) {
+  const userId = await requireUserId();
+  await revokeToken(userId, Number(formData.get("id")));
+  revalidatePath("/connect");
+}
 
 export type RelayFormState = {
   error?: string;
