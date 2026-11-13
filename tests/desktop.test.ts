@@ -34,3 +34,11 @@ describe("deviceName", () => {
     assert.equal(deviceName("x".repeat(100)).length, 60);
   });
 });
+
+describe("notification text", () => {
+  it("counts one play in the singular", async () => {
+    const { notificationMessage } = await import("../lib/notifications");
+    assert.equal(notificationMessage("listener", { kind: "milestone", count: 1 }).body, "You reached 1 play.");
+    assert.equal(notificationMessage("listener", { kind: "milestone", count: 1000 }).body, "You reached 1,000 plays.");
+  });
+});

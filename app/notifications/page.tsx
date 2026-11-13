@@ -26,7 +26,11 @@ function Message({ notification, userId }: { notification: Notification; userId:
   if (notification.kind === "milestone" && notification.count) {
     return (
       <>
-        You reached <Link href={`/u/${userId}`}>{notification.count.toLocaleString("en")} plays</Link>.
+        You reached{" "}
+        <Link href={`/u/${userId}`}>
+          {notification.count.toLocaleString("en")} {notification.count === 1 ? "play" : "plays"}
+        </Link>
+        .
       </>
     );
   }

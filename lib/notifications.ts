@@ -40,7 +40,12 @@ export function notificationMessage(
   if (kind === "passed") {
     return { title: "Leaderboard", body: `${otherUser} passed you on this week's leaderboard.`, url: "/feed" };
   }
-  return { title: "Milestone", body: `You reached ${(count ?? 0).toLocaleString("en")} plays.`, url: `/u/${userId}` };
+  const plays = count ?? 0;
+  return {
+    title: "Milestone",
+    body: `You reached ${plays.toLocaleString("en")} ${plays === 1 ? "play" : "plays"}.`,
+    url: `/u/${userId}`,
+  };
 }
 
 const sending = new Set<Promise<number>>();
