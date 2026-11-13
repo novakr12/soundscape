@@ -1,13 +1,46 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { deleteAccount } from "@/lib/accounts";
 import { clearLoginFailures, isLoginLocked, recordLoginFailure } from "@/lib/live";
 import { deleteAllPlays } from "@/lib/play-edits";
-import { logOut, logOutOtherDevices, requireUserId } from "@/lib/session";
+import { PushError, type PushSubscriptionJson, removePushDevice, savePushDevice, sendPush } from "@/lib/push";
+import { currentSessionKey, logOut, logOutOtherDevices, requireUserId } from "@/lib/session";
 import { createInvite, signupMode } from "@/lib/signups";
 import { changePassword, MIN_PASSWORD_LENGTH, verifyPassword } from "@/lib/users";
+
+export type PushResult = { error?: string; delivered?: number };
+
+export async function savePushSubscription(subscription: PushSubscriptionJson): Promise<PushResult> {
+  const userId = await requireUserId();
+  try {
+    await savePushDevice(userId, subscription, (await headers()).get("user-agent"), await currentSessionKey());
+  } catch (error) {
+    if (error instanceof PushError) return { error: error.message };
+    throw error;
+  }
+  revalidatePath("/settings");
+  return {};
+}
+
+export async function removePushSubscription(endpoint: string): Promise<PushResult> {
+  await removePushDevice(await requireUserId(), String(endpoint));
+  revalidatePath("/settings");
+  return {};
+}
+
+export async function sendTestPush(): Promise<PushResult> {
+  const userId = await requireUserId();
+  const delivered = await sendPush(userId, {
+    title: "Soundscape",
+    body: "Notifications work on this device.",
+    url: "/notifications",
+    tag: "test",
+  });
+  return delivered > 0 ? { delivered } : { error: "No device accepted the test notification." };
+}
 
 export type DeleteHistoryState = { error?: string; deleted?: number };
 

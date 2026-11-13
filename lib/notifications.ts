@@ -4,6 +4,7 @@ import { getValue, keys, setValue } from "./kv";
 import { ranking } from "./leaderboard";
 import { MILESTONES } from "./milestones";
 import { sql } from "./postgres";
+import { type PushMessage, sendPush } from "./push";
 import { daysThisWeek, startOfDay } from "./time";
 
 const KEEP_DAYS = 90;
@@ -30,12 +31,36 @@ type New = {
   read?: boolean;
 };
 
+export function notificationMessage(
+  userId: string,
+  { kind, otherUser, count }: { kind: NotificationKind; otherUser?: string; count?: number },
+): PushMessage {
+  if (kind === "follow")
+    return { title: "New follower", body: `${otherUser} started following you.`, url: `/u/${otherUser}` };
+  if (kind === "passed") {
+    return { title: "Leaderboard", body: `${otherUser} passed you on this week's leaderboard.`, url: "/feed" };
+  }
+  return { title: "Milestone", body: `You reached ${(count ?? 0).toLocaleString("en")} plays.`, url: `/u/${userId}` };
+}
+
+const sending = new Set<Promise<number>>();
+
+export async function pushesSent() {
+  await Promise.all([...sending]);
+}
+
 async function add({ userId, kind, dedupe, otherUser, count, read }: New) {
   const rows = await sql`
     INSERT INTO notifications (user_id, kind, other_user, count, dedupe, read_at)
     VALUES (${userId}, ${kind}, ${otherUser ?? null}, ${count ?? null}, ${dedupe}, ${read ? new Date() : null})
     ON CONFLICT (user_id, dedupe) DO NOTHING
     RETURNING id`;
+  if (rows.length > 0 && !read) {
+    const message = { ...notificationMessage(userId, { kind, otherUser, count }), tag: `${kind}:${dedupe}` };
+    const push = sendPush(userId, message).catch(() => 0);
+    sending.add(push);
+    push.finally(() => sending.delete(push));
+  }
   return rows.length > 0;
 }
 

@@ -1,17 +1,19 @@
 import { revalidatePath } from "next/cache";
 import Link from "next/link";
 import { isPrivate, setPrivate } from "@/lib/privacy";
+import { pushDeviceCount, vapidKeys } from "@/lib/push";
 import { requireUserId } from "@/lib/session";
 import { INVITE_DAYS, signupMode } from "@/lib/signups";
 import ChangePasswordForm from "./change-password-form";
 import DeleteAccountForm from "./delete-account-form";
 import DeleteHistoryForm from "./delete-history-form";
 import InviteForm from "./invite-form";
+import PushSettings from "./push-settings";
 
 export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ password?: string }> }) {
   const userId = await requireUserId();
   const { password } = await searchParams;
-  const hidden = await isPrivate(userId);
+  const [hidden, keys, devices] = await Promise.all([isPrivate(userId), vapidKeys(), pushDeviceCount(userId)]);
 
   async function togglePrivacy() {
     "use server";
@@ -39,6 +41,15 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
         <form action={togglePrivacy}>
           <button type="submit">{hidden ? "Make profile public" : "Make profile private"}</button>
         </form>
+      </section>
+
+      <section>
+        <h2>Notifications</h2>
+        <p className="muted">
+          Get a notification on your phone or computer when someone follows you, when a friend passes you on the weekly
+          leaderboard and when you reach a play milestone. Turn it on separately on each device.
+        </p>
+        <PushSettings publicKey={keys.publicKey} devices={devices} />
       </section>
 
       {signupMode() === "invite" && (

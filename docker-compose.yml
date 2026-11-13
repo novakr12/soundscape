@@ -15,6 +15,7 @@ services:
       LASTFM_API_KEY: ${LASTFM_API_KEY:-}
       SIGNUPS: ${SIGNUPS:-open}
       ADMIN_USERS: ${ADMIN_USERS:-}
+      PUSH_CONTACT: ${PUSH_CONTACT:-}
       NEXT_TELEMETRY_DISABLED: "1"
     depends_on:
       postgres:

@@ -29,6 +29,8 @@ To choose who can create accounts, set `SIGNUPS` in `.env`: `open` (anyone, the 
 
 To see the admin page (accounts, library status, backups and maintenance buttons), add your username to `ADMIN_USERS` in `.env`, for example `ADMIN_USERS=admin`. Admins can also rename and merge artists and songs from their pages; plays sent later under the old name follow automatically.
 
+Phone and browser notifications are turned on per device in Settings. They need Soundscape to be opened over https, for example through Tailscale Serve; on iPhone, add Soundscape to the Home Screen first. Push services may contact whoever runs the server, so you can set `PUSH_CONTACT=mailto:you@example.com` in `.env`.
+
 `/health` answers 200 when PostgreSQL is reachable and 503 when it is not, for uptime monitors such as Uptime Kuma. Docker uses it too: `docker ps` shows the app as `healthy` or `unhealthy`.
 
 To import from Last.fm, create a free API key at [last.fm/api/account/create](https://www.last.fm/api/account/create) and add `LASTFM_API_KEY=your-key` to `.env`.

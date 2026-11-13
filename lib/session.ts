@@ -1,7 +1,7 @@
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { cache } from "react";
-import { endOtherSessions, endSession, sessionUser, startSession } from "@/lib/sessions";
+import { endOtherSessions, endSession, sessionKey, sessionUser, startSession } from "@/lib/sessions";
 
 const COOKIE = "soundscape_session";
 const COOKIE_MAX_AGE = 400 * 24 * 60 * 60;
@@ -9,6 +9,10 @@ const COOKIE_MAX_AGE = 400 * 24 * 60 * 60;
 export const currentUserId = cache(async (): Promise<string | null> => {
   return sessionUser((await cookies()).get(COOKIE)?.value);
 });
+
+export async function currentSessionKey(): Promise<string | null> {
+  return sessionKey((await cookies()).get(COOKIE)?.value);
+}
 
 export async function requireUserId(): Promise<string> {
   const userId = await currentUserId();

@@ -24,10 +24,16 @@ export async function sessionUser(token: string | undefined, now = Date.now()): 
   return row.user_id;
 }
 
+export const sessionKey = (token: string | undefined) => (token ? hash(token) : null);
+
 export async function endSession(token: string | undefined) {
-  if (token) await sql`DELETE FROM sessions WHERE id = ${hash(token)}`;
+  if (!token) return;
+  await sql`DELETE FROM push_subscriptions WHERE session_id = ${hash(token)}`;
+  await sql`DELETE FROM sessions WHERE id = ${hash(token)}`;
 }
 
 export async function endOtherSessions(userId: string, keep: string | undefined) {
-  await sql`DELETE FROM sessions WHERE user_id = ${userId} AND id <> ${keep ? hash(keep) : ""}`;
+  const kept = keep ? hash(keep) : "";
+  await sql`DELETE FROM push_subscriptions WHERE user_id = ${userId} AND session_id IS DISTINCT FROM ${kept}`;
+  await sql`DELETE FROM sessions WHERE user_id = ${userId} AND id <> ${kept}`;
 }
