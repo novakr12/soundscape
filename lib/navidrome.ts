@@ -104,8 +104,13 @@ function isSameSong(song: LibrarySong, candidate: SubsonicSong) {
   return [...artistIds(candidate.artist)].some((id) => wanted.has(id));
 }
 
-export async function findLibrarySong(server: Navidrome, song: LibrarySong): Promise<SubsonicSong | null> {
+export type LibrarySearch = { match: SubsonicSong | null; queries: string[]; seen: SubsonicSong[] };
+
+export async function searchLibrary(server: Navidrome, song: LibrarySong): Promise<LibrarySearch> {
+  const queries: string[] = [];
+  const seen = new Map<string, SubsonicSong>();
   for (const query of new Set([`${song.artist} ${songTitle(song.title)}`, songTitle(song.title)])) {
+    queries.push(query);
     const result = await call<{ searchResult3?: { song?: SubsonicSong[] } }>(server, "search3", [
       ["query", query],
       ["songCount", "50"],
@@ -113,10 +118,15 @@ export async function findLibrarySong(server: Navidrome, song: LibrarySong): Pro
       ["albumCount", "0"],
     ]);
     const songs = result.searchResult3?.song ?? [];
+    for (const candidate of songs) seen.set(candidate.id, candidate);
     const match = songs.find((candidate) => isSameSong(song, candidate));
-    if (match) return match;
+    if (match) return { match, queries, seen: [...seen.values()] };
   }
-  return null;
+  return { match: null, queries, seen: [...seen.values()] };
+}
+
+export async function findLibrarySong(server: Navidrome, song: LibrarySong): Promise<SubsonicSong | null> {
+  return (await searchLibrary(server, song)).match;
 }
 
 export async function findInLibrary(server: Navidrome, song: LibrarySong): Promise<string | null> {
@@ -130,36 +140,74 @@ export function isSongId(id: string) {
   return SONG_ID.test(id);
 }
 
-const REMEMBER_MS = 10 * 60_000;
+const REMEMBER_FOUND_MS = 10 * 60_000;
+const REMEMBER_MISSING_MS = 2 * 60_000;
 const REMEMBER_AT_MOST = 500;
-const remembered = new Map<string, { songId: string | null; until: number }>();
+const globalForFullSongs = globalThis as unknown as {
+  soundscapeFullSongs?: Map<string, { songId: string | null; until: number }>;
+};
+const remembered = (globalForFullSongs.soundscapeFullSongs ??= new Map());
 
 export function forgetFullSongs() {
   remembered.clear();
 }
 
-export async function findFullSong(userId: string, trackId: string, now = Date.now()): Promise<string | null> {
-  const key = `${userId}\n${trackId}`;
-  const known = remembered.get(key);
-  if (known && known.until > now) return known.songId;
-  const songId = await lookUpFullSong(userId, trackId);
+export type FullSongCheck = {
+  full: boolean;
+  reason: "found" | "navidrome-not-connected" | "unknown-song" | "not-found-in-navidrome" | "navidrome-error";
+  detail?: string;
+  lookedFor?: { artist: string; title: string };
+  searched?: string[];
+  navidromeAnswered?: { title?: string; artist?: string }[];
+  songId?: string;
+};
+
+function remember(userId: string, trackId: string, songId: string | null, now: number) {
   if (remembered.size >= REMEMBER_AT_MOST) remembered.delete(remembered.keys().next().value as string);
-  remembered.set(key, { songId, until: now + REMEMBER_MS });
-  return songId;
+  remembered.set(`${userId}\n${trackId}`, {
+    songId,
+    until: now + (songId ? REMEMBER_FOUND_MS : REMEMBER_MISSING_MS),
+  });
 }
 
-async function lookUpFullSong(userId: string, trackId: string): Promise<string | null> {
+export async function findFullSong(userId: string, trackId: string, now = Date.now()): Promise<string | null> {
+  const known = remembered.get(`${userId}\n${trackId}`);
+  if (known && known.until > now) return known.songId;
+  return (await checkFullSong(userId, trackId, now)).songId ?? null;
+}
+
+export async function checkFullSong(userId: string, trackId: string, now = Date.now()): Promise<FullSongCheck> {
   const server = await getNavidrome(userId);
-  if (!server) return null;
+  if (!server) {
+    remember(userId, trackId, null, now);
+    return { full: false, reason: "navidrome-not-connected" };
+  }
   const [track] = await sql`
     SELECT t.title, a.name AS artist FROM tracks t JOIN artists a ON a.id = t.artist_id WHERE t.id = ${trackId}`;
-  if (!track) return null;
+  if (!track) return { full: false, reason: "unknown-song" };
+  const lookedFor = { artist: track.artist as string, title: track.title as string };
+  let search: LibrarySearch;
   try {
-    const song = await findLibrarySong(server, { trackId, title: track.title, artist: track.artist });
-    return song && isSongId(song.id) ? song.id : null;
-  } catch {
-    return null;
+    search = await searchLibrary(server, { trackId, ...lookedFor });
+  } catch (error) {
+    remember(userId, trackId, null, now);
+    return {
+      full: false,
+      reason: "navidrome-error",
+      detail: error instanceof Error ? error.message : String(error),
+      lookedFor,
+    };
   }
+  const songId = search.match && isSongId(search.match.id) ? search.match.id : null;
+  remember(userId, trackId, songId, now);
+  if (songId) return { full: true, reason: "found", lookedFor, songId };
+  return {
+    full: false,
+    reason: "not-found-in-navidrome",
+    lookedFor,
+    searched: search.queries,
+    navidromeAnswered: search.seen.slice(0, 10).map((song) => ({ title: song.title, artist: song.artist })),
+  };
 }
 
 export async function streamSong(server: Navidrome, songId: string, range: string | null): Promise<Response> {

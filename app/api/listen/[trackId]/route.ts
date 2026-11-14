@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { findFullSong } from "@/lib/navidrome";
+import { checkFullSong, findFullSong } from "@/lib/navidrome";
 import { currentUserId } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
@@ -12,11 +12,12 @@ export async function GET(request: Request, { params }: Context) {
   const userId = await currentUserId();
   if (!userId) return NextResponse.json({ error: "Log in to listen" }, { status: 401 });
   const { trackId } = await params;
-  const songId = await findFullSong(userId, trackId);
   const noStore = { "cache-control": "private, no-store" };
   if (new URL(request.url).searchParams.has("info")) {
-    return NextResponse.json({ full: songId !== null }, { headers: noStore });
+    const { songId: _, ...check } = await checkFullSong(userId, trackId);
+    return NextResponse.json(check, { headers: noStore });
   }
+  const songId = await findFullSong(userId, trackId);
   const target = songId
     ? `/api/full-song/${encodeURIComponent(songId)}`
     : `/api/preview/${encodeURIComponent(trackId)}`;

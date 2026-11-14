@@ -5,7 +5,14 @@ import type { AddressInfo } from "node:net";
 import { after, before, describe, it } from "node:test";
 import { trackIdFor } from "../../lib/catalog";
 import { importListens } from "../../lib/imports";
-import { findFullSong, forgetFullSongs, getNavidrome, saveNavidrome, streamSong } from "../../lib/navidrome";
+import {
+  checkFullSong,
+  findFullSong,
+  forgetFullSongs,
+  getNavidrome,
+  saveNavidrome,
+  streamSong,
+} from "../../lib/navidrome";
 import { closeConnections, createTestUser, removeTestUser, testUser } from "./helpers";
 
 process.env.AUTH_SECRET ??= "test-only-secret";
@@ -93,6 +100,21 @@ describe("Full songs from Navidrome", () => {
     assert.equal(await findFullSong(stranger.userId, trackIdFor(user.artist, "Owned Song")), null);
   });
 
+  it("explains why a song isn't played in full", async () => {
+    assert.deepEqual(await checkFullSong(stranger.userId, trackIdFor(user.artist, "Owned Song")), {
+      full: false,
+      reason: "navidrome-not-connected",
+    });
+    assert.deepEqual(await checkFullSong(user.userId, "no-such-track"), { full: false, reason: "unknown-song" });
+    const found = await checkFullSong(user.userId, trackIdFor(user.artist, "Owned Song"));
+    assert.equal(found.reason, "found");
+    const missing = await checkFullSong(user.userId, trackIdFor(user.artist, "Missing Song"));
+    assert.equal(missing.reason, "not-found-in-navidrome");
+    assert.deepEqual(missing.lookedFor, { artist: user.artist, title: "Missing Song" });
+    assert.deepEqual(missing.searched, [`${user.artist} Missing Song`, "Missing Song"]);
+    assert.deepEqual(missing.navidromeAnswered, []);
+  });
+
   it("remembers what it found for a while", async () => {
     forgetFullSongs();
     const trackId = trackIdFor(user.artist, "Missing Song");
@@ -100,7 +122,11 @@ describe("Full songs from Navidrome", () => {
     assert.equal(await findFullSong(user.userId, trackId, now), null);
     library.push({ id: "song-2", title: "Missing Song", artist: user.artist });
     assert.equal(await findFullSong(user.userId, trackId, now + 60_000), null);
-    assert.equal(await findFullSong(user.userId, trackId, now + 11 * 60_000), "song-2");
+    assert.equal(await findFullSong(user.userId, trackId, now + 3 * 60_000), "song-2");
+    library.pop();
+    assert.equal(await findFullSong(user.userId, trackId, now + 9 * 60_000), "song-2");
+    assert.equal(await findFullSong(user.userId, trackId, now + 14 * 60_000), null);
+    library.push({ id: "song-2", title: "Missing Song", artist: user.artist });
     library.pop();
   });
 
