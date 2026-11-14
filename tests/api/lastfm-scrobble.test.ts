@@ -9,6 +9,7 @@ import {
   removeLastfmScrobbling,
   scrobbleToLastfm,
   sendAllLastfmQueues,
+  sendLoveToLastfm,
   sendNowPlayingToLastfm,
   signature,
   waitingForLastfm,
@@ -66,6 +67,7 @@ function fakeLastfm() {
     if (mode === "bad") return reply({ error: 6, message: "Invalid parameters" }, 400);
     if (params.sk !== "session-key-1") return reply({ error: 9, message: "Invalid session key" }, 403);
     if (params.method === "track.updateNowPlaying") return reply({ nowplaying: {} });
+    if (params.method === "track.love" || params.method === "track.unlove") return reply({});
     if (params.method === "track.scrobble") {
       const count = Object.keys(params).filter((name) => name.startsWith("timestamp[")).length;
       return reply({ scrobbles: { "@attr": { accepted: count, ignored: 0 } } });
@@ -155,6 +157,19 @@ describe("Scrobbling to Last.fm", () => {
     await scrobbleToLastfm(other.userId, [{ artist: "Air", title: "Not connected", playedAt }]);
     assert.equal(scrobbles().length, 1);
     assert.equal(await waitingForLastfm(user.userId), 0);
+  });
+
+  it("passes loves and unloves on", async () => {
+    await sendLoveToLastfm(user.userId, "Air", "La Femme d'Argent", true);
+    await sendLoveToLastfm(user.userId, "Air", "La Femme d'Argent", false);
+    await sendLoveToLastfm(other.userId, "Air", "Not connected", true);
+    assert.deepEqual(
+      calls.map((call) => [call.method, call.track]),
+      [
+        ["track.love", "La Femme d'Argent"],
+        ["track.unlove", "La Femme d'Argent"],
+      ],
+    );
   });
 
   it("sends at most 50 plays at a time", async () => {

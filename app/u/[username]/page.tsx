@@ -12,6 +12,7 @@ import TasteMatchCard from "@/components/taste-match";
 import { artistIdFor } from "@/lib/catalog";
 import { followCounts, isFollowing } from "@/lib/follows";
 import { getListening } from "@/lib/live";
+import { lovedSongs } from "@/lib/loved";
 import { getListeningRecord } from "@/lib/milestones";
 import { isPrivate } from "@/lib/privacy";
 import { currentUserId } from "@/lib/session";
@@ -43,13 +44,14 @@ export default async function ProfilePage({ params, searchParams }: Props) {
     );
   }
 
-  const [listening, { month, page }, counts, following, match, record] = await Promise.all([
+  const [listening, { month, page }, counts, following, match, record, loved] = await Promise.all([
     getListening(username),
     searchParams,
     followCounts(username),
     viewer && !isOwner ? isFollowing(viewer, username) : false,
     viewer && !isOwner ? tasteMatch(viewer, username) : null,
     getListeningRecord(username),
+    lovedSongs(username),
   ]);
   const profilePath = `/u/${encodeURIComponent(username)}`;
   const known = listening
@@ -116,6 +118,27 @@ export default async function ProfilePage({ params, searchParams }: Props) {
       )}
 
       <ListeningRecordView record={record} />
+
+      {loved.length > 0 && (
+        <section>
+          <h2>Loved songs</h2>
+          <ul className="listening-list">
+            {loved.map((song) => (
+              <li key={song.trackId}>
+                <Cover src={song.cover} />
+                <span className="listening-info">
+                  <span>
+                    <SongLink trackId={song.trackId}>{song.title}</SongLink>{" "}
+                    <span className="muted">
+                      · <ArtistLink name={song.artist} />
+                    </span>
+                  </span>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       <section>
         <h2>Stats</h2>

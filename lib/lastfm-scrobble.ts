@@ -136,6 +136,19 @@ export async function sendNowPlayingToLastfm(userId: string, song: Omit<Scrobble
   if (answer?.error === INVALID_SESSION) await needsReconnect(userId);
 }
 
+export async function sendLoveToLastfm(userId: string, artist: string, title: string, loved: boolean) {
+  if (!scrobblingConfigured() || !artist.trim() || !title.trim()) return;
+  const key = await sessionKey(userId);
+  if (!key) return;
+  const answer = await call({
+    method: loved ? "track.love" : "track.unlove",
+    sk: key,
+    artist: clip(artist),
+    track: clip(title),
+  });
+  if (answer?.error === INVALID_SESSION) await needsReconnect(userId);
+}
+
 export async function scrobbleToLastfm(userId: string, plays: Scrobble[], now = Date.now()) {
   if (!scrobblingConfigured()) return;
   const [connected] = await sql`SELECT 1 FROM lastfm_scrobbling WHERE user_id = ${userId}`;

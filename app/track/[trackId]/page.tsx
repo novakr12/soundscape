@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import Cover from "@/components/cover";
 import { SongTools } from "@/components/library-tools";
+import LoveButton from "@/components/love-button";
 import { ArtistLink } from "@/components/music-links";
 import PlayButton from "@/components/play-button";
 import { DailyPlaysChart } from "@/components/stats-charts";
@@ -10,6 +11,7 @@ import { isAdmin } from "@/lib/admin";
 import { albumOf } from "@/lib/albums";
 import { trackAlias } from "@/lib/aliases";
 import { otherSongsBy } from "@/lib/library-edits";
+import { isLoved } from "@/lib/loved";
 import { currentUserId } from "@/lib/session";
 import { getAlsoPlayed, getTrack, getTrackPlaysPerDay, getYourPlays } from "@/lib/tracks";
 
@@ -39,12 +41,13 @@ export default async function TrackPage({ params }: Props) {
   }
 
   const admin = isAdmin(viewer);
-  const [daily, yourPlays, alsoPlayed, album, otherSongs] = await Promise.all([
+  const [daily, yourPlays, alsoPlayed, album, otherSongs, loved] = await Promise.all([
     getTrackPlaysPerDay(trackId),
     viewer ? getYourPlays(viewer, trackId) : null,
     getAlsoPlayed(trackId),
     albumOf(trackId),
     admin ? otherSongsBy(trackId) : [],
+    viewer ? isLoved(viewer, trackId) : false,
   ]);
   const last30 = daily.reduce((sum, d) => sum + d.plays, 0);
 
@@ -71,7 +74,12 @@ export default async function TrackPage({ params }: Props) {
             )}
             {track.durationMs && <span className="muted"> · {duration(track.durationMs)}</span>}
           </p>
-          {viewer && <PlayButton track={{ trackId, title: track.title, artist: track.artist, cover: track.cover }} />}
+          {viewer && (
+            <div className="export-buttons">
+              <PlayButton track={{ trackId, title: track.title, artist: track.artist, cover: track.cover }} />
+              <LoveButton trackId={trackId} loved={loved} />
+            </div>
+          )}
         </div>
       </div>
 
