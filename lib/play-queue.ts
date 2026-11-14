@@ -106,3 +106,20 @@ export function heardStep(before: number | null, now: number) {
   const step = now - before;
   return step <= LONGEST_STEP_SECONDS ? step : 0;
 }
+
+export const SEEK_STEP_SECONDS = 5;
+
+export type Shortcut = "toggle" | "back" | "forward" | "previous" | "next";
+
+export function shortcutFor(key: string, keys: { shift: boolean; other: boolean; repeat: boolean }): Shortcut | null {
+  if (keys.other) return null;
+  if (key === " " || key === "Spacebar") return keys.shift || keys.repeat ? null : "toggle";
+  if (key === "ArrowLeft") return keys.shift ? (keys.repeat ? null : "previous") : "back";
+  if (key === "ArrowRight") return keys.shift ? (keys.repeat ? null : "next") : "forward";
+  return null;
+}
+
+export function seekTarget(now: number, step: number, duration: number) {
+  const end = Number.isFinite(duration) ? duration : now + Math.max(step, 0);
+  return Math.min(Math.max(now + step, 0), end);
+}

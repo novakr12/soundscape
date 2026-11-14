@@ -10,6 +10,8 @@ import {
   nextRepeat,
   removeAt,
   restoreQueue,
+  seekTarget,
+  shortcutFor,
   shuffleAfter,
   shuffleAll,
   unshuffle,
@@ -107,5 +109,36 @@ describe("play queue", () => {
     assert.equal(heardStep(10, 10.25), 0.25);
     assert.equal(heardStep(10, 45), 0);
     assert.equal(heardStep(45, 10), 0);
+  });
+});
+
+describe("keyboard shortcuts", () => {
+  const plain = { shift: false, other: false, repeat: false };
+
+  it("maps space and the arrow keys to player actions", () => {
+    assert.equal(shortcutFor(" ", plain), "toggle");
+    assert.equal(shortcutFor("ArrowLeft", plain), "back");
+    assert.equal(shortcutFor("ArrowRight", plain), "forward");
+    assert.equal(shortcutFor("ArrowLeft", { ...plain, shift: true }), "previous");
+    assert.equal(shortcutFor("ArrowRight", { ...plain, shift: true }), "next");
+    assert.equal(shortcutFor("a", plain), null);
+  });
+
+  it("leaves shortcuts with other modifier keys to the browser", () => {
+    assert.equal(shortcutFor(" ", { ...plain, other: true }), null);
+    assert.equal(shortcutFor("ArrowLeft", { ...plain, other: true }), null);
+  });
+
+  it("does not repeat play/pause or song changes while a key is held, but keeps seeking", () => {
+    assert.equal(shortcutFor(" ", { ...plain, repeat: true }), null);
+    assert.equal(shortcutFor("ArrowRight", { shift: true, other: false, repeat: true }), null);
+    assert.equal(shortcutFor("ArrowRight", { ...plain, repeat: true }), "forward");
+  });
+
+  it("keeps seeking inside the song", () => {
+    assert.equal(seekTarget(10, 5, 30), 15);
+    assert.equal(seekTarget(28, 5, 30), 30);
+    assert.equal(seekTarget(3, -5, 30), 0);
+    assert.equal(seekTarget(10, 5, Number.NaN), 15);
   });
 });
