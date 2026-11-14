@@ -1,11 +1,11 @@
 import { listNotifications, notificationMessage, unreadCount } from "@/lib/notifications";
-import { userForAuthorization } from "@/lib/tokens";
+import { tokenUser, unauthorized } from "@/lib/token-auth";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
-  const userId = await userForAuthorization(request.headers.get("authorization"), request.headers.get("user-agent"));
-  if (!userId) return Response.json({ error: "Invalid authorization token." }, { status: 401 });
+  const userId = await tokenUser(request);
+  if (!userId) return unauthorized();
   const after = Number(new URL(request.url).searchParams.get("after") ?? 0) || 0;
   const [notifications, unread] = await Promise.all([listNotifications(userId), unreadCount(userId)]);
   return Response.json({
