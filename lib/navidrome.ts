@@ -84,11 +84,13 @@ export async function saveNavidrome(userId: string, url: string, username: strin
     VALUES (${userId}, ${server.url}, ${username}, ${encrypt(password, "navidrome")})
     ON CONFLICT (user_id) DO UPDATE SET server_url = excluded.server_url, username = excluded.username,
       password = excluded.password, created_at = now()`;
+  forgetFullSongs();
   return server;
 }
 
 export async function removeNavidrome(userId: string) {
   await sql`DELETE FROM navidrome_settings WHERE user_id = ${userId}`;
+  forgetFullSongs();
 }
 
 function artistIds(artist: string) {
@@ -119,6 +121,79 @@ export async function findLibrarySong(server: Navidrome, song: LibrarySong): Pro
 
 export async function findInLibrary(server: Navidrome, song: LibrarySong): Promise<string | null> {
   return (await findLibrarySong(server, song))?.id ?? null;
+}
+
+const SONG_ID = /^[A-Za-z0-9_-]{1,64}$/;
+const PASSED_HEADERS = ["content-type", "content-length", "content-range", "accept-ranges"];
+
+export function isSongId(id: string) {
+  return SONG_ID.test(id);
+}
+
+const REMEMBER_MS = 10 * 60_000;
+const REMEMBER_AT_MOST = 500;
+const remembered = new Map<string, { songId: string | null; until: number }>();
+
+export function forgetFullSongs() {
+  remembered.clear();
+}
+
+export async function findFullSong(userId: string, trackId: string, now = Date.now()): Promise<string | null> {
+  const key = `${userId}\n${trackId}`;
+  const known = remembered.get(key);
+  if (known && known.until > now) return known.songId;
+  const songId = await lookUpFullSong(userId, trackId);
+  if (remembered.size >= REMEMBER_AT_MOST) remembered.delete(remembered.keys().next().value as string);
+  remembered.set(key, { songId, until: now + REMEMBER_MS });
+  return songId;
+}
+
+async function lookUpFullSong(userId: string, trackId: string): Promise<string | null> {
+  const server = await getNavidrome(userId);
+  if (!server) return null;
+  const [track] = await sql`
+    SELECT t.title, a.name AS artist FROM tracks t JOIN artists a ON a.id = t.artist_id WHERE t.id = ${trackId}`;
+  if (!track) return null;
+  try {
+    const song = await findLibrarySong(server, { trackId, title: track.title, artist: track.artist });
+    return song && isSongId(song.id) ? song.id : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function streamSong(server: Navidrome, songId: string, range: string | null): Promise<Response> {
+  if (!isSongId(songId)) return Response.json({ error: "Unknown song." }, { status: 404 });
+  const waiting = new AbortController();
+  const timer = setTimeout(() => waiting.abort(), 10_000);
+  let upstream: Response;
+  try {
+    upstream = await fetch(
+      endpoint(server, "stream", [
+        ["id", songId],
+        ["format", "raw"],
+      ]),
+      { headers: range ? { range } : {}, signal: waiting.signal, cache: "no-store" },
+    );
+  } catch {
+    return Response.json({ error: "Navidrome is unreachable." }, { status: 502 });
+  } finally {
+    clearTimeout(timer);
+  }
+  const type = upstream.headers.get("content-type") ?? "";
+  if (!upstream.ok || type.includes("json") || type.includes("xml")) {
+    await upstream.body?.cancel();
+    return Response.json(
+      { error: "Navidrome couldn't play that song." },
+      { status: upstream.status === 416 ? 416 : 404 },
+    );
+  }
+  const headers = new Headers({ "cache-control": "private, no-store" });
+  for (const name of PASSED_HEADERS) {
+    const value = upstream.headers.get(name);
+    if (value) headers.set(name, value);
+  }
+  return new Response(upstream.body, { status: upstream.status, headers });
 }
 
 export async function fetchCoverArt(server: Navidrome, coverArtId: string, size = 300) {
