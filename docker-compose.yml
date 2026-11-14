@@ -13,11 +13,14 @@ services:
       DATABASE_URL: postgres://soundscape:${POSTGRES_PASSWORD:-soundscape}@postgres:5432/soundscape
       AUTH_SECRET: ${AUTH_SECRET:-soundscape-dev-secret-change-me}
       LASTFM_API_KEY: ${LASTFM_API_KEY:-}
+      LASTFM_SHARED_SECRET: ${LASTFM_SHARED_SECRET:-}
       SIGNUPS: ${SIGNUPS:-open}
       ADMIN_USERS: ${ADMIN_USERS:-}
       PUSH_CONTACT: ${PUSH_CONTACT:-}
       APPLE_MUSIC_COUNTRY: ${APPLE_MUSIC_COUNTRY:-}
       NEXT_TELEMETRY_DISABLED: "1"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       postgres:
         condition: service_healthy

@@ -224,8 +224,12 @@ export default async function ConnectPage({ searchParams }: { searchParams: Prom
           <NavidromeForm />
         )}
         <p className="muted">
-          Use the address Soundscape can reach, like <code>http://navidrome:4533</code> when both run in the same Docker
-          network. The password is stored encrypted and only used to search your library and save playlists.
+          Use an address the Soundscape server itself can reach, not the one in your browser:{" "}
+          <code>http://navidrome:4533</code> when both run in the same Docker network, or{" "}
+          <code>http://host.docker.internal:4533</code> when Navidrome runs on the same computer outside
+          Soundscape&apos;s Docker setup. Tailscale addresses ending in <code>.ts.net</code> don&apos;t work from inside
+          Docker. The password is stored encrypted and only used to search your library, play full songs and save
+          playlists.
         </p>
       </section>
 
