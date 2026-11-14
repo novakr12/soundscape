@@ -123,6 +123,13 @@ export default async function TrackPage({ params, searchParams }: Props) {
                   </span>
                   <small className="muted">{plural(other.listeners, "listener")} in common</small>
                 </span>
+                {viewer && (
+                  <span className="list-play">
+                    <PlayButton
+                      track={{ trackId: other.trackId, title: other.title, artist: other.artist, cover: other.cover }}
+                    />
+                  </span>
+                )}
               </li>
             ))}
           </ul>

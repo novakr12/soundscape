@@ -419,6 +419,11 @@ header a[aria-current="page"] {
   margin-bottom: 0.5rem;
 }
 
+.list-play {
+  flex: none;
+  margin-left: auto;
+}
+
 .listening-info {
   display: flex;
   flex-direction: column;

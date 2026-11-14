@@ -119,7 +119,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       audio.play().catch(() => {});
       return;
     }
-    setError("Preview unavailable for this track");
+    setError("Can't play this song right now");
   }
 
   return (

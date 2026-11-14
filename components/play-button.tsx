@@ -8,7 +8,7 @@ export default function PlayButton({ track }: { track: PlayerTrack }) {
 
   return (
     <button type="button" onClick={() => play(track)} aria-pressed={isCurrent}>
-      {isCurrent ? "♪ Playing" : "▶ Preview"}
+      {isCurrent ? "♪ Playing" : "▶ Play"}
     </button>
   );
 }
