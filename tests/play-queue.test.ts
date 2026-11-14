@@ -1,6 +1,17 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { inOrder, nextPosition, nextRepeat, shuffleAfter, shuffleAll, unshuffle } from "../lib/play-queue";
+import {
+  inOrder,
+  insertAfter,
+  LONGEST_QUEUE,
+  nextPosition,
+  nextRepeat,
+  removeAt,
+  restoreQueue,
+  shuffleAfter,
+  shuffleAll,
+  unshuffle,
+} from "../lib/play-queue";
 
 function seeded(seed: number) {
   let state = seed;
@@ -44,5 +55,39 @@ describe("play queue", () => {
     assert.equal(nextPosition(2, 3, "all"), 0);
     assert.equal(nextPosition(2, 3, "one"), null);
     assert.equal(nextPosition(0, 0, "all"), null);
+  });
+
+  it("puts a song right after the one playing, or removes one without losing its place", () => {
+    assert.deepEqual(insertAfter([0, 1, 2], 0, 3), [0, 3, 1, 2]);
+    assert.deepEqual(insertAfter([0, 1, 2], 2, 3), [0, 1, 2, 3]);
+    assert.deepEqual(removeAt([0, 1, 2, 3], 2, 0), { order: [1, 2, 3], position: 1 });
+    assert.deepEqual(removeAt([0, 1, 2, 3], 1, 3), { order: [0, 1, 2], position: 1 });
+    assert.deepEqual(removeAt([0, 1, 2], 1, 1), { order: [0, 1, 2], position: 1 });
+    assert.deepEqual(unshuffle([4, 0, 7, 2], 2), { order: [0, 2, 4, 7], position: 3 });
+  });
+
+  it("only trusts a saved queue that makes sense", () => {
+    const song = (n: number) => ({ trackId: `t${n}`, title: `Song ${n}`, artist: "Air" });
+    assert.deepEqual(restoreQueue({ tracks: [song(0), song(1)], order: [1, 0], position: 1, time: 42.5 }), {
+      tracks: [song(0), song(1)],
+      order: [1, 0],
+      position: 1,
+      time: 42.5,
+    });
+    assert.deepEqual(restoreQueue({ tracks: [song(0), song(1)], order: [1, 1, 9, -1, 0.5], position: 7, time: "x" }), {
+      tracks: [song(0), song(1)],
+      order: [1],
+      position: 0,
+      time: 0,
+    });
+    assert.equal(restoreQueue({ tracks: [{ trackId: 1 }], order: [0], position: 0 }), null);
+    assert.equal(restoreQueue({ tracks: [], order: [], position: 0 }), null);
+    assert.equal(restoreQueue("nonsense"), null);
+    assert.equal(restoreQueue(null), null);
+    const long = Array.from({ length: LONGEST_QUEUE + 50 }, (_, n) => song(n));
+    assert.equal(
+      restoreQueue({ tracks: long, order: inOrder(long.length), position: 0 })?.tracks.length,
+      LONGEST_QUEUE,
+    );
   });
 });

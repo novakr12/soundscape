@@ -28,7 +28,63 @@ export function shuffleAfter(order: number[], position: number, random = Math.ra
 }
 
 export function unshuffle(order: number[], position: number) {
-  return { order: inOrder(order.length), position: order[position] ?? 0 };
+  const sorted = [...order].sort((a, b) => a - b);
+  return { order: sorted, position: Math.max(sorted.indexOf(order[position]), 0) };
+}
+
+export function insertAfter(order: number[], position: number, index: number) {
+  return [...order.slice(0, position + 1), index, ...order.slice(position + 1)];
+}
+
+export function removeAt(order: number[], position: number, at: number) {
+  if (at === position || at < 0 || at >= order.length) return { order, position };
+  return { order: order.filter((_, i) => i !== at), position: at < position ? position - 1 : position };
+}
+
+export const LONGEST_QUEUE = 500;
+
+export type SavedQueue<T> = { tracks: T[]; order: number[]; position: number; time: number };
+
+type SavedTrack = { trackId: string; title: string; artist: string; cover?: string };
+
+function isTrack(value: unknown): value is SavedTrack {
+  if (typeof value !== "object" || value === null) return false;
+  const track = value as Record<string, unknown>;
+  return (
+    typeof track.trackId === "string" &&
+    typeof track.title === "string" &&
+    typeof track.artist === "string" &&
+    (track.cover === undefined || typeof track.cover === "string")
+  );
+}
+
+export function restoreQueue(raw: unknown): SavedQueue<SavedTrack> | null {
+  if (typeof raw !== "object" || raw === null) return null;
+  const saved = raw as Record<string, unknown>;
+  if (!Array.isArray(saved.tracks) || !Array.isArray(saved.order)) return null;
+  const tracks = saved.tracks.slice(0, LONGEST_QUEUE);
+  if (tracks.length === 0 || !tracks.every(isTrack)) return null;
+  const seen = new Set<number>();
+  const order = saved.order.filter(
+    (index): index is number =>
+      Number.isInteger(index) && index >= 0 && index < tracks.length && !seen.has(index) && Boolean(seen.add(index)),
+  );
+  if (order.length === 0) return null;
+  const position = Number.isInteger(saved.position)
+    ? Math.min(Math.max(saved.position as number, 0), order.length - 1)
+    : 0;
+  const time = typeof saved.time === "number" && Number.isFinite(saved.time) && saved.time > 0 ? saved.time : 0;
+  return {
+    tracks: tracks.map(({ trackId, title, artist, cover }) => ({
+      trackId,
+      title,
+      artist,
+      ...(cover ? { cover } : {}),
+    })),
+    order,
+    position,
+    time,
+  };
 }
 
 export function nextPosition(position: number, length: number, repeat: Repeat): number | null {

@@ -1,7 +1,19 @@
 "use client";
 
 import { createContext, useContext, useEffect, useRef, useState } from "react";
-import { inOrder, nextPosition, nextRepeat, type Repeat, shuffleAfter, shuffleAll, unshuffle } from "@/lib/play-queue";
+import {
+  inOrder,
+  insertAfter,
+  LONGEST_QUEUE,
+  nextPosition,
+  nextRepeat,
+  type Repeat,
+  removeAt,
+  restoreQueue,
+  shuffleAfter,
+  shuffleAll,
+  unshuffle,
+} from "@/lib/play-queue";
 import { ArtistLink, SongLink } from "./music-links";
 import VolumeControl from "./volume-control";
 
@@ -24,9 +36,15 @@ type PlayerContextValue = {
   repeat: Repeat;
   toggleShuffle: () => void;
   cycleRepeat: () => void;
+  playNext: (track: PlayerTrack) => void;
+  addToQueue: (track: PlayerTrack) => void;
+  remove: (position: number) => void;
+  jumpTo: (position: number) => void;
 };
 
 const SETTINGS_KEY = "soundscape:player";
+const QUEUE_KEY = "soundscape:queue";
+const SAVE_TIME_EVERY_MS = 5000;
 const REPEAT_LABELS: Record<Repeat, string> = {
   off: "Repeat is off",
   all: "Repeating the queue",
@@ -58,11 +76,14 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const positionRef = useRef(0);
   const shuffleRef = useRef(false);
   const repeatRef = useRef<Repeat>("off");
-  const skip = useRef({ next: () => {}, previous: () => {}, ended: () => {} });
+  const skip = useRef({ next: () => {}, previous: () => {}, ended: () => {}, restore: () => {} });
   const [error, setError] = useState<string | null>(null);
   const [full, setFull] = useState(false);
   const playing = useRef(0);
   const fellBack = useRef(false);
+  const autoplay = useRef(false);
+  const pendingTime = useRef(0);
+  const [showQueue, setShowQueue] = useState(false);
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -102,10 +123,15 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       paused();
       skip.current.ended();
     };
+    const started = () => {
+      autoplay.current = true;
+    };
+    audio.addEventListener("play", started);
     audio.addEventListener("play", playing);
     audio.addEventListener("pause", paused);
     audio.addEventListener("ended", ended);
     return () => {
+      audio.removeEventListener("play", started);
       audio.removeEventListener("play", playing);
       audio.removeEventListener("pause", paused);
       audio.removeEventListener("ended", ended);
@@ -141,6 +167,42 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       }
     } catch {}
   }, []);
+
+  useEffect(() => {
+    skip.current.restore();
+  }, []);
+
+  function restoreSaved() {
+    try {
+      const saved = restoreQueue(JSON.parse(localStorage.getItem(QUEUE_KEY) ?? "null"));
+      if (!saved) return;
+      arrange(saved.tracks, saved.order, saved.position);
+      start(saved.tracks[saved.order[saved.position]], false, saved.time);
+    } catch {}
+  }
+
+  useEffect(() => {
+    if (order.length === 0) return;
+    const save = () => {
+      try {
+        const audio = audioRef.current;
+        const time = pendingTime.current || audio?.currentTime || 0;
+        const keep = tracks.slice(0, LONGEST_QUEUE);
+        const kept = order.filter((index) => index < keep.length);
+        localStorage.setItem(
+          QUEUE_KEY,
+          JSON.stringify({ tracks: keep, order: kept, position: Math.min(position, kept.length - 1), time }),
+        );
+      } catch {}
+    };
+    save();
+    const timer = setInterval(save, SAVE_TIME_EVERY_MS);
+    window.addEventListener("pagehide", save);
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener("pagehide", save);
+    };
+  }, [tracks, order, position]);
 
   function remember() {
     try {
@@ -224,25 +286,66 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
+  function enqueue(track: PlayerTrack, next: boolean) {
+    if (orderRef.current.length === 0) {
+      play(track);
+      return;
+    }
+    const index = tracksRef.current.length;
+    const nextTracks = [...tracksRef.current, track];
+    const nextOrder = next ? insertAfter(orderRef.current, positionRef.current, index) : [...orderRef.current, index];
+    arrange(nextTracks, nextOrder, positionRef.current);
+  }
+
+  function playNext(track: PlayerTrack) {
+    enqueue(track, true);
+  }
+
+  function addToQueue(track: PlayerTrack) {
+    enqueue(track, false);
+  }
+
+  function remove(at: number) {
+    const left = removeAt(orderRef.current, positionRef.current, at);
+    arrange(tracksRef.current, left.order, left.position);
+  }
+
+  function jumpTo(at: number) {
+    if (at >= 0 && at < orderRef.current.length) moveTo(at);
+  }
+
   function cycleRepeat() {
     repeatRef.current = nextRepeat(repeatRef.current);
     setRepeat(repeatRef.current);
     remember();
   }
 
-  skip.current = { next, previous, ended };
+  skip.current = { next, previous, ended, restore: restoreSaved };
   const hasNext = position + 1 < queue.length || (repeat === "all" && queue.length > 1);
 
-  function start(track: PlayerTrack) {
+  function start(track: PlayerTrack, play = true, at = 0) {
     const audio = audioRef.current;
     if (!audio) return;
     const id = ++playing.current;
     fellBack.current = false;
+    autoplay.current = play;
     setError(null);
     describe(track, false);
     const path = `/api/listen/${encodeURIComponent(track.trackId)}`;
     audio.src = path;
-    audio.play().catch(() => {});
+    pendingTime.current = at;
+    if (at > 0) {
+      audio.addEventListener(
+        "loadedmetadata",
+        () => {
+          if (id !== playing.current) return;
+          audio.currentTime = Math.min(at, Math.max(audio.duration - 1, 0));
+          pendingTime.current = 0;
+        },
+        { once: true },
+      );
+    }
+    if (play) audio.play().catch(() => {});
     fetch(`${path}?info`)
       .then((response) => (response.ok ? response.json() : { full: false }))
       .then((info: { full?: boolean }) => {
@@ -258,10 +361,11 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       fellBack.current = true;
       describe(current, false);
       audio.src = `/api/preview/${encodeURIComponent(current.trackId)}`;
-      audio.play().catch(() => {});
+      if (autoplay.current) audio.play().catch(() => {});
       return;
     }
     setError("Can't play this song right now");
+    if (!autoplay.current) return;
     const id = playing.current;
     setTimeout(() => {
       if (id === playing.current) next();
@@ -270,9 +374,54 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <PlayerContext.Provider
-      value={{ current, queue, position, play, playAll, next, previous, shuffle, repeat, toggleShuffle, cycleRepeat }}
+      value={{
+        current,
+        queue,
+        position,
+        play,
+        playAll,
+        next,
+        previous,
+        shuffle,
+        repeat,
+        toggleShuffle,
+        cycleRepeat,
+        playNext,
+        addToQueue,
+        remove,
+        jumpTo,
+      }}
     >
       {children}
+      {current && showQueue && (
+        <section className="queue-panel" aria-label="Queue">
+          <div className="section-head">
+            <h2>Queue</h2>
+            <button type="button" className="secondary" onClick={() => setShowQueue(false)}>
+              Close
+            </button>
+          </div>
+          <ol>
+            {queue.map((track, at) => (
+              <li key={`${order[at]}`} className={at === position ? "current" : at < position ? "played" : undefined}>
+                <button type="button" className="queue-song" onClick={() => jumpTo(at)}>
+                  <span>{track.title}</span> <span className="muted">· {track.artist}</span>
+                </button>
+                {at !== position && (
+                  <button
+                    type="button"
+                    className="queue-remove"
+                    aria-label={`Remove ${track.title} from the queue`}
+                    onClick={() => remove(at)}
+                  >
+                    ✕
+                  </button>
+                )}
+              </li>
+            ))}
+          </ol>
+        </section>
+      )}
       <div className="player" hidden={!current}>
         {current?.cover && <img src={current.cover} alt="" width={48} height={48} />}
         <div className="now-playing">
@@ -316,6 +465,16 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
             onClick={cycleRepeat}
           >
             {repeat === "one" ? "🔂" : "🔁"}
+          </button>
+          <button
+            type="button"
+            data-player="queue"
+            aria-label="Queue"
+            aria-expanded={showQueue}
+            title="Queue"
+            onClick={() => setShowQueue(!showQueue)}
+          >
+            ☰
           </button>
         </div>
         <audio ref={audioRef} controls onError={failed} />
