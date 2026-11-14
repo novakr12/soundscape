@@ -12,6 +12,8 @@ export async function register() {
     await removeOldErrors();
     return undefined;
   });
+  const { sendAllLastfmQueues } = await import("./lib/lastfm-scrobble");
+  every("lastfm-scrobbles", 5 * 60 * 1000, () => sendAllLastfmQueues());
   const { startJellyfinPolling } = await import("./lib/jellyfin");
   startJellyfinPolling();
   const { startGenreFilling } = await import("./lib/genres");

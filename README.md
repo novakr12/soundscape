@@ -37,6 +37,8 @@ Song previews come from Deezer, and from Apple Music for songs Deezer doesn't ha
 
 To import from Last.fm, create a free API key at [last.fm/api/account/create](https://www.last.fm/api/account/create) and add `LASTFM_API_KEY=your-key` to `.env`.
 
+To also scrobble to Last.fm, add the shared secret from the same page as `LASTFM_SHARED_SECRET=your-secret`. Each person then clicks Connect Last.fm on the Connect page. Soundscape passes on what they're playing right now and every play that reaches it live (from Navidrome, the desktop app, phone apps and the play button), retries every few minutes while Last.fm is down, and drops plays once they're older than the two weeks Last.fm accepts. Imported history is never sent. If a player already scrobbles to Last.fm itself, turn that off to avoid doubles.
+
 ## Useful commands
 
 | Command | What it does |

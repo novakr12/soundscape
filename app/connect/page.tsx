@@ -1,11 +1,12 @@
 import Link from "next/link";
 import { getJellyfin } from "@/lib/jellyfin";
+import { getLastfmScrobbling, scrobblingConfigured, waitingForLastfm } from "@/lib/lastfm-scrobble";
 import { getNavidrome } from "@/lib/navidrome";
 import { getRelay, queuedForUser } from "@/lib/relay";
 import { requireUserId } from "@/lib/session";
 import { formatDateTime, formatTimeAgo } from "@/lib/time";
 import { listTokens } from "@/lib/tokens";
-import { disconnectJellyfin, disconnectNavidrome, stopRelay } from "./actions";
+import { disconnectJellyfin, disconnectNavidrome, stopLastfm, stopRelay } from "./actions";
 import JellyfinForm from "./jellyfin-form";
 import NavidromeForm from "./navidrome-form";
 import RelayForm from "./relay-form";
@@ -14,15 +15,28 @@ import TokenForm from "./token-form";
 
 const ADDRESS = "https://your-soundscape-address";
 
-export default async function ConnectPage() {
+const LASTFM_MESSAGES: Record<string, string> = {
+  connected: "Last.fm is connected. New plays will show up there too.",
+  expired: "That Last.fm sign-in took too long or came from somewhere else. Try again.",
+  unreachable: "Last.fm is unreachable right now. Try again later.",
+  refused: "Last.fm didn't accept the connection. Try again.",
+  unavailable: "Last.fm scrobbling isn't set up on this server yet.",
+};
+
+export default async function ConnectPage({ searchParams }: { searchParams: Promise<{ lastfm?: string }> }) {
   const userId = await requireUserId();
-  const [tokens, relay, queued, navidrome, jellyfin] = await Promise.all([
-    listTokens(userId),
-    getRelay(userId),
-    queuedForUser(userId),
-    getNavidrome(userId),
-    getJellyfin(userId),
-  ]);
+  const [tokens, relay, queued, navidrome, jellyfin, lastfm, lastfmWaiting, { lastfm: lastfmOutcome }] =
+    await Promise.all([
+      listTokens(userId),
+      getRelay(userId),
+      queuedForUser(userId),
+      getNavidrome(userId),
+      getJellyfin(userId),
+      getLastfmScrobbling(userId),
+      waitingForLastfm(userId),
+      searchParams,
+    ]);
+  const lastfmMessage = lastfmOutcome ? LASTFM_MESSAGES[lastfmOutcome] : undefined;
 
   const now = new Date();
 
@@ -236,6 +250,55 @@ export default async function ConnectPage() {
         )}
         <p className="muted">
           Your token is on your ListenBrainz settings page. Forwarded listens are not imported again from ListenBrainz.
+        </p>
+      </section>
+
+      <section id="lastfm">
+        <h2>Also send to Last.fm</h2>
+        <p className="muted">
+          Soundscape can scrobble what you play to your Last.fm profile as well: plays from Navidrome, your phone, the
+          desktop app and anything else that sends to Soundscape, and what you're listening to right now. Imported
+          history isn't sent, and Last.fm doesn't take plays older than two weeks.
+        </p>
+        {lastfmMessage && <p role="status">{lastfmMessage}</p>}
+        {!scrobblingConfigured() ? (
+          <p className="muted">
+            Whoever runs this server needs to add a Last.fm API key and shared secret first: <code>LASTFM_API_KEY</code>{" "}
+            and <code>LASTFM_SHARED_SECRET</code> in <code>.env</code>.
+          </p>
+        ) : lastfm ? (
+          <>
+            {lastfm.needsReconnect ? (
+              <p className="error">
+                Last.fm stopped accepting plays for <strong>{lastfm.lastfmUser}</strong>, maybe because the access was
+                removed on last.fm. Connect again to carry on.
+                {lastfmWaiting > 0 && <> {lastfmWaiting} plays are waiting and will be sent then.</>}
+              </p>
+            ) : (
+              <p>
+                Scrobbling to Last.fm as <strong>{lastfm.lastfmUser}</strong>.
+                {lastfmWaiting > 0 && <span className="muted"> {lastfmWaiting} waiting to be sent.</span>}
+              </p>
+            )}
+            <div className="export-buttons">
+              {lastfm.needsReconnect && (
+                <form action="/connect/lastfm" method="get">
+                  <button type="submit">Connect Last.fm again</button>
+                </form>
+              )}
+              <form action={stopLastfm}>
+                <button type="submit">Stop scrobbling to Last.fm</button>
+              </form>
+            </div>
+          </>
+        ) : (
+          <form action="/connect/lastfm" method="get">
+            <button type="submit">Connect Last.fm</button>
+          </form>
+        )}
+        <p className="muted">
+          If Navidrome or another player already scrobbles to Last.fm itself, turn that off, or your plays will show up
+          there twice.
         </p>
       </section>
     </>

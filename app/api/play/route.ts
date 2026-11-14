@@ -1,4 +1,5 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
+import { scrobbleToLastfm } from "@/lib/lastfm-scrobble";
 import { recordPlay } from "@/lib/plays";
 import { currentUserId } from "@/lib/session";
 
@@ -20,5 +21,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: `Unknown track: ${trackId}` }, { status: 404 });
   }
 
+  after(() =>
+    scrobbleToLastfm(userId, [{ artist: play.artist, title: play.title, playedAt: new Date(play.playedAt) }]),
+  );
   return NextResponse.json(play, { status: 201 });
 }

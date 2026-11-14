@@ -5,6 +5,7 @@ import { songArtist, songTitle } from "@/lib/catalog";
 import { findMissingCovers } from "@/lib/covers";
 import { findTrackDetails } from "@/lib/deezer";
 import { importListens, type Listen } from "@/lib/imports";
+import { scrobbleToLastfm, sendNowPlayingToLastfm } from "@/lib/lastfm-scrobble";
 import { addListeningDetails, getListening, publishListening, publishPlay, setListening } from "@/lib/live";
 import { relaySubmission } from "@/lib/relay";
 import { userForAuthorization } from "@/lib/tokens";
@@ -60,6 +61,8 @@ export async function POST(request: Request) {
     if (!artist || !title) return error(400, "artist_name and track_name are required.");
     const info = metadata.additional_info ?? {};
     const durationMs = durationMsOf(info);
+    const album = typeof metadata.release_name === "string" ? metadata.release_name : undefined;
+    after(() => sendNowPlayingToLastfm(userId, { artist, title, album, durationMs }));
     const trackId = await resolveTrackId(artist, title);
     if ((await getListening(userId))?.source === "jellyfin") {
       after(() => relaySubmission(userId, body));
@@ -89,6 +92,7 @@ export async function POST(request: Request) {
   if (result.imported === 0) return error(400, "No valid listens in payload.");
   after(() => findMissingCovers(userId, result.catalogNodesCreated > 0));
   after(() => relaySubmission(userId, body));
+  if (listenType === "single") after(() => scrobbleToLastfm(userId, listens));
 
   const recent = listens.filter((l) => l.artist && l.title && Date.now() - l.playedAt.getTime() < LIVE_WINDOW_MS);
   const recentIds = await resolveTracks(recent);

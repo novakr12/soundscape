@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { after } from "next/server";
 import { fillCoversFromNavidrome, forgetNavidromeCovers } from "@/lib/covers";
 import { JellyfinError, removeJellyfin, saveJellyfin } from "@/lib/jellyfin";
+import { removeLastfmScrobbling } from "@/lib/lastfm-scrobble";
 import { NavidromeError, removeNavidrome, saveNavidrome } from "@/lib/navidrome";
 import { RelayError, removeRelay, saveRelay } from "@/lib/relay";
 import { requireUserId } from "@/lib/session";
@@ -112,5 +113,10 @@ export async function startRelay(_previous: RelayFormState, formData: FormData):
 
 export async function stopRelay() {
   await removeRelay(await requireUserId());
+  revalidatePath("/connect");
+}
+
+export async function stopLastfm() {
+  await removeLastfmScrobbling(await requireUserId());
   revalidatePath("/connect");
 }
