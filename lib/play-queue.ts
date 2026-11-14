@@ -91,3 +91,18 @@ export function nextPosition(position: number, length: number, repeat: Repeat): 
   if (position + 1 < length) return position + 1;
   return repeat === "all" && length > 0 ? 0 : null;
 }
+
+export const SHORTEST_SONG_SECONDS = 30;
+export const LONGEST_WAIT_SECONDS = 240;
+export const LONGEST_STEP_SECONDS = 2;
+
+export function countsAsPlay(heardSeconds: number, songSeconds: number) {
+  if (!Number.isFinite(songSeconds) || songSeconds < SHORTEST_SONG_SECONDS) return false;
+  return heardSeconds >= Math.min(songSeconds / 2, LONGEST_WAIT_SECONDS);
+}
+
+export function heardStep(before: number | null, now: number) {
+  if (before === null || now <= before) return 0;
+  const step = now - before;
+  return step <= LONGEST_STEP_SECONDS ? step : 0;
+}

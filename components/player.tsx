@@ -2,6 +2,8 @@
 
 import { createContext, useContext, useEffect, useRef, useState } from "react";
 import {
+  countsAsPlay,
+  heardStep,
   inOrder,
   insertAfter,
   LONGEST_QUEUE,
@@ -76,12 +78,19 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const positionRef = useRef(0);
   const shuffleRef = useRef(false);
   const repeatRef = useRef<Repeat>("off");
-  const skip = useRef({ next: () => {}, previous: () => {}, ended: () => {}, restore: () => {} });
+  const skip = useRef({
+    next: () => {},
+    previous: () => {},
+    ended: () => {},
+    restore: () => {},
+    listened: () => {},
+  });
   const [error, setError] = useState<string | null>(null);
   const [full, setFull] = useState(false);
   const playing = useRef(0);
   const fellBack = useRef(false);
   const autoplay = useRef(false);
+  const listen = useRef({ full: false, heard: 0, last: null as number | null, counted: false });
   const pendingTime = useRef(0);
   const [showQueue, setShowQueue] = useState(false);
 
@@ -126,11 +135,19 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     const started = () => {
       autoplay.current = true;
     };
+    const listened = () => skip.current.listened();
+    const jumped = () => {
+      listen.current.last = null;
+    };
+    audio.addEventListener("timeupdate", listened);
+    audio.addEventListener("seeking", jumped);
     audio.addEventListener("play", started);
     audio.addEventListener("play", playing);
     audio.addEventListener("pause", paused);
     audio.addEventListener("ended", ended);
     return () => {
+      audio.removeEventListener("timeupdate", listened);
+      audio.removeEventListener("seeking", jumped);
       audio.removeEventListener("play", started);
       audio.removeEventListener("play", playing);
       audio.removeEventListener("pause", paused);
@@ -145,6 +162,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
 
   function describe(track: PlayerTrack, isFull: boolean) {
     setFull(isFull);
+    listen.current.full = isFull;
     if (!("mediaSession" in navigator)) return;
     navigator.mediaSession.metadata = new MediaMetadata({
       title: track.title,
@@ -173,6 +191,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   function restoreSaved() {
+    if (playing.current > 0) return;
     try {
       const saved = restoreQueue(JSON.parse(localStorage.getItem(QUEUE_KEY) ?? "null"));
       if (!saved) return;
@@ -251,9 +270,32 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     if (index !== null) moveTo(index);
   }
 
+  function listenAfresh() {
+    listen.current = { full: listen.current.full, heard: 0, last: null, counted: false };
+  }
+
+  function listened() {
+    const audio = audioRef.current;
+    if (!audio) return;
+    const now = audio.currentTime;
+    const state = listen.current;
+    if (!audio.paused) state.heard += heardStep(state.last, now);
+    state.last = audio.paused ? null : now;
+    if (state.counted || !state.full || !countsAsPlay(state.heard, audio.duration)) return;
+    const track = tracksRef.current[orderRef.current[positionRef.current]];
+    if (!track) return;
+    state.counted = true;
+    fetch("/api/play", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ trackId: track.trackId }),
+    }).catch(() => {});
+  }
+
   function ended() {
     const audio = audioRef.current;
     if (repeatRef.current === "one" && audio) {
+      listenAfresh();
       audio.currentTime = 0;
       audio.play().catch(() => {});
       return;
@@ -266,6 +308,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     const audio = audioRef.current;
     if (!audio) return;
     if (audio.currentTime > RESTART_AFTER_SECONDS || positionRef.current === 0) {
+      listenAfresh();
       audio.currentTime = 0;
       audio.play().catch(() => {});
       return;
@@ -320,7 +363,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     remember();
   }
 
-  skip.current = { next, previous, ended, restore: restoreSaved };
+  skip.current = { next, previous, ended, restore: restoreSaved, listened };
   const hasNext = position + 1 < queue.length || (repeat === "all" && queue.length > 1);
 
   function start(track: PlayerTrack, play = true, at = 0) {
@@ -329,6 +372,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     const id = ++playing.current;
     fellBack.current = false;
     autoplay.current = play;
+    listen.current = { full: false, heard: 0, last: null, counted: false };
     setError(null);
     describe(track, false);
     const path = `/api/listen/${encodeURIComponent(track.trackId)}`;

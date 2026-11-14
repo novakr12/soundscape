@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+  countsAsPlay,
+  heardStep,
   inOrder,
   insertAfter,
   LONGEST_QUEUE,
@@ -89,5 +91,21 @@ describe("play queue", () => {
       restoreQueue({ tracks: long, order: inOrder(long.length), position: 0 })?.tracks.length,
       LONGEST_QUEUE,
     );
+  });
+
+  it("counts a full song once half of it, or four minutes, has really been heard", () => {
+    assert.equal(countsAsPlay(29, 60), false);
+    assert.equal(countsAsPlay(30, 60), true);
+    assert.equal(countsAsPlay(239, 600), false);
+    assert.equal(countsAsPlay(240, 600), true);
+    assert.equal(countsAsPlay(29, 29.9), false);
+    assert.equal(countsAsPlay(100, Number.NaN), false);
+  });
+
+  it("only adds up time that was played, not jumped over", () => {
+    assert.equal(heardStep(null, 5), 0);
+    assert.equal(heardStep(10, 10.25), 0.25);
+    assert.equal(heardStep(10, 45), 0);
+    assert.equal(heardStep(45, 10), 0);
   });
 });
