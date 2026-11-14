@@ -285,6 +285,16 @@ main {
   padding: 0.3rem 0.5rem;
 }
 
+.player-skip button[data-player="shuffle"],
+.player-skip button[data-player="repeat"] {
+  opacity: 0.45;
+}
+
+.player-skip button[aria-pressed="true"] {
+  opacity: 1;
+  border-color: var(--accent);
+}
+
 code {
   font-family: ui-monospace, monospace;
   font-size: 0.9em;

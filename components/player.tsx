@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useContext, useEffect, useRef, useState } from "react";
+import { inOrder, nextPosition, nextRepeat, type Repeat, shuffleAfter, shuffleAll, unshuffle } from "@/lib/play-queue";
 import { ArtistLink, SongLink } from "./music-links";
 import VolumeControl from "./volume-control";
 
@@ -19,6 +20,17 @@ type PlayerContextValue = {
   playAll: (tracks: PlayerTrack[], start?: number) => void;
   next: () => void;
   previous: () => void;
+  shuffle: boolean;
+  repeat: Repeat;
+  toggleShuffle: () => void;
+  cycleRepeat: () => void;
+};
+
+const SETTINGS_KEY = "soundscape:player";
+const REPEAT_LABELS: Record<Repeat, string> = {
+  off: "Repeat is off",
+  all: "Repeating the queue",
+  one: "Repeating this song",
 };
 
 const RESTART_AFTER_SECONDS = 3;
@@ -34,12 +46,19 @@ export function usePlayer() {
 
 export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const audioRef = useRef<HTMLAudioElement>(null);
-  const [queue, setQueue] = useState<PlayerTrack[]>([]);
+  const [tracks, setTracks] = useState<PlayerTrack[]>([]);
+  const [order, setOrder] = useState<number[]>([]);
   const [position, setPosition] = useState(0);
+  const [shuffle, setShuffle] = useState(false);
+  const [repeat, setRepeat] = useState<Repeat>("off");
+  const queue = order.map((index) => tracks[index]);
   const current = queue[position] ?? null;
-  const queueRef = useRef<PlayerTrack[]>([]);
+  const tracksRef = useRef<PlayerTrack[]>([]);
+  const orderRef = useRef<number[]>([]);
   const positionRef = useRef(0);
-  const skip = useRef({ next: () => {}, previous: () => {} });
+  const shuffleRef = useRef(false);
+  const repeatRef = useRef<Repeat>("off");
+  const skip = useRef({ next: () => {}, previous: () => {}, ended: () => {} });
   const [error, setError] = useState<string | null>(null);
   const [full, setFull] = useState(false);
   const playing = useRef(0);
@@ -81,7 +100,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     };
     const ended = () => {
       paused();
-      skip.current.next();
+      skip.current.ended();
     };
     audio.addEventListener("play", playing);
     audio.addEventListener("pause", paused);
@@ -109,26 +128,76 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     });
   }
 
-  function moveTo(tracks: PlayerTrack[], index: number) {
-    queueRef.current = tracks;
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(SETTINGS_KEY) ?? "{}") as { shuffle?: unknown; repeat?: unknown };
+      if (saved.shuffle === true) {
+        shuffleRef.current = true;
+        setShuffle(true);
+      }
+      if (saved.repeat === "all" || saved.repeat === "one") {
+        repeatRef.current = saved.repeat;
+        setRepeat(saved.repeat);
+      }
+    } catch {}
+  }, []);
+
+  function remember() {
+    try {
+      localStorage.setItem(SETTINGS_KEY, JSON.stringify({ shuffle: shuffleRef.current, repeat: repeatRef.current }));
+    } catch {}
+  }
+
+  function arrange(nextTracks: PlayerTrack[], nextOrder: number[], index: number) {
+    tracksRef.current = nextTracks;
+    orderRef.current = nextOrder;
     positionRef.current = index;
-    setQueue(tracks);
+    setTracks(nextTracks);
+    setOrder(nextOrder);
     setPosition(index);
-    start(tracks[index]);
+  }
+
+  function moveTo(index: number) {
+    arrange(tracksRef.current, orderRef.current, index);
+    start(tracksRef.current[orderRef.current[index]]);
   }
 
   function play(track: PlayerTrack) {
-    moveTo([track], 0);
+    arrange([track], [0], 0);
+    start(track);
   }
 
-  function playAll(tracks: PlayerTrack[], first = 0) {
-    if (tracks.length === 0) return;
-    moveTo(tracks, Math.min(Math.max(first, 0), tracks.length - 1));
+  function playAll(list: PlayerTrack[], first = 0) {
+    if (list.length === 0) return;
+    const chosen = Math.min(Math.max(first, 0), list.length - 1);
+    const listOrder = shuffleRef.current
+      ? first === 0
+        ? shuffleAll(list.length)
+        : [chosen, ...shuffleAll(list.length).filter((index) => index !== chosen)]
+      : inOrder(list.length);
+    const index = shuffleRef.current ? 0 : chosen;
+    arrange(list, listOrder, index);
+    start(list[listOrder[index]]);
   }
 
   function next() {
-    const index = positionRef.current + 1;
-    if (index < queueRef.current.length) moveTo(queueRef.current, index);
+    const index = nextPosition(
+      positionRef.current,
+      orderRef.current.length,
+      repeatRef.current === "all" ? "all" : "off",
+    );
+    if (index !== null) moveTo(index);
+  }
+
+  function ended() {
+    const audio = audioRef.current;
+    if (repeatRef.current === "one" && audio) {
+      audio.currentTime = 0;
+      audio.play().catch(() => {});
+      return;
+    }
+    const index = nextPosition(positionRef.current, orderRef.current.length, repeatRef.current);
+    if (index !== null) moveTo(index);
   }
 
   function previous() {
@@ -139,11 +208,30 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       audio.play().catch(() => {});
       return;
     }
-    moveTo(queueRef.current, positionRef.current - 1);
+    moveTo(positionRef.current - 1);
   }
 
-  skip.current = { next, previous };
-  const hasNext = position + 1 < queue.length;
+  function toggleShuffle() {
+    shuffleRef.current = !shuffleRef.current;
+    setShuffle(shuffleRef.current);
+    remember();
+    if (orderRef.current.length < 2) return;
+    if (shuffleRef.current) {
+      arrange(tracksRef.current, shuffleAfter(orderRef.current, positionRef.current), positionRef.current);
+    } else {
+      const restored = unshuffle(orderRef.current, positionRef.current);
+      arrange(tracksRef.current, restored.order, restored.position);
+    }
+  }
+
+  function cycleRepeat() {
+    repeatRef.current = nextRepeat(repeatRef.current);
+    setRepeat(repeatRef.current);
+    remember();
+  }
+
+  skip.current = { next, previous, ended };
+  const hasNext = position + 1 < queue.length || (repeat === "all" && queue.length > 1);
 
   function start(track: PlayerTrack) {
     const audio = audioRef.current;
@@ -181,7 +269,9 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <PlayerContext.Provider value={{ current, queue, position, play, playAll, next, previous }}>
+    <PlayerContext.Provider
+      value={{ current, queue, position, play, playAll, next, previous, shuffle, repeat, toggleShuffle, cycleRepeat }}
+    >
       {children}
       <div className="player" hidden={!current}>
         {current?.cover && <img src={current.cover} alt="" width={48} height={48} />}
@@ -200,11 +290,32 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
           {error && <span className="error">{error}</span>}
         </div>
         <div className="player-skip">
+          <button
+            type="button"
+            data-player="shuffle"
+            aria-label="Shuffle"
+            aria-pressed={shuffle}
+            title={shuffle ? "Shuffle is on" : "Shuffle is off"}
+            onClick={toggleShuffle}
+          >
+            🔀
+          </button>
           <button type="button" data-player="previous" aria-label="Previous song" onClick={previous}>
             ⏮
           </button>
           <button type="button" data-player="next" aria-label="Next song" onClick={next} disabled={!hasNext}>
             ⏭
+          </button>
+          <button
+            type="button"
+            data-player="repeat"
+            data-repeat={repeat}
+            aria-label={REPEAT_LABELS[repeat]}
+            aria-pressed={repeat !== "off"}
+            title={REPEAT_LABELS[repeat]}
+            onClick={cycleRepeat}
+          >
+            {repeat === "one" ? "🔂" : "🔁"}
           </button>
         </div>
         <audio ref={audioRef} controls onError={failed} />
