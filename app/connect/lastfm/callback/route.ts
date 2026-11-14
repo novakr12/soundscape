@@ -1,7 +1,7 @@
 import { timingSafeEqual } from "node:crypto";
-import { type NextRequest, NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
 import { connectLastfm, LastfmScrobbleError, STATE_COOKIE } from "@/lib/lastfm-scrobble";
-import { publicOrigin } from "@/lib/public-origin";
+import { redirectTo } from "@/lib/relative-redirect";
 import { currentUserId } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
@@ -12,9 +12,8 @@ function sameState(expected: string | undefined, given: string | null) {
 }
 
 export async function GET(request: NextRequest) {
-  const origin = publicOrigin(request);
   const userId = await currentUserId();
-  if (!userId) return NextResponse.redirect(new URL("/login?next=/connect", origin));
+  if (!userId) return redirectTo("/login?next=/connect");
   const params = request.nextUrl.searchParams;
   let outcome = "connected";
   if (!sameState(request.cookies.get(STATE_COOKIE)?.value, params.get("state"))) {
@@ -27,7 +26,7 @@ export async function GET(request: NextRequest) {
       outcome = error.message.includes("unreachable") ? "unreachable" : "refused";
     }
   }
-  const response = NextResponse.redirect(new URL(`/connect?lastfm=${outcome}#lastfm`, origin));
-  response.cookies.set(STATE_COOKIE, "", { path: "/connect/lastfm", maxAge: 0 });
+  const response = redirectTo(`/connect?lastfm=${outcome}#lastfm`);
+  response.headers.append("set-cookie", `${STATE_COOKIE}=; Path=/connect/lastfm; Max-Age=0; HttpOnly; SameSite=Lax`);
   return response;
 }

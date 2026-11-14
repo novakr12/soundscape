@@ -146,7 +146,8 @@ const REMEMBER_AT_MOST = 500;
 const globalForFullSongs = globalThis as unknown as {
   soundscapeFullSongs?: Map<string, { songId: string | null; until: number }>;
 };
-const remembered = (globalForFullSongs.soundscapeFullSongs ??= new Map());
+globalForFullSongs.soundscapeFullSongs ??= new Map();
+const remembered = globalForFullSongs.soundscapeFullSongs;
 
 export function forgetFullSongs() {
   remembered.clear();

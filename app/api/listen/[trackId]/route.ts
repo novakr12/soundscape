@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { checkFullSong, findFullSong } from "@/lib/navidrome";
+import { redirectTo } from "@/lib/relative-redirect";
 import { currentUserId } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
@@ -21,5 +22,5 @@ export async function GET(request: Request, { params }: Context) {
   const target = songId
     ? `/api/full-song/${encodeURIComponent(songId)}`
     : `/api/preview/${encodeURIComponent(trackId)}`;
-  return NextResponse.redirect(new URL(target, request.url), { status: 307, headers: noStore });
+  return redirectTo(target, noStore);
 }
