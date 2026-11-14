@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
+import AutoPlay from "@/components/auto-play";
 import Cover from "@/components/cover";
 import { SongTools } from "@/components/library-tools";
 import LoveButton from "@/components/love-button";
@@ -15,7 +16,7 @@ import { isLoved } from "@/lib/loved";
 import { currentUserId } from "@/lib/session";
 import { getAlsoPlayed, getTrack, getTrackPlaysPerDay, getYourPlays } from "@/lib/tracks";
 
-type Props = { params: Promise<{ trackId: string }> };
+type Props = { params: Promise<{ trackId: string }>; searchParams?: Promise<{ play?: string }> };
 
 function plural(count: number, word: string) {
   return `${count.toLocaleString("en")} ${word}${count === 1 ? "" : "s"}`;
@@ -31,8 +32,9 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   return { title: track ? `${track.title} · ${track.artist} · Soundscape` : "Soundscape" };
 }
 
-export default async function TrackPage({ params }: Props) {
+export default async function TrackPage({ params, searchParams }: Props) {
   const trackId = decodeURIComponent((await params).trackId);
+  const autoplay = (await searchParams)?.play === "1";
   const [track, viewer] = await Promise.all([getTrack(trackId), currentUserId()]);
   if (!track) {
     const target = await trackAlias(trackId);
@@ -74,6 +76,9 @@ export default async function TrackPage({ params }: Props) {
             )}
             {track.durationMs && <span className="muted"> · {duration(track.durationMs)}</span>}
           </p>
+          {viewer && autoplay && (
+            <AutoPlay track={{ trackId, title: track.title, artist: track.artist, cover: track.cover }} />
+          )}
           {viewer && (
             <div className="export-buttons">
               <PlayButton track={{ trackId, title: track.title, artist: track.artist, cover: track.cover }} />
