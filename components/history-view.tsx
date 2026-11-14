@@ -5,6 +5,7 @@ import TrackCell from "@/components/track-cell";
 import { albumsFor } from "@/lib/albums";
 import { coversFor, getHistory, monthLabel, shiftMonth } from "@/lib/history";
 import { formatDateTime, monthBucket } from "@/lib/time";
+import PlayAllButton from "./play-all-button";
 
 const PAGE_SIZE = 200;
 
@@ -55,19 +56,31 @@ export default async function HistoryView({
           {page > 1 ? "No more plays" : "No plays"} in {monthLabel(month)}.
         </p>
       ) : editable ? (
-        <HistoryTable
-          key={`${month}-${page}`}
-          plays={plays.map((play) => ({
-            playId: play.playId,
-            trackId: play.trackId,
-            playedAt: play.playedAt.toISOString(),
-            when: formatDateTime(play.playedAt),
-            title: play.title,
-            artist: play.artist,
-            cover: covers.get(play.trackId),
-            album: albums.get(play.trackId),
-          }))}
-        />
+        <>
+          <div className="history-play">
+            <PlayAllButton
+              tracks={plays.map((play) => ({
+                trackId: play.trackId,
+                title: play.title,
+                artist: play.artist,
+                cover: covers.get(play.trackId),
+              }))}
+            />
+          </div>
+          <HistoryTable
+            key={`${month}-${page}`}
+            plays={plays.map((play) => ({
+              playId: play.playId,
+              trackId: play.trackId,
+              playedAt: play.playedAt.toISOString(),
+              when: formatDateTime(play.playedAt),
+              title: play.title,
+              artist: play.artist,
+              cover: covers.get(play.trackId),
+              album: albums.get(play.trackId),
+            }))}
+          />
+        </>
       ) : (
         <table>
           <thead>

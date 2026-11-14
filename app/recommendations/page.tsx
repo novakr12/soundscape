@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ArtistLink, SongLink } from "@/components/music-links";
+import PlayAllButton from "@/components/play-all-button";
 import PlayButton from "@/components/play-button";
 import { privateUsers } from "@/lib/privacy";
 import { because, getRecommendations, getSimilarListeners } from "@/lib/recommendations";
@@ -40,7 +41,17 @@ export default async function RecommendationsPage() {
       </section>
 
       <section>
-        <h2>Tracks you haven&apos;t played</h2>
+        <div className="section-head">
+          <h2>Tracks you haven&apos;t played</h2>
+          <PlayAllButton
+            tracks={recommendations.map((rec) => ({
+              trackId: rec.trackId,
+              title: rec.title,
+              artist: rec.artist,
+              cover: rec.cover,
+            }))}
+          />
+        </div>
         {recommendations.length === 0 ? (
           <p className="muted">Nothing yet. Play a few tracks so we can find listeners like you.</p>
         ) : (

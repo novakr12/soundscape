@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useState, useTransition } from "react";
+import PlayAllButton from "@/components/play-all-button";
 import type { MixKind } from "@/lib/mixes";
 import { type SaveMixState, saveMix } from "./actions";
 import SongRow, { type RowSong } from "./song-row";
@@ -63,6 +64,14 @@ export default function MixSection({ kind, title, description, empty, playlist, 
     <section>
       <div className="section-head">
         <h2>{title}</h2>
+        <PlayAllButton
+          tracks={songs.map((song) => ({
+            trackId: song.trackId,
+            title: song.title,
+            artist: song.artist,
+            cover: song.cover,
+          }))}
+        />
         {songs.length > 0 &&
           (connected ? (
             <button type="button" className="follow-button" onClick={save} disabled={pending}>

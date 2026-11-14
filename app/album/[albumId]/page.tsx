@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import Cover from "@/components/cover";
+import PlayAllButton from "@/components/play-all-button";
 import PlayButton from "@/components/play-button";
 import { getAlbum } from "@/lib/albums";
 import { currentUserId } from "@/lib/session";
@@ -64,7 +65,18 @@ export default async function AlbumPage({ params }: Props) {
       </div>
 
       <section>
-        <h2>Songs</h2>
+        <div className="section-head">
+          <h2>Songs</h2>
+          {viewer && (
+            <PlayAllButton
+              tracks={album.tracks.flatMap((track) =>
+                track.trackId
+                  ? [{ trackId: track.trackId, title: track.title, artist: album.artist, cover: track.cover }]
+                  : [],
+              )}
+            />
+          )}
+        </div>
         <ol className={viewer ? "chart playable" : "chart"}>
           {album.tracks.map((track, index) =>
             track.trackId ? (

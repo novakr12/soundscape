@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Lockup } from "@/components/logo";
 import { ArtistLink, SongLink } from "@/components/music-links";
+import PlayAllButton from "@/components/play-all-button";
 import PlayButton from "@/components/play-button";
 import WeekRecapView from "@/components/week-recap";
 import { getRecent } from "@/lib/live";
@@ -99,7 +100,10 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ d
       )}
 
       <section>
-        <h2>Recently played</h2>
+        <div className="section-head">
+          <h2>Recently played</h2>
+          <PlayAllButton tracks={recent} />
+        </div>
         {recent.length === 0 ? (
           <p className="muted">
             Nothing yet. <Link href="/connect">Connect your music player</Link> or{" "}

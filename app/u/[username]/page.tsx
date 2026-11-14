@@ -5,6 +5,7 @@ import FollowButton from "@/components/follow-button";
 import HistoryView from "@/components/history-view";
 import ListeningRecordView from "@/components/listening-record";
 import { ArtistLink, SongLink } from "@/components/music-links";
+import PlayAllButton from "@/components/play-all-button";
 import ProfileUpdates from "@/components/profile-updates";
 import SongProgress from "@/components/song-progress";
 import StatsView from "@/components/stats-view";
@@ -121,7 +122,10 @@ export default async function ProfilePage({ params, searchParams }: Props) {
 
       {loved.length > 0 && (
         <section>
-          <h2>Loved songs</h2>
+          <div className="section-head">
+            <h2>Loved songs</h2>
+            {viewer && <PlayAllButton tracks={loved} />}
+          </div>
           <ul className="listening-list">
             {loved.map((song) => (
               <li key={song.trackId}>

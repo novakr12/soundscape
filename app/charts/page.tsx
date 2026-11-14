@@ -2,6 +2,7 @@ import Link from "next/link";
 import Cover from "@/components/cover";
 import LiveUpdates from "@/components/live-updates";
 import { ArtistLink, SongLink } from "@/components/music-links";
+import PlayAllButton from "@/components/play-all-button";
 import PlayButton from "@/components/play-button";
 import SongProgress from "@/components/song-progress";
 import { artistIdFor } from "@/lib/catalog";
@@ -22,7 +23,10 @@ function plural(count: number, word: string) {
 function Chart({ title, rows, canPlay }: { title: string; rows: ChartRow[]; canPlay: boolean }) {
   return (
     <section>
-      <h2>{title}</h2>
+      <div className="section-head">
+        <h2>{title}</h2>
+        {canPlay && <PlayAllButton tracks={rows} />}
+      </div>
       {rows.length === 0 ? (
         <p className="muted">No plays yet.</p>
       ) : (

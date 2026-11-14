@@ -1,6 +1,7 @@
 import AlbumList from "@/components/album-list";
 import Cover from "@/components/cover";
 import { ArtistLink, SongLink } from "@/components/music-links";
+import PlayAllButton from "@/components/play-all-button";
 import type { Monthscape, Yearscape } from "@/lib/yearscape";
 
 const dayLabel = (day: string) =>
@@ -32,7 +33,17 @@ export default function ScapeSummary({ scape }: { scape: Yearscape | Monthscape 
 
       <div className="columns">
         <section>
-          <h2>Top songs</h2>
+          <div className="section-head">
+            <h2>Top songs</h2>
+            <PlayAllButton
+              tracks={scape.topSongs.map((song) => ({
+                trackId: song.trackId,
+                title: song.title,
+                artist: song.artist,
+                cover: song.cover,
+              }))}
+            />
+          </div>
           <ol className="ranked-list">
             {scape.topSongs.map((song, index) => (
               <li key={song.trackId}>

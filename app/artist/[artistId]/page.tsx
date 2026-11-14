@@ -4,6 +4,7 @@ import { notFound, redirect } from "next/navigation";
 import { after } from "next/server";
 import Cover from "@/components/cover";
 import { ArtistTools } from "@/components/library-tools";
+import PlayAllButton from "@/components/play-all-button";
 import PlayButton from "@/components/play-button";
 import { isAdmin } from "@/lib/admin";
 import { albumsBy } from "@/lib/albums";
@@ -94,7 +95,19 @@ export default async function ArtistPage({ params }: Props) {
       </div>
 
       <section>
-        <h2>Top songs</h2>
+        <div className="section-head">
+          <h2>Top songs</h2>
+          {viewer && (
+            <PlayAllButton
+              tracks={songs.map((song) => ({
+                trackId: song.trackId,
+                title: song.title,
+                artist: artist.name,
+                cover: song.cover,
+              }))}
+            />
+          )}
+        </div>
         {songs.length === 0 ? (
           <p className="muted">Nobody has played this artist yet.</p>
         ) : (
