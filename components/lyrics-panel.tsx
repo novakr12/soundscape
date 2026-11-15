@@ -45,6 +45,21 @@ export default function LyricsPanel({
   const lyrics = "lyrics" in state && state.key === key ? state.lyrics : null;
 
   useEffect(() => {
+    const body = document.body;
+    const bar = document.querySelector<HTMLElement>(".player");
+    const measure = () => body.style.setProperty("--player-height", `${bar?.offsetHeight ?? 0}px`);
+    measure();
+    const watcher = bar ? new ResizeObserver(measure) : null;
+    if (bar) watcher?.observe(bar);
+    body.classList.add("lyrics-open");
+    return () => {
+      watcher?.disconnect();
+      body.classList.remove("lyrics-open");
+      body.style.removeProperty("--player-height");
+    };
+  }, []);
+
+  useEffect(() => {
     if (!lyrics?.synced) return;
     const tick = () => setAt(currentLine(lyrics.lines, audio.current?.currentTime ?? 0));
     tick();

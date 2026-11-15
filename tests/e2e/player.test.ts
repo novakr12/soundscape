@@ -324,8 +324,14 @@ describe("player", () => {
   });
 
   it("starts a radio from a song", async () => {
-    await page.goto(`${BASE_URL}/track/player-test-band-first-light`, { waitUntil: "domcontentloaded" });
+    await page.goto(`${BASE_URL}/track/player-test-band-first-light`, { waitUntil: "load" });
+    const started = page.waitForResponse((response) => response.url().endsWith("/api/radio"), { timeout: 30_000 });
+    await page.waitForFunction(() => {
+      const button = [...document.querySelectorAll("button")].find((b) => b.textContent?.includes("Start radio"));
+      return Boolean(button && Object.keys(button).some((key) => key.startsWith("__reactProps")));
+    });
     await page.getByRole("button", { name: "📻 Start radio" }).click();
+    assert.equal((await started).status(), 200);
     await waitForSong("First Light");
     await page.locator('[data-player="queue"]').click();
     const rows = page.locator(".queue-panel .queue-song");
