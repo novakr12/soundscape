@@ -16,6 +16,7 @@ export type AlbumSongRow = {
 
 export default function AlbumSongs({ rows, canPlay }: { rows: AlbumSongRow[]; canPlay: boolean }) {
   const { playFrom } = usePlayer();
+  const discs = rows.some((row) => row.position.includes("."));
   const playable = rows.flatMap((row) => (row.track ? [row.track] : []));
   const at = new Map(rows.flatMap((row) => (row.track ? [[row.key, playable.indexOf(row.track)] as const] : [])));
   return (
@@ -24,7 +25,7 @@ export default function AlbumSongs({ rows, canPlay }: { rows: AlbumSongRow[]; ca
         <h2>Songs</h2>
         {canPlay && <PlayAllButton tracks={playable} />}
       </div>
-      <ol className={canPlay ? "chart playable" : "chart"}>
+      <ol className={["chart", canPlay && "playable", discs && "disc-numbers"].filter(Boolean).join(" ")}>
         {rows.map((row) => (
           <li key={row.key} className={row.href || row.track ? undefined : "unplayed"}>
             <span className="muted">{row.position}</span>

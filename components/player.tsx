@@ -62,6 +62,7 @@ const GIVE_UP_LOADING_AFTER_MS = 12_000;
 const PREPARE_NEXT_SECONDS = 30;
 const WATCH_END_SECONDS = 1.5;
 const START_NEXT_EARLY_MS = 13;
+const ANNOUNCE_AGAIN_AFTER_MS = 60_000;
 const CLOSE_TO_END_SECONDS = 0.25;
 
 const PlayerContext = createContext<PlayerContextValue | null>(null);
@@ -78,6 +79,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const holderRef = useRef<HTMLDivElement>(null);
   const prepared = useRef<string | null>(null);
   const early = useRef<number | null>(null);
+  const announced = useRef({ id: 0, at: 0 });
   const [active, setActive] = useState<HTMLAudioElement | null>(null);
   const activeAudio = useMemo(() => ({ current: active }), [active]);
   const [tracks, setTracks] = useState<PlayerTrack[]>([]);
@@ -101,6 +103,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     failed: () => {},
     prepare: () => {},
     finish: (_id: number) => {},
+    announce: () => {},
   });
   const [error, setError] = useState<string | null>(null);
   const [full, setFull] = useState(false);
@@ -124,6 +127,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       if (!mine()) return;
       autoplay.current = true;
       if (session) session.playbackState = "playing";
+      skip.current.announce();
     });
     element.addEventListener("pause", () => {
       if (mine() && session) session.playbackState = "paused";
@@ -195,9 +199,27 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
+  function announce() {
+    const audio = audioRef.current;
+    const track = tracksRef.current[orderRef.current[positionRef.current]];
+    if (!audio || audio.paused || !track || !listen.current.full) return;
+    const id = playing.current;
+    const now = Date.now();
+    if (announced.current.id === id && now - announced.current.at < ANNOUNCE_AGAIN_AFTER_MS) return;
+    announced.current = { id, at: now };
+    fetch("/api/now-playing", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(
+        track.songId ? { trackId: track.trackId, songId: track.songId } : { trackId: track.trackId },
+      ),
+    }).catch(() => {});
+  }
+
   function describe(track: PlayerTrack, isFull: boolean) {
     setFull(isFull);
     listen.current.full = isFull;
+    if (isFull) announce();
     if (!("mediaSession" in navigator)) return;
     navigator.mediaSession.metadata = new MediaMetadata({
       title: track.title,
@@ -516,6 +538,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     failed,
     prepare: () => audioElement(),
     finish: finishEarly,
+    announce,
   };
   const hasNext = position + 1 < queue.length || (repeat === "all" && queue.length > 1);
 

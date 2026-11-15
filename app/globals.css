@@ -203,6 +203,14 @@ th, td {
   align-items: center;
 }
 
+.chart.disc-numbers li {
+  grid-template-columns: 2.5rem 1fr auto;
+}
+
+.chart.playable.disc-numbers li {
+  grid-template-columns: 2.5rem 1fr auto auto;
+}
+
 .chart li {
   display: grid;
   grid-template-columns: 1.5rem 1fr auto;

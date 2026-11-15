@@ -109,15 +109,17 @@ export async function relaySubmission(userId: string, body: Submission) {
   }
 }
 
-function playedSubmission(play: { artist: string; title: string; playedAt: string | Date }) {
+type Song = { artist: string; title: string };
+
+function submission(type: "single" | "playing_now", song: Song, playedAt?: string | Date) {
   return {
-    listen_type: "single",
+    listen_type: type,
     payload: [
       {
-        listened_at: Math.floor(new Date(play.playedAt).getTime() / 1000),
+        ...(playedAt ? { listened_at: Math.floor(new Date(playedAt).getTime() / 1000) } : {}),
         track_metadata: {
-          artist_name: play.artist,
-          track_name: play.title,
+          artist_name: song.artist,
+          track_name: song.title,
           additional_info: { media_player: "Soundscape", submission_client: "Soundscape" },
         },
       },
@@ -125,8 +127,12 @@ function playedSubmission(play: { artist: string; title: string; playedAt: strin
   };
 }
 
-export async function relayPlay(userId: string, play: { artist: string; title: string; playedAt: string | Date }) {
-  await relaySubmission(userId, playedSubmission(play));
+export async function relayPlay(userId: string, play: Song & { playedAt: string | Date }) {
+  await relaySubmission(userId, submission("single", play, play.playedAt));
+}
+
+export async function relayNowPlaying(userId: string, song: Song) {
+  await relaySubmission(userId, submission("playing_now", song));
 }
 
 export async function queuedForUser(userId: string): Promise<number> {
