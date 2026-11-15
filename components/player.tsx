@@ -53,6 +53,7 @@ type PlayerContextValue = {
 
 const SETTINGS_KEY = "soundscape:player";
 const QUEUE_KEY = "soundscape:queue";
+const RESUME_KEY = "soundscape:resume";
 const SAVE_TIME_EVERY_MS = 5000;
 
 const RESTART_AFTER_SECONDS = 3;
@@ -231,8 +232,10 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     try {
       const saved = restoreQueue(JSON.parse(localStorage.getItem(QUEUE_KEY) ?? "null"));
       if (!saved) return;
+      const resume = sessionStorage.getItem(RESUME_KEY) === "1";
+      sessionStorage.removeItem(RESUME_KEY);
       arrange(saved.tracks, saved.order, saved.position);
-      start(saved.tracks[saved.order[saved.position]], false, saved.time);
+      start(saved.tracks[saved.order[saved.position]], resume, saved.time);
     } catch {}
   }
 
@@ -250,12 +253,19 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         );
       } catch {}
     };
+    const leave = () => {
+      save();
+      try {
+        if (audioRef.current && !audioRef.current.paused) sessionStorage.setItem(RESUME_KEY, "1");
+        else sessionStorage.removeItem(RESUME_KEY);
+      } catch {}
+    };
     save();
     const timer = setInterval(save, SAVE_TIME_EVERY_MS);
-    window.addEventListener("pagehide", save);
+    window.addEventListener("pagehide", leave);
     return () => {
       clearInterval(timer);
-      window.removeEventListener("pagehide", save);
+      window.removeEventListener("pagehide", leave);
     };
   }, [tracks, order, position]);
 
