@@ -67,6 +67,7 @@ type PlayerBarProps = {
   hasNext: boolean;
   showQueue: boolean;
   audio: RefObject<HTMLAudioElement | null>;
+  live: RefObject<HTMLAudioElement | null>;
   holder: Ref<HTMLDivElement>;
   onShuffle: () => void;
   onPrevious: () => void;
@@ -86,6 +87,7 @@ export function PlayerBar({
   hasNext,
   showQueue,
   audio,
+  live,
   holder,
   onShuffle,
   onPrevious,
@@ -145,7 +147,7 @@ export function PlayerBar({
           >
             <PreviousIcon />
           </button>
-          <PlayPauseButton audio={audio} />
+          <PlayPauseButton audio={live} />
           <button
             type="button"
             className="icon-button"
@@ -170,7 +172,7 @@ export function PlayerBar({
             <RepeatIcon size={18} one={repeat === "one"} />
           </button>
         </div>
-        <SeekBar audio={audio} />
+        <SeekBar audio={live} />
       </div>
       <div className="player-side">
         <button

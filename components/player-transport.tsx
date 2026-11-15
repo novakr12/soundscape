@@ -13,6 +13,8 @@ function clock(seconds: number) {
     : `${minutes}:${rest}`;
 }
 
+const REFRESH_MS = 250;
+
 function useAudio(
   audio: RefObject<HTMLAudioElement | null>,
   events: string[],
@@ -20,13 +22,16 @@ function useAudio(
 ) {
   const [value, setValue] = useState(0);
   useEffect(() => {
-    const element = audio.current;
-    if (!element) return;
-    const follow = () => setValue(read(element));
+    const follow = () => {
+      const element = audio.current;
+      setValue(element ? read(element) : 0);
+    };
     follow();
-    for (const event of events) element.addEventListener(event, follow);
+    const timer = setInterval(follow, REFRESH_MS);
+    for (const event of events) document.addEventListener(event, follow, true);
     return () => {
-      for (const event of events) element.removeEventListener(event, follow);
+      clearInterval(timer);
+      for (const event of events) document.removeEventListener(event, follow, true);
     };
   }, [audio, events, read]);
   return value;

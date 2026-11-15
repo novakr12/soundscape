@@ -630,6 +630,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         hasNext={hasNext}
         showQueue={showQueue}
         audio={activeAudio}
+        live={audioRef}
         holder={holderRef}
         onShuffle={toggleShuffle}
         onPrevious={previous}
