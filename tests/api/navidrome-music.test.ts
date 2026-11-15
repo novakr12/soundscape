@@ -8,11 +8,13 @@ import { importListens } from "../../lib/imports";
 import { saveNavidromeSong, toMusicSongs } from "../../lib/music";
 import {
   getLibraries,
+  getLibraryAlbums,
   getLibrarySongs,
   getNavidrome,
   getPlaylistSongs,
   getPlaylists,
   getSong,
+  getSongsOfAlbums,
   saveNavidrome,
 } from "../../lib/navidrome";
 import { recordPlay } from "../../lib/plays";
@@ -76,6 +78,22 @@ function fakeNavidrome() {
         return response.end(JSON.stringify({ "subsonic-response": { status: "failed", error: { code: 70 } } }));
       }
       return response.end(subsonic({ playlist: { name: "Evening", entry: [songs[1], songs[0], songs[3]] } }));
+    }
+    if (method === "getAlbumList2") {
+      const albums = params.get("musicFolderId") === "2" ? [] : [{ id: "al-second" }, { id: "al-first" }, { id: 5 }];
+      const from = Number(params.get("offset") ?? 0);
+      return response.end(subsonic({ albumList2: { album: albums.slice(from, from + Number(params.get("size"))) } }));
+    }
+    if (method === "getAlbum") {
+      const album =
+        params.get("id") === "al-first"
+          ? [
+              { id: "first-3", title: "Disc Two Opener", artist: user.artist, discNumber: 2, track: 1 },
+              { id: "first-2", title: "Track Two", artist: user.artist, discNumber: 1, track: 2 },
+              { id: "first-1", title: "Track One", artist: user.artist, discNumber: 1, track: 1 },
+            ]
+          : [songs[1]];
+      return response.end(subsonic({ album: { song: album } }));
     }
     if (method === "getSong") {
       const song = songs.find((s) => s.id === params.get("id"));
@@ -158,6 +176,26 @@ describe("Browsing Navidrome", () => {
     assert.deepEqual(
       far.map((song) => song.title),
       ["Far Song"],
+    );
+  });
+
+  it("lists a library album by album in the chosen order", async () => {
+    const navidrome = (await getNavidrome(user.userId))!;
+    seen.length = 0;
+    const albums = await getLibraryAlbums(navidrome, { libraryId: "1", order: "added", offset: 0, size: 21 });
+    assert.deepEqual(albums, ["al-second", "al-first"]);
+    assert.equal(seen[0].get("type"), "newest");
+    assert.equal(seen[0].get("musicFolderId"), "1");
+    assert.equal(seen[0].get("size"), "21");
+    await getLibraryAlbums(navidrome, { order: "year", offset: 20, size: 21 });
+    assert.equal(seen[1].get("type"), "byYear");
+    assert.equal(seen[1].get("fromYear"), "9999");
+    assert.equal(seen[1].get("offset"), "20");
+    assert.equal(seen[1].get("musicFolderId"), null);
+    const listed = await getSongsOfAlbums(navidrome, albums);
+    assert.deepEqual(
+      listed.map((song) => song.title),
+      ["New Song", "Track One", "Track Two", "Disc Two Opener"],
     );
   });
 

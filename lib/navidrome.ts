@@ -303,6 +303,7 @@ export type NavidromeSong = {
   duration?: number;
   coverArt?: string;
   track?: number;
+  disc?: number;
 };
 
 type RawSong = {
@@ -313,6 +314,7 @@ type RawSong = {
   duration?: unknown;
   coverArt?: unknown;
   track?: unknown;
+  discNumber?: unknown;
 };
 
 function text(value: unknown) {
@@ -336,6 +338,7 @@ function toSong(raw: RawSong): NavidromeSong | null {
     duration: count(raw.duration),
     coverArt: coverArt && isSongId(coverArt) ? coverArt : undefined,
     track: count(raw.track),
+    disc: count(raw.discNumber),
   };
 }
 
@@ -408,4 +411,57 @@ export async function getSong(server: Navidrome, songId: string) {
   } catch {
     return null;
   }
+}
+
+export type AlbumOrder = "artist" | "album" | "added" | "year" | "played";
+
+const ALBUM_LISTS: Record<AlbumOrder, [string, string][]> = {
+  artist: [["type", "alphabeticalByArtist"]],
+  album: [["type", "alphabeticalByName"]],
+  added: [["type", "newest"]],
+  year: [
+    ["type", "byYear"],
+    ["fromYear", "9999"],
+    ["toYear", "0"],
+  ],
+  played: [["type", "frequent"]],
+};
+
+export async function getLibraryAlbums(
+  server: Navidrome,
+  options: { libraryId?: string; order: AlbumOrder; offset: number; size: number },
+) {
+  const params: [string, string][] = [
+    ...ALBUM_LISTS[options.order],
+    ["size", String(options.size)],
+    ["offset", String(options.offset)],
+  ];
+  if (options.libraryId && isSongId(options.libraryId)) params.push(["musicFolderId", options.libraryId]);
+  const result = await call<{ albumList2?: { album?: { id?: unknown }[] } }>(server, "getAlbumList2", params);
+  return (result.albumList2?.album ?? []).flatMap((album) =>
+    typeof album.id === "string" && isSongId(album.id) ? [album.id] : [],
+  );
+}
+
+function byDiscAndTrack(a: NavidromeSong, b: NavidromeSong) {
+  return (a.disc ?? 1) - (b.disc ?? 1) || (a.track ?? 0) - (b.track ?? 0);
+}
+
+export async function getAlbumSongs(server: Navidrome, albumId: string) {
+  if (!isSongId(albumId)) return [];
+  const result = await call<{ album?: { song?: RawSong[] } }>(server, "getAlbum", [["id", albumId]]);
+  return songs(result.album?.song).sort(byDiscAndTrack);
+}
+
+export async function getSongsOfAlbums(server: Navidrome, albumIds: string[], concurrency = 5) {
+  const found: NavidromeSong[][] = new Array(albumIds.length);
+  let next = 0;
+  async function worker() {
+    while (next < albumIds.length) {
+      const at = next++;
+      found[at] = await getAlbumSongs(server, albumIds[at]);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(concurrency, albumIds.length) }, worker));
+  return found.flat();
 }

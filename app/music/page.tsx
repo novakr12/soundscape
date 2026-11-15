@@ -1,12 +1,15 @@
 import Link from "next/link";
 import MusicList from "@/components/music-list";
 import { type MusicSong, toMusicSongs } from "@/lib/music";
+import { libraryOrder, songOrder, sortChoices, sortSongs } from "@/lib/music-sort";
 import {
   getLibraries,
+  getLibraryAlbums,
   getLibrarySongs,
   getNavidrome,
   getPlaylistSongs,
   getPlaylists,
+  getSongsOfAlbums,
   NavidromeError,
   type NavidromeLibrary,
   type NavidromePlaylist,
@@ -16,9 +19,10 @@ import { requireUserId } from "@/lib/session";
 export const metadata = { title: "Music" };
 
 const PAGE_SIZE = 100;
+const ALBUMS_PER_PAGE = 20;
 
 type Props = {
-  searchParams: Promise<{ library?: string; playlist?: string; q?: string; page?: string }>;
+  searchParams: Promise<{ library?: string; playlist?: string; q?: string; page?: string; sort?: string }>;
 };
 
 type Shown = {
@@ -29,6 +33,8 @@ type Shown = {
   libraryId?: string;
   playlistId?: string;
   query?: string;
+  sort: string;
+  firstNumber: number;
 };
 
 function address(params: Record<string, string | number | undefined>) {
@@ -72,31 +78,56 @@ export default async function MusicPage({ searchParams }: Props) {
     if (params.playlist) {
       const playlist = await getPlaylistSongs(server, params.playlist);
       if (playlist) {
+        const order = songOrder(params.sort);
         shown = {
           title: playlist.name,
-          songs: await toMusicSongs(playlist.songs),
+          songs: await toMusicSongs(sortSongs(playlist.songs, order)),
           page: 1,
           hasMore: false,
           playlistId: params.playlist,
+          sort: order ?? "",
+          firstNumber: 1,
         };
       }
     } else {
       const library = libraries.find((item) => item.id === params.library) ?? libraries[0];
       const query = params.q?.trim().slice(0, 100) || undefined;
-      const found = await getLibrarySongs(server, {
-        libraryId: library?.id,
-        query,
-        offset: (page - 1) * PAGE_SIZE,
-        size: PAGE_SIZE + 1,
-      });
-      shown = {
-        title: library?.name ?? "Library",
-        songs: await toMusicSongs(found.slice(0, PAGE_SIZE)),
-        page,
-        hasMore: found.length > PAGE_SIZE,
-        libraryId: library?.id,
-        query,
-      };
+      if (query) {
+        const order = songOrder(params.sort);
+        const found = await getLibrarySongs(server, {
+          libraryId: library?.id,
+          query,
+          offset: (page - 1) * PAGE_SIZE,
+          size: PAGE_SIZE + 1,
+        });
+        shown = {
+          title: library?.name ?? "Library",
+          songs: await toMusicSongs(sortSongs(found.slice(0, PAGE_SIZE), order)),
+          page,
+          hasMore: found.length > PAGE_SIZE,
+          libraryId: library?.id,
+          query,
+          sort: order ?? "",
+          firstNumber: (page - 1) * PAGE_SIZE + 1,
+        };
+      } else {
+        const order = libraryOrder(params.sort);
+        const albums = await getLibraryAlbums(server, {
+          libraryId: library?.id,
+          order,
+          offset: (page - 1) * ALBUMS_PER_PAGE,
+          size: ALBUMS_PER_PAGE + 1,
+        });
+        shown = {
+          title: library?.name ?? "Library",
+          songs: await toMusicSongs(await getSongsOfAlbums(server, albums.slice(0, ALBUMS_PER_PAGE))),
+          page,
+          hasMore: albums.length > ALBUMS_PER_PAGE,
+          libraryId: library?.id,
+          sort: order === "artist" ? "" : order,
+          firstNumber: 1,
+        };
+      }
     }
   } catch (error) {
     if (!(error instanceof NavidromeError)) throw error;
@@ -165,11 +196,38 @@ export default async function MusicPage({ searchParams }: Props) {
                   />
                 </form>
               )}
-              <MusicList songs={shown.songs} firstNumber={(shown.page - 1) * PAGE_SIZE + 1} />
+              <nav className="music-sort" aria-label="Sort by">
+                <span className="muted">Sort by</span>
+                {sortChoices(shown.playlistId ? "playlist" : shown.query ? "search" : "library").map((choice) => {
+                  const value = !shown.playlistId && !shown.query && choice.value === "artist" ? "" : choice.value;
+                  return (
+                    <Link
+                      key={choice.value}
+                      href={address({
+                        library: shown.playlistId ? undefined : shown.libraryId,
+                        playlist: shown.playlistId,
+                        q: shown.query,
+                        sort: value,
+                      })}
+                      aria-current={shown.sort === value ? "true" : undefined}
+                    >
+                      {choice.label}
+                    </Link>
+                  );
+                })}
+              </nav>
+              <MusicList songs={shown.songs} firstNumber={shown.firstNumber} />
               {(shown.page > 1 || shown.hasMore) && (
                 <nav className="pager" aria-label="Pages">
                   {shown.page > 1 ? (
-                    <Link href={address({ library: shown.libraryId, q: shown.query, page: shown.page - 1 })}>
+                    <Link
+                      href={address({
+                        library: shown.libraryId,
+                        q: shown.query,
+                        sort: shown.sort,
+                        page: shown.page - 1,
+                      })}
+                    >
                       ← Previous
                     </Link>
                   ) : (
@@ -177,7 +235,14 @@ export default async function MusicPage({ searchParams }: Props) {
                   )}
                   <span className="muted">Page {shown.page}</span>
                   {shown.hasMore ? (
-                    <Link href={address({ library: shown.libraryId, q: shown.query, page: shown.page + 1 })}>
+                    <Link
+                      href={address({
+                        library: shown.libraryId,
+                        q: shown.query,
+                        sort: shown.sort,
+                        page: shown.page + 1,
+                      })}
+                    >
                       Next →
                     </Link>
                   ) : (

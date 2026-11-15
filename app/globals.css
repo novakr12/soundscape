@@ -2068,3 +2068,30 @@ tr.selected {
     display: none;
   }
 }
+
+.music-sort {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+  margin: 0.5rem 0 0;
+  font-size: 0.9rem;
+}
+
+.music-sort a {
+  padding: 0.15rem 0.6rem;
+  border: 1px solid color-mix(in srgb, var(--muted) 30%, transparent);
+  border-radius: 999px;
+  color: var(--fg);
+  text-decoration: none;
+}
+
+.music-sort a:hover {
+  background: color-mix(in srgb, var(--muted) 15%, transparent);
+}
+
+.music-sort a[aria-current="true"] {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  color: var(--accent);
+}
