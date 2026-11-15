@@ -203,11 +203,9 @@ export async function getYearscape(userId: string, year: number, now = new Date(
   );
   const past = year < Number(localDay(now).slice(0, 4));
   const key = keys.yearscape(userId, year);
-  const print = past ? await fingerprint(userId, year) : "";
-  if (past) {
-    const cached = await getValue<{ print: string; scape: Omit<Yearscape, "years"> }>(key);
-    if (cached?.print === print) return { ...cached.scape, years };
-  }
+  const print = `${await fingerprint(userId, year)}${past ? "" : `:${localDay(now)}`}`;
+  const cached = await getValue<{ print: string; scape: Omit<Yearscape, "years"> }>(key);
+  if (cached?.print === print) return { ...cached.scape, years };
   const { plays, earlierArtists } = await readPeriod(userId, `${year}-01`, `${year}-12`, `${year}-`);
 
   const scape: Omit<Yearscape, "years"> = {
@@ -224,7 +222,7 @@ export async function getYearscape(userId: string, year: number, now = new Date(
       };
     }),
   };
-  if (past) await setValue(key, { print, scape }, CACHE_SECONDS);
+  await setValue(key, { print, scape }, CACHE_SECONDS);
   return { ...scape, years };
 }
 

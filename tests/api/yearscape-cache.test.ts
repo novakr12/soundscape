@@ -35,9 +35,17 @@ describe("Yearscape cache", () => {
     assert.equal(fresh.plays, 2);
   });
 
-  it("does not keep the current year", async () => {
-    await getYearscape(user.userId, 2026, now);
-    assert.equal(await getValue(keys.yearscape(user.userId, 2026)), null);
+  it("keeps the current year only for today and until a new play arrives", async () => {
+    const first = await getYearscape(user.userId, 2026, now);
+    const saved = await getValue<{ print: string }>(keys.yearscape(user.userId, 2026));
+    assert.match(saved?.print ?? "", /:2026-06-01$/);
+    assert.equal(first.plays, 1);
+    await importListens(user.userId, [{ artist, title: "This Year", playedAt: at("2026-03-01T12:00:00Z") }]);
+    assert.equal((await getYearscape(user.userId, 2026, now)).plays, 2);
+    const tomorrow = new Date("2026-06-02T12:00:00Z");
+    await getYearscape(user.userId, 2026, tomorrow);
+    const next = await getValue<{ print: string }>(keys.yearscape(user.userId, 2026));
+    assert.match(next?.print ?? "", /:2026-06-02$/);
   });
 
   it("notices new and edited plays in that year", async () => {

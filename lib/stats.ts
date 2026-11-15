@@ -1,6 +1,6 @@
 import { shiftMonth } from "./history";
 import { sql } from "./postgres";
-import { addDays, localDay, localWeekdayHour, monthBucket, monthRange, startOfDay } from "./time";
+import { addDays, localDay, monthBucket, monthRange, startOfDay, TIME_ZONE } from "./time";
 
 export type DailyPlays = { day: string; plays: number };
 export type RankedItem = { name: string; plays: number };
@@ -52,11 +52,14 @@ export async function getListeningTime(
 export async function getListeningHeatmap(userId: string, months = 12, now = new Date()): Promise<number[][]> {
   const grid = Array.from({ length: 7 }, () => Array<number>(24).fill(0));
   const { from } = monthRange(shiftMonth(monthBucket(now), 1 - months));
-  const rows = await sql`SELECT played_at FROM plays WHERE user_id = ${userId} AND played_at >= ${from}`;
-  for (const row of rows) {
-    const { weekday, hour } = localWeekdayHour(row.played_at);
-    grid[weekday][hour]++;
-  }
+  const rows = await sql`
+    SELECT extract(isodow FROM played_at AT TIME ZONE ${TIME_ZONE})::int - 1 AS weekday,
+           extract(hour FROM played_at AT TIME ZONE ${TIME_ZONE})::int AS hour,
+           count(*)::int AS plays
+    FROM plays
+    WHERE user_id = ${userId} AND played_at >= ${from}
+    GROUP BY 1, 2`;
+  for (const row of rows) grid[row.weekday][row.hour] = row.plays;
   return grid;
 }
 
