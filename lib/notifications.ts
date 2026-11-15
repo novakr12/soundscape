@@ -158,7 +158,7 @@ export async function removeOldNotifications(now = new Date()) {
   await sql`DELETE FROM notifications WHERE created_at < ${new Date(now.getTime() - KEEP_DAYS * 86_400_000)}`;
 }
 
-export async function checkNotifications() {
+async function checkNotifications() {
   const milestones = await checkMilestones();
   const passes = await checkLeaderboardPasses();
   await removeOldNotifications();

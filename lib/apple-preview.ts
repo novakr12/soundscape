@@ -1,4 +1,5 @@
 import { mainArtist, mainTitle, normalize } from "./deezer";
+import { request } from "./http";
 import { sql } from "./postgres";
 
 const RECHECK_MS = 30 * 24 * 60 * 60 * 1000;
@@ -35,7 +36,7 @@ export function pickPreview(results: SearchResult[], artist: string, title: stri
   return null;
 }
 
-export async function findApplePreview(artist: string, title: string): Promise<string | null> {
+async function findApplePreview(artist: string, title: string): Promise<string | null> {
   const params = new URLSearchParams({
     term: `${mainArtist(artist)} ${mainTitle(title)}`,
     media: "music",
@@ -45,7 +46,7 @@ export async function findApplePreview(artist: string, title: string): Promise<s
   });
   let response: Response;
   try {
-    response = await fetch(`${itunesApi()}/search?${params}`, { signal: AbortSignal.timeout(5000), cache: "no-store" });
+    response = await request(`${itunesApi()}/search?${params}`, { timeoutMs: 5000 });
   } catch {
     throw new AppleUnreachable("Apple Music is unreachable");
   }

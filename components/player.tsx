@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import {
   countsAsPlay,
@@ -14,18 +13,13 @@ import {
   type Repeat,
   removeAt,
   restoreQueue,
-  SEEK_STEP_SECONDS,
-  seekTarget,
-  shortcutFor,
   shuffleAfter,
   shuffleAll,
   startingWith,
   unshuffle,
 } from "@/lib/play-queue";
-import { ArtistLink, SongLink } from "./music-links";
-import { NextIcon, PreviousIcon, QueueIcon, RepeatIcon, ShuffleIcon } from "./player-icons";
-import { PlayPauseButton, SeekBar } from "./player-transport";
-import VolumeControl from "./volume-control";
+import { PlayerBar, QueuePanel } from "./player-bar";
+import { usePlayerKeys } from "./player-keys";
 
 export type PlayerTrack = {
   trackId: string;
@@ -60,11 +54,6 @@ type PlayerContextValue = {
 const SETTINGS_KEY = "soundscape:player";
 const QUEUE_KEY = "soundscape:queue";
 const SAVE_TIME_EVERY_MS = 5000;
-const REPEAT_LABELS: Record<Repeat, string> = {
-  off: "Repeat is off",
-  all: "Repeating the queue",
-  one: "Repeating this song",
-};
 
 const RESTART_AFTER_SECONDS = 3;
 const SKIP_BROKEN_AFTER_MS = 1500;
@@ -73,12 +62,6 @@ const PREPARE_NEXT_SECONDS = 30;
 const WATCH_END_SECONDS = 1.5;
 const START_NEXT_EARLY_MS = 13;
 const CLOSE_TO_END_SECONDS = 0.25;
-const KEEPS_ITS_KEYS =
-  "input, textarea, select, button, audio, video, summary, [contenteditable]:not([contenteditable='false']), [role='slider'], [role='textbox'], [role='menuitem']";
-
-function keepsItsKeys(target: EventTarget | null) {
-  return target instanceof Element && target.closest(KEEPS_ITS_KEYS) !== null;
-}
 
 const PlayerContext = createContext<PlayerContextValue | null>(null);
 
@@ -237,33 +220,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     } catch {}
   }, []);
 
-  useEffect(() => {
-    const pressed = (event: KeyboardEvent) => {
-      if (event.defaultPrevented || keepsItsKeys(event.target)) return;
-      const audio = audioRef.current;
-      if (!audio?.currentSrc || tracksRef.current.length === 0) return;
-      const shortcut = shortcutFor(event.key, {
-        shift: event.shiftKey,
-        other: event.ctrlKey || event.metaKey || event.altKey,
-        repeat: event.repeat,
-      });
-      if (!shortcut) return;
-      event.preventDefault();
-      if (shortcut === "toggle") {
-        if (audio.paused) audio.play().catch(() => {});
-        else audio.pause();
-      } else if (shortcut === "back" || shortcut === "forward") {
-        const step = shortcut === "back" ? -SEEK_STEP_SECONDS : SEEK_STEP_SECONDS;
-        audio.currentTime = seekTarget(audio.currentTime, step, audio.duration);
-      } else if (shortcut === "next") {
-        skip.current.next();
-      } else {
-        skip.current.previous();
-      }
-    };
-    window.addEventListener("keydown", pressed);
-    return () => window.removeEventListener("keydown", pressed);
-  }, []);
+  usePlayerKeys(audioRef, tracksRef, skip);
 
   useEffect(() => {
     skip.current.restore();
@@ -643,129 +600,33 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     >
       {children}
       {current && showQueue && (
-        <section className="queue-panel" aria-label="Queue">
-          <div className="section-head">
-            <h2>Queue</h2>
-            <button type="button" className="secondary" onClick={() => setShowQueue(false)}>
-              Close
-            </button>
-          </div>
-          <ol>
-            {queue.map((track, at) => (
-              <li key={`${order[at]}`} className={at === position ? "current" : at < position ? "played" : undefined}>
-                <button type="button" className="queue-song" onClick={() => jumpTo(at)}>
-                  <span>{track.title}</span> <span className="muted">· {track.artist}</span>
-                </button>
-                {at !== position && (
-                  <button
-                    type="button"
-                    className="queue-remove"
-                    aria-label={`Remove ${track.title} from the queue`}
-                    onClick={() => remove(at)}
-                  >
-                    ✕
-                  </button>
-                )}
-              </li>
-            ))}
-          </ol>
-        </section>
+        <QueuePanel
+          queue={queue}
+          keys={order}
+          position={position}
+          onClose={() => setShowQueue(false)}
+          onJump={jumpTo}
+          onRemove={remove}
+        />
       )}
-      <div className="player" hidden={!current}>
-        <div className="player-song">
-          {current?.cover && <img src={current.cover} alt="" width={48} height={48} />}
-          <div className="now-playing">
-            {current && (
-              <>
-                <strong title={current.title}>
-                  {current.newSong ? current.title : <SongLink trackId={current.trackId}>{current.title}</SongLink>}
-                </strong>
-                <span className="muted" title={[current.artist, current.album].filter(Boolean).join(" · ")}>
-                  {current.newSong ? current.artist : <ArtistLink name={current.artist} />}
-                  {current.album && " · "}
-                  {current.album &&
-                    (current.albumHref ? (
-                      <Link className="music-link" href={current.albumHref}>
-                        {current.album}
-                      </Link>
-                    ) : (
-                      current.album
-                    ))}
-                  {!full && " · 30-second preview"}
-                  {queue.length > 1 && ` · ${position + 1} of ${queue.length}`}
-                </span>
-              </>
-            )}
-            {error && <span className="error">{error}</span>}
-          </div>
-        </div>
-        <div className="player-center">
-          <div className="player-skip">
-            <button
-              type="button"
-              className="icon-button player-toggle"
-              data-player="shuffle"
-              aria-label="Shuffle"
-              aria-pressed={shuffle}
-              title={shuffle ? "Shuffle is on" : "Shuffle is off"}
-              onClick={toggleShuffle}
-            >
-              <ShuffleIcon size={18} />
-            </button>
-            <button
-              type="button"
-              className="icon-button"
-              data-player="previous"
-              aria-label="Previous song"
-              title="Previous song (Shift+←)"
-              onClick={previous}
-            >
-              <PreviousIcon />
-            </button>
-            <PlayPauseButton audio={activeAudio} />
-            <button
-              type="button"
-              className="icon-button"
-              data-player="next"
-              aria-label="Next song"
-              title="Next song (Shift+→)"
-              onClick={next}
-              disabled={!hasNext}
-            >
-              <NextIcon />
-            </button>
-            <button
-              type="button"
-              className="icon-button player-toggle"
-              data-player="repeat"
-              data-repeat={repeat}
-              aria-label={REPEAT_LABELS[repeat]}
-              aria-pressed={repeat !== "off"}
-              title={REPEAT_LABELS[repeat]}
-              onClick={cycleRepeat}
-            >
-              <RepeatIcon size={18} one={repeat === "one"} />
-            </button>
-          </div>
-          <SeekBar audio={activeAudio} />
-        </div>
-        <div className="player-side">
-          <button
-            type="button"
-            className="icon-button player-toggle"
-            data-player="queue"
-            aria-label="Queue"
-            aria-expanded={showQueue}
-            aria-pressed={showQueue}
-            title="Queue"
-            onClick={() => setShowQueue(!showQueue)}
-          >
-            <QueueIcon size={18} />
-          </button>
-          <VolumeControl audio={activeAudio} />
-        </div>
-        <div className="player-audio" ref={holderRef} />
-      </div>
+      <PlayerBar
+        current={current}
+        position={position}
+        length={queue.length}
+        full={full}
+        error={error}
+        shuffle={shuffle}
+        repeat={repeat}
+        hasNext={hasNext}
+        showQueue={showQueue}
+        audio={activeAudio}
+        holder={holderRef}
+        onShuffle={toggleShuffle}
+        onPrevious={previous}
+        onNext={next}
+        onRepeat={cycleRepeat}
+        onQueue={() => setShowQueue(!showQueue)}
+      />
     </PlayerContext.Provider>
   );
 }

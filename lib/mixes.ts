@@ -4,7 +4,7 @@ import { getRecommendations } from "./recommendations";
 import { startOfDay } from "./time";
 import { getWanted, removeWanted } from "./wanted";
 
-export const MIX_SIZE = 25;
+const MIX_SIZE = 25;
 export const REDISCOVER_AFTER_DAYS = 90;
 const SONGS_PER_ARTIST = 2;
 
@@ -82,7 +82,7 @@ export async function getRediscoverMix(userId: string, now = new Date()): Promis
   return picked.map((song) => ({ ...song, ...details.get(song.trackId) }));
 }
 
-export function getMix(userId: string, kind: MixKind, now = new Date()) {
+function getMix(userId: string, kind: MixKind, now = new Date()) {
   return kind === "discover" ? getDiscoverMix(userId) : getRediscoverMix(userId, now);
 }
 
@@ -122,9 +122,9 @@ export async function checkWantedInNavidrome(userId: string): Promise<LibrarySon
     .map(({ trackId, title, artist }) => ({ trackId, title, artist }));
 }
 
-export const YEAR_PLAYLIST_SIZE = 50;
+const YEAR_PLAYLIST_SIZE = 50;
 
-export function yearPlaylistName(year: number) {
+function yearPlaylistName(year: number) {
   return `Soundscape ${year}`;
 }
 

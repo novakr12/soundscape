@@ -1,4 +1,5 @@
 import { coverUrl, FALLBACK_COVER, getCover } from "./covers";
+import { request } from "./http";
 
 export const FALLBACK = `data:image/svg+xml;base64,${Buffer.from(FALLBACK_COVER).toString("base64")}`;
 const IMAGE_TYPES = ["image/jpeg", "image/png"];
@@ -51,7 +52,7 @@ async function coverImage(cover: string): Promise<string | undefined> {
   if (local)
     return IMAGE_TYPES.includes(local.type) ? `data:${local.type};base64,${local.data.toString("base64")}` : undefined;
   if (!/^https:\/\//.test(cover)) return undefined;
-  const response = await fetch(cover, { signal: AbortSignal.timeout(5000) });
+  const response = await request(cover, { timeoutMs: 5000 });
   const type = response.headers.get("content-type")?.split(";")[0] ?? "";
   if (!response.ok || !IMAGE_TYPES.includes(type)) return undefined;
   if (Number(response.headers.get("content-length") ?? 0) > MAX_IMAGE_BYTES) return undefined;

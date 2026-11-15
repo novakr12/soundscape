@@ -65,11 +65,6 @@ export function nextMidnight(now: Date) {
   return startOfDay(addDays(localDay(now), 1));
 }
 
-export function nextMonday(now: Date) {
-  const today = localDay(now);
-  return startOfDay(addDays(today, (8 - weekday(today)) % 7 || 7));
-}
-
 export function daysThisWeek(now = new Date()) {
   const today = localDay(now);
   const daysSinceMonday = (weekday(today) + 6) % 7;

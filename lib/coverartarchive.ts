@@ -1,7 +1,7 @@
 import { artistIdFor, slug, songTitle } from "./catalog";
+import { request } from "./http";
 import { sql } from "./postgres";
 
-export const USER_AGENT = "Soundscape/0.1 ( https://github.com/novakr12/soundscape )";
 const RETRY_AFTER_MS = 30 * 24 * 60 * 60 * 1000;
 const RELEASE_GROUPS_TRIED = 5;
 
@@ -36,10 +36,9 @@ export async function musicBrainz<T>(path: string, params: Record<string, string
 
   let response: Response;
   try {
-    response = await fetch(`${musicBrainzUrl()}${path}?${new URLSearchParams({ ...params, fmt: "json" })}`, {
-      headers: { "user-agent": USER_AGENT, accept: "application/json" },
-      signal: AbortSignal.timeout(10_000),
-      cache: "no-store",
+    response = await request(`${musicBrainzUrl()}${path}?${new URLSearchParams({ ...params, fmt: "json" })}`, {
+      headers: { accept: "application/json" },
+      timeoutMs: 10_000,
     });
   } catch {
     throw new Unreachable("MusicBrainz is unreachable");
@@ -56,12 +55,10 @@ export async function musicBrainz<T>(path: string, params: Record<string, string
 async function hasFrontCover(releaseGroup: string) {
   let response: Response;
   try {
-    response = await fetch(`${coverArtArchiveUrl()}/release-group/${releaseGroup}/front-250`, {
+    response = await request(`${coverArtArchiveUrl()}/release-group/${releaseGroup}/front-250`, {
       method: "HEAD",
       redirect: "manual",
-      headers: { "user-agent": USER_AGENT },
-      signal: AbortSignal.timeout(10_000),
-      cache: "no-store",
+      timeoutMs: 10_000,
     });
   } catch {
     throw new Unreachable("The Cover Art Archive is unreachable");
@@ -118,7 +115,7 @@ async function recordingsFor(artist: string, title: string, mbid?: string | null
   return [];
 }
 
-export async function findCoverArt(artist: string, title: string, mbid?: string | null): Promise<CoverArtMatch | null> {
+async function findCoverArt(artist: string, title: string, mbid?: string | null): Promise<CoverArtMatch | null> {
   const recordings = await recordingsFor(artist, title, mbid);
   for (const releaseGroup of releaseGroupsByPreference(recordings).slice(0, RELEASE_GROUPS_TRIED)) {
     if (!(await hasFrontCover(releaseGroup))) continue;

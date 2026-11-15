@@ -3,19 +3,18 @@ import Link from "next/link";
 import MusicList from "@/components/music-list";
 import { type MusicSong, toMusicSongs } from "@/lib/music";
 import { libraryOrder, songOrder, sortChoices, sortSongs } from "@/lib/music-sort";
+import { getNavidrome, NavidromeError } from "@/lib/navidrome";
 import {
   getLibraries,
   getLibraryAlbums,
   getLibrarySongs,
-  getNavidrome,
   getNavidromeAlbum,
   getPlaylistSongs,
   getPlaylists,
   getSongsOfAlbums,
-  NavidromeError,
   type NavidromeLibrary,
   type NavidromePlaylist,
-} from "@/lib/navidrome";
+} from "@/lib/navidrome-library";
 import { requireUserId } from "@/lib/session";
 
 export const metadata = { title: "Music" };

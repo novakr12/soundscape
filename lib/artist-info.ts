@@ -1,4 +1,5 @@
-import { musicBrainz, Unreachable, USER_AGENT } from "./coverartarchive";
+import { musicBrainz, Unreachable } from "./coverartarchive";
+import { request } from "./http";
 import { every } from "./jobs";
 import { sql } from "./postgres";
 
@@ -53,10 +54,9 @@ function webUrl(text: string) {
 async function getJson<T>(url: string): Promise<T | null> {
   let response: Response;
   try {
-    response = await fetch(url, {
-      headers: { "user-agent": USER_AGENT, accept: "application/json" },
-      signal: AbortSignal.timeout(10_000),
-      cache: "no-store",
+    response = await request(url, {
+      headers: { accept: "application/json" },
+      timeoutMs: 10_000,
     });
   } catch {
     throw new Unreachable(`${new URL(url).host} is unreachable`);
@@ -81,7 +81,7 @@ async function wikipediaSummary(wikidataId: string) {
   return { bio, url: webUrl(page?.content_urls?.desktop?.page ?? "") ?? undefined };
 }
 
-export async function findArtistInfo(mbid: string): Promise<ArtistInfo | null> {
+async function findArtistInfo(mbid: string): Promise<ArtistInfo | null> {
   const artist = await musicBrainz<MusicBrainzArtist>(`/artist/${mbid}`, { inc: "url-rels" });
   if (!artist) return null;
   const relations = artist.relations ?? [];

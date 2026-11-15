@@ -6,17 +6,16 @@ import { after, before, describe, it } from "node:test";
 import { artistIdFor, trackIdFor } from "../../lib/catalog";
 import { importListens } from "../../lib/imports";
 import { matchAlbumSongs, navidromeAlbumFor, saveNavidromeSong, toMusicSongs } from "../../lib/music";
+import { getNavidrome, saveNavidrome } from "../../lib/navidrome";
 import {
   getLibraries,
   getLibraryAlbums,
   getLibrarySongs,
-  getNavidrome,
   getPlaylistSongs,
   getPlaylists,
   getSong,
   getSongsOfAlbums,
-  saveNavidrome,
-} from "../../lib/navidrome";
+} from "../../lib/navidrome-library";
 import { recordPlay } from "../../lib/plays";
 import { sql } from "../../lib/postgres";
 import { createToken } from "../../lib/tokens";

@@ -1,4 +1,5 @@
 import type { JSONValue } from "postgres";
+import { request } from "./http";
 import { deleteValues, takeLock } from "./kv";
 import { advanceImportState } from "./listenbrainz";
 import { sql } from "./postgres";
@@ -31,10 +32,9 @@ export async function getRelay(userId: string): Promise<Relay | null> {
 export async function saveRelay(userId: string, token: string): Promise<Relay> {
   let response: Response;
   try {
-    response = await fetch(`${RELAY_URL}validate-token`, {
+    response = await request(`${RELAY_URL}validate-token`, {
       headers: { Authorization: `Token ${token}` },
-      signal: AbortSignal.timeout(10_000),
-      cache: "no-store",
+      timeoutMs: 10_000,
     });
   } catch {
     throw new RelayError("ListenBrainz is unreachable, try again later.");
@@ -57,12 +57,11 @@ export async function removeRelay(userId: string) {
 async function send(token: string, body: Submission): Promise<SendResult> {
   let response: Response;
   try {
-    response = await fetch(`${RELAY_URL}submit-listens`, {
+    response = await request(`${RELAY_URL}submit-listens`, {
       method: "POST",
       headers: { Authorization: `Token ${token}`, "content-type": "application/json" },
       body: JSON.stringify(body),
-      signal: AbortSignal.timeout(10_000),
-      cache: "no-store",
+      timeoutMs: 10_000,
     });
   } catch {
     return "retry";
@@ -79,7 +78,7 @@ async function delivered(userId: string, relay: Relay, body: Submission) {
   await advanceImportState(userId, relay.listenBrainzUser, new Date(newest * 1000));
 }
 
-export async function flushRelayQueue() {
+async function flushRelayQueue() {
   if (!(await takeLock(FLUSH_LOCK, FLUSH_LOCK_SECONDS))) return;
   try {
     for (let i = 0; i < FLUSH_BATCH; i++) {
@@ -110,7 +109,7 @@ export async function relaySubmission(userId: string, body: Submission) {
   }
 }
 
-export function playedSubmission(play: { artist: string; title: string; playedAt: string | Date }) {
+function playedSubmission(play: { artist: string; title: string; playedAt: string | Date }) {
   return {
     listen_type: "single",
     payload: [

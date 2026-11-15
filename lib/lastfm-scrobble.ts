@@ -1,4 +1,5 @@
 import { createHash, randomBytes } from "node:crypto";
+import { request } from "./http";
 import { deleteValues, takeLock } from "./kv";
 import { sql } from "./postgres";
 import { decrypt, encrypt } from "./servers";
@@ -65,13 +66,12 @@ async function call(params: Record<string, string>, method: "GET" | "POST" = "PO
   try {
     const response =
       method === "GET"
-        ? await fetch(`${api()}?${body}`, { signal: AbortSignal.timeout(10_000), cache: "no-store" })
-        : await fetch(api(), {
+        ? await request(`${api()}?${body}`, { timeoutMs: 10_000 })
+        : await request(api(), {
             method: "POST",
             headers: { "content-type": "application/x-www-form-urlencoded" },
             body,
-            signal: AbortSignal.timeout(10_000),
-            cache: "no-store",
+            timeoutMs: 10_000,
           });
     const answer = (await response.json().catch(() => null)) as Answer | null;
     if (answer) return answer;
@@ -205,7 +205,7 @@ async function send(key: string, rows: Row[]): Promise<Outcome> {
   return "dropped";
 }
 
-export async function sendLastfmQueue(userId: string, now = Date.now()) {
+async function sendLastfmQueue(userId: string, now = Date.now()) {
   const lock = `lastfm:send:${userId}`;
   if (!(await takeLock(lock, LOCK_SECONDS))) return;
   try {

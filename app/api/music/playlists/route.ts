@@ -1,4 +1,5 @@
-import { getNavidrome, getPlaylists, NavidromeError } from "@/lib/navidrome";
+import { getNavidrome, NavidromeError } from "@/lib/navidrome";
+import { getPlaylists } from "@/lib/navidrome-library";
 import { tokenUser, unauthorized } from "@/lib/token-auth";
 
 export const dynamic = "force-dynamic";

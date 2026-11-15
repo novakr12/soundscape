@@ -1,4 +1,6 @@
 import { linkAlbums } from "./albums";
+import { fold } from "./catalog";
+import { request } from "./http";
 import { sql } from "./postgres";
 
 const deezerApi = () => process.env.DEEZER_API_URL ?? "https://api.deezer.com";
@@ -29,10 +31,7 @@ export type DeezerMatch = {
 };
 
 export function normalize(text: string) {
-  return text
-    .toLowerCase()
-    .normalize("NFKD")
-    .replace(/\p{M}/gu, "")
+  return fold(text)
     .replace(/['’]/g, "")
     .replace(/[^a-z0-9]+/g, " ")
     .trim();
@@ -54,7 +53,7 @@ export function mainTitle(title: string) {
 async function searchDeezer(query: string, retry = true): Promise<DeezerSearchResult[]> {
   await waitForTurn();
   const params = new URLSearchParams({ q: query, limit: "10" });
-  const response = await fetch(`${deezerApi()}/search?${params}`, { signal: AbortSignal.timeout(5000) });
+  const response = await request(`${deezerApi()}/search?${params}`, { timeoutMs: 5000 });
   if (!response.ok) throw new Error(`Deezer search failed with ${response.status}`);
 
   const body = (await response.json()) as {
@@ -99,7 +98,7 @@ export async function findDeezerTrack(artist: string, title: string): Promise<De
 
 async function deezerGet<T>(path: string, retry = true): Promise<T & { error?: { message: string; code?: number } }> {
   await waitForTurn();
-  const response = await fetch(`${deezerApi()}${path}`, { signal: AbortSignal.timeout(5000) });
+  const response = await request(`${deezerApi()}${path}`, { timeoutMs: 5000 });
   if (!response.ok) throw new Error(`Deezer answered ${response.status}`);
   const body = (await response.json()) as T & { error?: { message: string; code?: number } };
   if (body.error?.code === QUOTA_EXCEEDED && retry) {
@@ -195,9 +194,8 @@ export async function fillAlbumsFromDeezer(limit = 100, userId?: string): Promis
 }
 
 export async function getPreviewUrl(deezerId: number): Promise<string | null> {
-  const response = await fetch(`${deezerApi()}/track/${deezerId}`, {
-    signal: AbortSignal.timeout(5000),
-    cache: "no-store",
+  const response = await request(`${deezerApi()}/track/${deezerId}`, {
+    timeoutMs: 5000,
   });
   if (!response.ok) throw new Error(`Deezer track lookup failed with ${response.status}`);
 

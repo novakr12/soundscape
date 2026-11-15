@@ -3,10 +3,10 @@ import { deleteValues, getValue, increment, keys } from "./kv";
 import { sql } from "./postgres";
 import { isPrivate } from "./privacy";
 
-export const RECENT_LIMIT = 20;
+const RECENT_LIMIT = 20;
 export const LISTENING_TTL_SECONDS = 60;
-export const LOGIN_MAX_FAILURES = 5;
-export const LOGIN_LOCK_SECONDS = 15 * 60;
+const LOGIN_MAX_FAILURES = 5;
+const LOGIN_LOCK_SECONDS = 15 * 60;
 export const PLAYS_CHANNEL = "plays";
 export const LISTENING_CHANNEL = "listening";
 export const USER_CHANNEL = "user_events";

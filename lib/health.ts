@@ -1,7 +1,7 @@
 import type { Sql } from "postgres";
 import { sql as postgres } from "./postgres";
 
-export const HEALTH_TIMEOUT_MS = 2000;
+const HEALTH_TIMEOUT_MS = 2000;
 
 export type ServiceHealth = { ok: boolean; ms: number };
 export type Health = { ok: boolean; postgres: ServiceHealth };

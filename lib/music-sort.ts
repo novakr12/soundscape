@@ -1,4 +1,4 @@
-import type { AlbumOrder } from "./navidrome";
+import type { AlbumOrder } from "./navidrome-library";
 
 export type SongOrder = "title" | "artist" | "album" | "length";
 

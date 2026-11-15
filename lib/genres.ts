@@ -1,3 +1,4 @@
+import { fold } from "./catalog";
 import { musicBrainz, Unreachable } from "./coverartarchive";
 import { every } from "./jobs";
 import { sql } from "./postgres";
@@ -13,11 +14,7 @@ type Genre = { name: string; count?: number };
 export type GenreSummary = { checked: number; found: number; unreachable: boolean; reason?: string };
 
 function normalize(text: string) {
-  return text
-    .toLowerCase()
-    .normalize("NFKD")
-    .replace(/[̀-ͯ]/g, "")
-    .replace(/[^a-z0-9]+/g, "");
+  return fold(text).replace(/[^a-z0-9]+/g, "");
 }
 
 export function pickGenres(genres: Genre[]): string[] {
@@ -54,7 +51,7 @@ async function artistFromSearch(name: string): Promise<string | null> {
   return exact.sort((a, b) => (b.score ?? 0) - (a.score ?? 0))[0]?.id ?? null;
 }
 
-export async function findArtistGenres(name: string, recordings: string[] = []) {
+async function findArtistGenres(name: string, recordings: string[] = []) {
   const mbid = (await artistFromRecordings(name, recordings)) ?? (await artistFromSearch(name));
   if (!mbid) return null;
   const artist = await musicBrainz<{ genres?: Genre[] }>(`/artist/${mbid}`, { inc: "genres" });

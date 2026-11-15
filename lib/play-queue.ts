@@ -1,6 +1,6 @@
 export type Repeat = "off" | "all" | "one";
 
-export const REPEAT_ORDER: Repeat[] = ["off", "all", "one"];
+const REPEAT_ORDER: Repeat[] = ["off", "all", "one"];
 
 export function nextRepeat(repeat: Repeat): Repeat {
   return REPEAT_ORDER[(REPEAT_ORDER.indexOf(repeat) + 1) % REPEAT_ORDER.length];
@@ -123,9 +123,9 @@ export function nextPosition(position: number, length: number, repeat: Repeat): 
   return repeat === "all" && length > 0 ? 0 : null;
 }
 
-export const SHORTEST_SONG_SECONDS = 30;
-export const LONGEST_WAIT_SECONDS = 240;
-export const LONGEST_STEP_SECONDS = 2;
+const SHORTEST_SONG_SECONDS = 30;
+const LONGEST_WAIT_SECONDS = 240;
+const LONGEST_STEP_SECONDS = 2;
 
 export function countsAsPlay(heardSeconds: number, songSeconds: number) {
   if (!Number.isFinite(songSeconds) || songSeconds < SHORTEST_SONG_SECONDS) return false;

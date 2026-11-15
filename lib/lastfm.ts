@@ -1,4 +1,5 @@
 import { withoutKnownPlays } from "./dedupe";
+import { request } from "./http";
 import { importListens, type Listen } from "./imports";
 import { deleteValues, extendValue, getValue, keys, setValue, takeLock } from "./kv";
 import { ImportError } from "./listenbrainz";
@@ -69,7 +70,7 @@ async function fetchPage(lastfmUser: string, page: number, from?: number, to?: n
       recenttracks?: { track?: LastfmTrack | LastfmTrack[]; "@attr"?: { totalPages?: string; total?: string } };
     };
     try {
-      const response = await fetch(`${api()}?${query}`, { signal: AbortSignal.timeout(20_000), cache: "no-store" });
+      const response = await request(`${api()}?${query}`, { timeoutMs: 20_000 });
       body = await response.json();
     } catch {
       continue;

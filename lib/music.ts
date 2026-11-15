@@ -3,7 +3,8 @@ import { cleanAlbum, linkAlbums } from "./albums";
 import { resolveTracks } from "./aliases";
 import { slug, songArtist, songTitle } from "./catalog";
 import { saveTracks } from "./imports";
-import { findNavidromeAlbum, getNavidrome, getSong, type NavidromeSong } from "./navidrome";
+import { getNavidrome } from "./navidrome";
+import { findNavidromeAlbum, getSong, type NavidromeSong } from "./navidrome-library";
 import { sql } from "./postgres";
 
 export type MusicSong = PlayerTrack & { album?: string; duration?: number; artistHref?: string; albumHref?: string };

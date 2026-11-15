@@ -12,11 +12,15 @@ const TRAILING_DASH = /\s+-\s+([^-]+)$/;
 const BRACKETED_CREDIT = /\s*[([](?:feat\.?|ft\.?|featuring|with|prod\.|produced by)\s[^)\]]*[)\]]/gi;
 const BARE_CREDIT = /\s+(?:feat\.?|ft\.?|featuring|prod\.)\s.*$/i;
 
-export function slug(text: string) {
+export function fold(text: string) {
   return text
     .toLowerCase()
     .normalize("NFKD")
-    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[\u0300-\u036f]/g, "");
+}
+
+export function slug(text: string) {
+  return fold(text)
     .replace(/['’.]/g, "")
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-|-$/g, "");

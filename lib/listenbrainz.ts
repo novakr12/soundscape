@@ -1,5 +1,6 @@
 import { linkAlbums, trackNumber } from "./albums";
 import { resolveTracks } from "./aliases";
+import { request } from "./http";
 import { type ImportResult, importListens, type Listen } from "./imports";
 import { deleteValues, keys, takeLock } from "./kv";
 import { sql } from "./postgres";
@@ -41,7 +42,7 @@ async function fetchPage(listenBrainzUser: string, maxTs?: number): Promise<List
   for (let attempt = 0; attempt < 3; attempt++) {
     let response: Response;
     try {
-      response = await fetch(url, { signal: AbortSignal.timeout(20_000), cache: "no-store" });
+      response = await request(url, { timeoutMs: 20_000 });
     } catch {
       throw new ImportError("ListenBrainz is unreachable, try again later");
     }

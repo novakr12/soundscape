@@ -1,5 +1,6 @@
 import { resolveTrackId } from "./aliases";
 import { findTrackDetails } from "./deezer";
+import { request as send } from "./http";
 import {
   addListeningDetails,
   clearListening,
@@ -45,10 +46,9 @@ export class JellyfinError extends Error {}
 async function request(url: string, apiKey: string, path: string) {
   let response: Response;
   try {
-    response = await fetch(`${url}${path}`, {
+    response = await send(`${url}${path}`, {
       headers: { Authorization: `MediaBrowser Token="${apiKey}"` },
-      signal: AbortSignal.timeout(10_000),
-      cache: "no-store",
+      timeoutMs: 10_000,
     });
   } catch {
     throw new JellyfinError("Jellyfin is unreachable at that address.");
@@ -126,7 +126,7 @@ async function catalogCover(trackId: string): Promise<string | undefined> {
   return row?.cover ?? undefined;
 }
 
-export async function applyPlayback(userId: string, playback: Playback | null, now = Date.now()) {
+async function applyPlayback(userId: string, playback: Playback | null, now = Date.now()) {
   const current = await getListening(userId);
   const fromJellyfin = current?.source === "jellyfin";
 

@@ -1,5 +1,6 @@
 import type { JSONValue } from "postgres";
 import webpush from "web-push";
+import { request as send } from "./http";
 import { getValue } from "./kv";
 import { sql } from "./postgres";
 
@@ -107,12 +108,12 @@ export async function sendPush(userId: string, message: PushMessage): Promise<nu
             vapidDetails: { subject: contact(), publicKey: keys.publicKey, privateKey: keys.privateKey },
           },
         );
-        const response = await fetch(request.endpoint, {
+        const response = await send(request.endpoint, {
           method: "POST",
           headers: request.headers as Record<string, string>,
           body: request.body ? new Uint8Array(request.body) : undefined,
           redirect: "error",
-          signal: AbortSignal.timeout(SEND_TIMEOUT_MS),
+          timeoutMs: SEND_TIMEOUT_MS,
         });
         if (response.status === 404 || response.status === 410) {
           await sql`DELETE FROM push_subscriptions WHERE id = ${device.id}`;
