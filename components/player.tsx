@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { type Gain, gainLevel, playingAnAlbum } from "@/lib/levelling";
 import {
   countsAsPlay,
   heardStep,
@@ -18,8 +19,12 @@ import {
   startingWith,
   unshuffle,
 } from "@/lib/play-queue";
+import { DEFAULT_OPTIONS, type PlayerOptions, watchOptions } from "@/lib/player-options";
+import type { RadioSeed } from "@/lib/radio";
+import LyricsPanel from "./lyrics-panel";
 import { PlayerBar, QueuePanel } from "./player-bar";
 import { usePlayerKeys } from "./player-keys";
+import type { Sleep } from "./sleep-timer";
 
 export type PlayerTrack = {
   trackId: string;
@@ -30,6 +35,7 @@ export type PlayerTrack = {
   newSong?: boolean;
   album?: string;
   albumHref?: string;
+  gain?: Gain;
 };
 
 type PlayerContextValue = {
@@ -49,9 +55,15 @@ type PlayerContextValue = {
   addToQueue: (track: PlayerTrack) => void;
   remove: (position: number) => void;
   jumpTo: (position: number) => void;
+  startRadio: (seed: RadioSeed) => Promise<string | null>;
+  radio: boolean;
 };
 
 const SETTINGS_KEY = "soundscape:player";
+const RADIO_REFILL_AT = 3;
+const FADE_OUT_MS = 10_000;
+const FADE_STEPS = 40;
+const FADE_TICK_MS = 100;
 const QUEUE_KEY = "soundscape:queue";
 const RESUME_KEY = "soundscape:resume";
 const SAVE_TIME_EVERY_MS = 5000;
@@ -89,6 +101,15 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const [repeat, setRepeat] = useState<Repeat>("off");
   const queue = order.map((index) => tracks[index]);
   const current = queue[position] ?? null;
+  const [options, setOptions] = useState<PlayerOptions>(DEFAULT_OPTIONS);
+  const [radio, setRadio] = useState<RadioSeed | null>(null);
+  const radioLoading = useRef(false);
+  const [sleep, setSleep] = useState<Sleep>(null);
+  const [fadeIn, setFadeIn] = useState(1);
+  const fading = useRef(false);
+  const optionsRef = useRef<PlayerOptions>(DEFAULT_OPTIONS);
+  const sleepRef = useRef<Sleep>(null);
+  const level = options.levelling ? gainLevel(current?.gain, playingAnAlbum(queue, position)) : 1;
   const tracksRef = useRef<PlayerTrack[]>([]);
   const orderRef = useRef<number[]>([]);
   const positionRef = useRef(0);
@@ -104,6 +125,8 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     prepare: () => {},
     finish: (_id: number) => {},
     announce: () => {},
+    refill: (_seed: RadioSeed) => {},
+    sleep: () => {},
   });
   const [error, setError] = useState<string | null>(null);
   const [full, setFull] = useState(false);
@@ -113,6 +136,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const listen = useRef({ full: false, heard: 0, last: null as number | null, counted: false });
   const pendingTime = useRef(0);
   const [showQueue, setShowQueue] = useState(false);
+  const [showLyrics, setShowLyrics] = useState(false);
 
   function bind(element: HTMLAudioElement) {
     const mine = () => element === audioRef.current;
@@ -245,6 +269,21 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
 
   usePlayerKeys(audioRef, tracksRef, skip);
 
+  useEffect(
+    () =>
+      watchOptions((next) => {
+        optionsRef.current = next;
+        setOptions(next);
+      }),
+    [],
+  );
+
+  useEffect(() => {
+    if (sleep?.kind !== "time") return;
+    const timer = setTimeout(() => skip.current.sleep(), Math.max(0, sleep.until - Date.now()));
+    return () => clearTimeout(timer);
+  }, [sleep]);
+
   useEffect(() => {
     skip.current.restore();
   }, []);
@@ -326,7 +365,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   function prepareNext() {
     const audio = audioRef.current;
     const standby = standbyRef.current;
-    if (!audio || !standby || repeatRef.current === "one" || !Number.isFinite(audio.duration)) return;
+    if (!audio || !standby || fading.current || repeatRef.current === "one" || !Number.isFinite(audio.duration)) return;
     if (audio.duration - audio.currentTime > PREPARE_NEXT_SECONDS) return;
     const index = nextPosition(positionRef.current, orderRef.current.length, repeatRef.current);
     if (index === null || index === positionRef.current) return;
@@ -337,7 +376,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     standby.load();
   }
 
-  function handOver(index: number) {
+  function handOver(index: number, fadeSeconds = 0) {
     const old = audioRef.current;
     const standby = standbyRef.current;
     const key = preparedKey(index);
@@ -345,16 +384,16 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     if (standby.error || standby.readyState < HTMLMediaElement.HAVE_FUTURE_DATA) return false;
     const track = tracksRef.current[orderRef.current[index]];
     prepared.current = null;
-    standby.volume = old.volume;
+    standby.volume = fadeSeconds > 0 ? 0 : old.volume;
     standby.muted = old.muted;
     standby.currentTime = 0;
     audioRef.current = standby;
     standbyRef.current = old;
-    old.replaceWith(standby);
+    if (fadeSeconds > 0) old.before(standby);
+    else old.replaceWith(standby);
     standby.play().catch(() => {});
-    old.pause();
-    old.removeAttribute("src");
-    old.load();
+    if (fadeSeconds > 0) crossfade(old, fadeSeconds);
+    else unload(old);
     setActive(standby);
     arrange(tracksRef.current, orderRef.current, index);
     const id = ++playing.current;
@@ -368,13 +407,58 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     return true;
   }
 
+  function unload(audio: HTMLAudioElement) {
+    audio.pause();
+    audio.removeAttribute("src");
+    audio.load();
+  }
+
+  function crossfade(old: HTMLAudioElement, seconds: number) {
+    const from = old.volume;
+    const began = performance.now();
+    fading.current = true;
+    setFadeIn(0);
+    const timer = setInterval(() => {
+      const done = Math.min(1, (performance.now() - began) / (seconds * 1000));
+      if (old === standbyRef.current) old.volume = from * (1 - done);
+      setFadeIn(done);
+      if (done < 1) return;
+      clearInterval(timer);
+      fading.current = false;
+      old.remove();
+      if (old === standbyRef.current) unload(old);
+    }, FADE_TICK_MS);
+  }
+
+  function crossfadeSeconds(index: number) {
+    const seconds = optionsRef.current.crossfade;
+    if (seconds <= 0 || repeatRef.current === "one") return 0;
+    const here = tracksRef.current[orderRef.current[positionRef.current]];
+    const next = tracksRef.current[orderRef.current[index]];
+    return here && next && playingAnAlbum([here, next], 0) ? 0 : seconds;
+  }
+
+  function startCrossfade() {
+    const audio = audioRef.current;
+    if (!audio || audio.paused || fading.current || !prepared.current) return;
+    if (sleepRef.current?.kind === "song" || !Number.isFinite(audio.duration)) return;
+    const index = nextPosition(positionRef.current, orderRef.current.length, repeatRef.current);
+    if (index === null || index === positionRef.current) return;
+    const seconds = crossfadeSeconds(index);
+    if (seconds <= 0 || audio.duration < seconds * 3) return;
+    if ((audio.duration - audio.currentTime) / audio.playbackRate > seconds) return;
+    handOver(index, seconds);
+  }
+
   function play(track: PlayerTrack) {
+    setRadio(null);
     arrange([track], [0], 0);
     start(track);
   }
 
   function playAll(list: PlayerTrack[], first = 0) {
     if (list.length === 0) return;
+    setRadio(null);
     const chosen = Math.min(Math.max(first, 0), list.length - 1);
     const listOrder = shuffleRef.current
       ? first === 0
@@ -388,6 +472,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
 
   function playFrom(list: PlayerTrack[], chosen: number) {
     if (list.length === 0) return;
+    setRadio(null);
     const at = Math.min(Math.max(chosen, 0), list.length - 1);
     const { from, to } = queueWindow(list.length, at);
     const part = list.slice(from, to);
@@ -428,6 +513,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   function startNextOnTime() {
     const audio = audioRef.current;
     if (!audio || audio.paused || !prepared.current || repeatRef.current === "one") return;
+    if (sleepRef.current?.kind === "song") return;
     if (!Number.isFinite(audio.duration) || audio.playbackRate <= 0) return;
     const left = (audio.duration - audio.currentTime) / audio.playbackRate;
     const id = playing.current;
@@ -440,6 +526,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     const audio = audioRef.current;
     if (!audio) return;
     prepareNext();
+    startCrossfade();
     startNextOnTime();
     const now = audio.currentTime;
     const state = listen.current;
@@ -460,6 +547,14 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
 
   function ended() {
     const audio = audioRef.current;
+    if (sleepRef.current?.kind === "song") {
+      chooseSleep(null);
+      const index =
+        nextPosition(positionRef.current, orderRef.current.length, repeatRef.current) ?? positionRef.current;
+      arrange(tracksRef.current, orderRef.current, index);
+      start(tracksRef.current[orderRef.current[index]], false);
+      return;
+    }
     if (repeatRef.current === "one" && audio) {
       listenAfresh();
       audio.currentTime = 0;
@@ -468,6 +563,29 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     }
     const index = nextPosition(positionRef.current, orderRef.current.length, repeatRef.current);
     if (index !== null) moveTo(index);
+  }
+
+  function chooseSleep(next: Sleep) {
+    sleepRef.current = next;
+    setSleep(next);
+  }
+
+  function fallAsleep() {
+    const audio = audioRef.current;
+    chooseSleep(null);
+    if (!audio || audio.paused) return;
+    const from = audio.volume;
+    let step = 0;
+    const fade = setInterval(() => {
+      step++;
+      if (audio !== audioRef.current || audio.paused || step >= FADE_STEPS) {
+        clearInterval(fade);
+        audio.pause();
+        audio.volume = from;
+        return;
+      }
+      audio.volume = from * (1 - step / FADE_STEPS);
+    }, FADE_OUT_MS / FADE_STEPS);
   }
 
   function previous() {
@@ -506,6 +624,56 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     arrange(nextTracks, nextOrder, positionRef.current);
   }
 
+  async function radioBatch(seed: RadioSeed, exclude: string[]) {
+    const response = await fetch("/api/radio", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ ...seed, exclude }),
+    });
+    const answer = (await response.json().catch(() => null)) as { songs?: PlayerTrack[]; error?: string } | null;
+    if (!response.ok) throw new Error(answer?.error ?? "The radio couldn't start");
+    return answer?.songs ?? [];
+  }
+
+  async function startRadio(seed: RadioSeed) {
+    try {
+      const songs = await radioBatch(seed, []);
+      if (songs.length === 0) return "None of these songs are in your Navidrome yet.";
+      shuffleRef.current = false;
+      setShuffle(false);
+      remember();
+      playAll(songs);
+      setRadio(seed);
+      return null;
+    } catch (problem) {
+      return problem instanceof Error ? problem.message : "The radio couldn't start";
+    }
+  }
+
+  function refill(seed: RadioSeed) {
+    radioLoading.current = true;
+    const exclude = tracksRef.current.flatMap((track) => (track.songId ? [track.songId] : []));
+    radioBatch(seed, exclude)
+      .then((songs) => {
+        if (songs.length === 0) return setRadio(null);
+        const from = tracksRef.current.length;
+        arrange(
+          [...tracksRef.current, ...songs],
+          [...orderRef.current, ...songs.map((_, i) => from + i)],
+          positionRef.current,
+        );
+      })
+      .catch(() => {})
+      .finally(() => {
+        radioLoading.current = false;
+      });
+  }
+
+  useEffect(() => {
+    if (!radio || radioLoading.current || order.length - position > RADIO_REFILL_AT) return;
+    skip.current.refill(radio);
+  }, [radio, position, order.length]);
+
   function playNext(track: PlayerTrack) {
     enqueue(track, true);
   }
@@ -539,6 +707,8 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     prepare: () => audioElement(),
     finish: finishEarly,
     announce,
+    refill,
+    sleep: fallAsleep,
   };
   const hasNext = position + 1 < queue.length || (repeat === "all" && queue.length > 1);
 
@@ -629,9 +799,12 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         addToQueue,
         remove,
         jumpTo,
+        startRadio,
+        radio: radio !== null,
       }}
     >
       {children}
+      {current && showLyrics && <LyricsPanel track={current} audio={audioRef} onClose={() => setShowLyrics(false)} />}
       {current && showQueue && (
         <QueuePanel
           queue={queue}
@@ -653,13 +826,24 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         hasNext={hasNext}
         showQueue={showQueue}
         audio={activeAudio}
+        level={(full ? level : 1) * fadeIn}
+        sleep={sleep}
+        onSleep={chooseSleep}
         live={audioRef}
         holder={holderRef}
         onShuffle={toggleShuffle}
         onPrevious={previous}
         onNext={next}
         onRepeat={cycleRepeat}
-        onQueue={() => setShowQueue(!showQueue)}
+        onQueue={() => {
+          setShowLyrics(false);
+          setShowQueue(!showQueue);
+        }}
+        showLyrics={showLyrics}
+        onLyrics={() => {
+          setShowQueue(false);
+          setShowLyrics(!showLyrics);
+        }}
       />
     </PlayerContext.Provider>
   );

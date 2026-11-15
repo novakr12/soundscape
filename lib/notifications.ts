@@ -11,13 +11,16 @@ const KEEP_DAYS = 90;
 const CHECK_EVERY_MS = 5 * 60 * 1000;
 const PAGE_SIZE = 50;
 
-export type NotificationKind = "follow" | "passed" | "milestone";
+export type NotificationKind = "follow" | "passed" | "milestone" | "release";
+
+export type ReleaseDetail = { artistId: string; artist: string; title: string; kind: string; mbid: string };
 
 export type Notification = {
   id: number;
   kind: NotificationKind;
   otherUser?: string;
   count?: number;
+  release?: ReleaseDetail;
   createdAt: Date;
   read: boolean;
 };
@@ -29,12 +32,25 @@ type New = {
   otherUser?: string;
   count?: number;
   read?: boolean;
+  release?: ReleaseDetail;
 };
 
 export function notificationMessage(
   userId: string,
-  { kind, otherUser, count }: { kind: NotificationKind; otherUser?: string; count?: number },
+  {
+    kind,
+    otherUser,
+    count,
+    release,
+  }: { kind: NotificationKind; otherUser?: string; count?: number; release?: ReleaseDetail },
 ): PushMessage {
+  if (kind === "release" && release) {
+    return {
+      title: `New ${release.kind === "EP" ? "EP" : "album"} from ${release.artist}`,
+      body: release.title,
+      url: `/artist/${encodeURIComponent(release.artistId)}`,
+    };
+  }
   if (kind === "follow")
     return { title: "New follower", body: `${otherUser} started following you.`, url: `/u/${otherUser}` };
   if (kind === "passed") {
@@ -54,14 +70,15 @@ export async function pushesSent() {
   await Promise.all([...sending]);
 }
 
-async function add({ userId, kind, dedupe, otherUser, count, read }: New) {
+async function add({ userId, kind, dedupe, otherUser, count, read, release }: New) {
   const rows = await sql`
-    INSERT INTO notifications (user_id, kind, other_user, count, dedupe, read_at)
-    VALUES (${userId}, ${kind}, ${otherUser ?? null}, ${count ?? null}, ${dedupe}, ${read ? new Date() : null})
+    INSERT INTO notifications (user_id, kind, other_user, count, dedupe, read_at, detail)
+    VALUES (${userId}, ${kind}, ${otherUser ?? null}, ${count ?? null}, ${dedupe}, ${read ? new Date() : null},
+            ${release ? JSON.stringify(release) : null})
     ON CONFLICT (user_id, dedupe) DO NOTHING
     RETURNING id`;
   if (rows.length > 0 && !read) {
-    const message = { ...notificationMessage(userId, { kind, otherUser, count }), tag: `${kind}:${dedupe}` };
+    const message = { ...notificationMessage(userId, { kind, otherUser, count, release }), tag: `${kind}:${dedupe}` };
     const push = sendPush(userId, message).catch(() => 0);
     sending.add(push);
     push.finally(() => sending.delete(push));
@@ -85,7 +102,7 @@ export async function unreadCount(userId: string): Promise<number> {
 
 export async function listNotifications(userId: string, limit = PAGE_SIZE): Promise<Notification[]> {
   const rows = await sql`
-    SELECT n.id, n.kind, n.other_user, n.count, n.created_at, n.read_at
+    SELECT n.id, n.kind, n.other_user, n.count, n.created_at, n.read_at, n.detail
     FROM notifications n
     WHERE n.user_id = ${userId} AND ${visible}
     ORDER BY n.created_at DESC, n.id DESC
@@ -95,9 +112,23 @@ export async function listNotifications(userId: string, limit = PAGE_SIZE): Prom
     kind: row.kind as NotificationKind,
     ...(row.other_user ? { otherUser: row.other_user as string } : {}),
     ...(row.count !== null ? { count: Number(row.count) } : {}),
+    ...(row.kind === "release" && row.detail ? { release: readRelease(row.detail as string) } : {}),
     createdAt: row.created_at as Date,
     read: row.read_at !== null,
   }));
+}
+
+function readRelease(detail: string): ReleaseDetail | undefined {
+  try {
+    const value = JSON.parse(detail);
+    return typeof value?.artistId === "string" && typeof value?.title === "string" ? value : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+export async function notifyRelease(userId: string, release: ReleaseDetail) {
+  return add({ userId, kind: "release", dedupe: `release:${release.mbid}`, release });
 }
 
 export async function markAllRead(userId: string) {

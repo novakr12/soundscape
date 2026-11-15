@@ -1,3 +1,5 @@
+import { type Gain, savedGain } from "./levelling";
+
 export type Repeat = "off" | "all" | "one";
 
 const REPEAT_ORDER: Repeat[] = ["off", "all", "one"];
@@ -64,6 +66,7 @@ type SavedTrack = {
   newSong?: boolean;
   album?: string;
   albumHref?: string;
+  gain?: Gain;
 };
 
 const ALBUM_HREF = /^\/(album\/[^/?#]+|music\?album=[A-Za-z0-9_-]+)$/;
@@ -102,16 +105,20 @@ export function restoreQueue(raw: unknown): SavedQueue<SavedTrack> | null {
     : 0;
   const time = typeof saved.time === "number" && Number.isFinite(saved.time) && saved.time > 0 ? saved.time : 0;
   return {
-    tracks: tracks.map(({ trackId, title, artist, cover, songId, newSong, album, albumHref }) => ({
-      trackId,
-      title,
-      artist,
-      ...(cover ? { cover } : {}),
-      ...(songId ? { songId } : {}),
-      ...(newSong ? { newSong } : {}),
-      ...(album ? { album } : {}),
-      ...(album && albumHref ? { albumHref } : {}),
-    })),
+    tracks: tracks.map(({ trackId, title, artist, cover, songId, newSong, album, albumHref, gain }) => {
+      const level = savedGain(gain);
+      return {
+        trackId,
+        title,
+        artist,
+        ...(cover ? { cover } : {}),
+        ...(songId ? { songId } : {}),
+        ...(newSong ? { newSong } : {}),
+        ...(album ? { album } : {}),
+        ...(album && albumHref ? { albumHref } : {}),
+        ...(level ? { gain: level } : {}),
+      };
+    }),
     order,
     position,
     time,

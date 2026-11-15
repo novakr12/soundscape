@@ -1,7 +1,9 @@
 import Link from "next/link";
+import Cover from "@/components/cover";
 import { ArtistLink, SongLink } from "@/components/music-links";
 import PlayAllButton from "@/components/play-all-button";
 import PlayButton from "@/components/play-button";
+import { newReleasesFor } from "@/lib/new-releases";
 import { privateUsers } from "@/lib/privacy";
 import { because, getRecommendations, getSimilarListeners } from "@/lib/recommendations";
 import { requireUserId } from "@/lib/session";
@@ -9,12 +11,48 @@ import { requireUserId } from "@/lib/session";
 export default async function RecommendationsPage() {
   const userId = await requireUserId();
 
-  const [recommendations, similar] = await Promise.all([getRecommendations(userId), getSimilarListeners(userId)]);
+  const [recommendations, similar, releases] = await Promise.all([
+    getRecommendations(userId),
+    getSimilarListeners(userId),
+    newReleasesFor(userId),
+  ]);
   const hidden = await privateUsers([...similar.map((s) => s.userId), ...recommendations.flatMap((r) => r.via)]);
 
   return (
     <>
       <h1>Recommendations</h1>
+
+      {releases.length > 0 && (
+        <section>
+          <h2>New from artists you play</h2>
+          <ul className="listening-list">
+            {releases.map((release) => (
+              <li key={release.mbid}>
+                <Cover />
+                <span className="listening-info">
+                  <span>
+                    <a
+                      className="music-link"
+                      href={`https://musicbrainz.org/release-group/${release.mbid}`}
+                      rel="noreferrer"
+                      target="_blank"
+                    >
+                      {release.title}
+                    </a>{" "}
+                    <span className="muted">
+                      · <ArtistLink name={release.artist} />
+                    </span>
+                  </span>
+                  <small className="muted">
+                    {release.kind} · {release.released} ·{" "}
+                    <Link href={`/music?q=${encodeURIComponent(release.title)}`}>Look in your Navidrome</Link>
+                  </small>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       <section>
         <h2>Listeners like you</h2>

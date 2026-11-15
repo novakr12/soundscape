@@ -1,4 +1,5 @@
 import { artistIdFor, slug } from "./catalog";
+import { fromReplayGain, type Gain } from "./levelling";
 import { call, isSongId, type Navidrome } from "./navidrome";
 
 export type NavidromeLibrary = { id: string; name: string };
@@ -15,6 +16,7 @@ export type NavidromeSong = {
   coverArt?: string;
   track?: number;
   disc?: number;
+  gain?: Gain;
 };
 
 type RawSong = {
@@ -27,6 +29,7 @@ type RawSong = {
   coverArt?: unknown;
   track?: unknown;
   discNumber?: unknown;
+  replayGain?: unknown;
 };
 
 function text(value: unknown) {
@@ -53,6 +56,7 @@ function toSong(raw: RawSong): NavidromeSong | null {
     coverArt: coverArt && isSongId(coverArt) ? coverArt : undefined,
     track: count(raw.track),
     disc: count(raw.discNumber),
+    gain: fromReplayGain(raw.replayGain),
   };
 }
 
@@ -157,6 +161,22 @@ export async function getLibraryAlbums(
   );
 }
 
+export type AlbumSummary = { id: string; name: string; artist: string };
+
+export async function getAlbumSummaries(server: Navidrome, offset: number, size: number): Promise<AlbumSummary[]> {
+  const result = await call<{ albumList2?: { album?: { id?: unknown; name?: unknown; artist?: unknown }[] } }>(
+    server,
+    "getAlbumList2",
+    [...ALBUM_LISTS.album, ["size", String(size)], ["offset", String(offset)]],
+  );
+  return (result.albumList2?.album ?? []).flatMap((album) => {
+    const name = text(album.name);
+    return typeof album.id === "string" && isSongId(album.id) && name
+      ? [{ id: album.id, name, artist: text(album.artist) ?? "Unknown artist" }]
+      : [];
+  });
+}
+
 function byDiscAndTrack(a: NavidromeSong, b: NavidromeSong) {
   return (a.disc ?? 1) - (b.disc ?? 1) || (a.track ?? 0) - (b.track ?? 0);
 }
@@ -213,4 +233,18 @@ export async function getSongsOfAlbums(server: Navidrome, albumIds: string[], co
   }
   await Promise.all(Array.from({ length: Math.min(concurrency, albumIds.length) }, worker));
   return found.flat();
+}
+
+export async function addToPlaylist(server: Navidrome, playlistId: string, songId: string) {
+  await call(server, "updatePlaylist", [
+    ["playlistId", playlistId],
+    ["songIdToAdd", songId],
+  ]);
+}
+
+export async function createPlaylistWith(server: Navidrome, name: string, songId: string) {
+  await call(server, "createPlaylist", [
+    ["name", name],
+    ["songId", songId],
+  ]);
 }

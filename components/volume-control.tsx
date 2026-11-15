@@ -38,7 +38,7 @@ function Speaker({ level }: { level: number }) {
   );
 }
 
-export default function VolumeControl({ audio }: { audio: RefObject<HTMLAudioElement | null> }) {
+export default function VolumeControl({ audio, level }: { audio: RefObject<HTMLAudioElement | null>; level: number }) {
   const [volume, setVolume] = useState(0.8);
   const [muted, setMuted] = useState(false);
   const [ready, setReady] = useState(false);
@@ -53,10 +53,7 @@ export default function VolumeControl({ audio }: { audio: RefObject<HTMLAudioEle
   useEffect(() => {
     const element = audio.current;
     if (!element || !ready) return;
-    const follow = () => {
-      setVolume(element.volume);
-      setMuted(element.muted);
-    };
+    const follow = () => setMuted(element.muted);
     element.addEventListener("volumechange", follow);
     return () => element.removeEventListener("volumechange", follow);
   }, [audio, ready]);
@@ -64,15 +61,15 @@ export default function VolumeControl({ audio }: { audio: RefObject<HTMLAudioEle
   useEffect(() => {
     if (!ready) return;
     if (audio.current) {
-      audio.current.volume = volume;
+      audio.current.volume = volume * level;
       audio.current.muted = muted;
     }
     try {
       window.localStorage.setItem(KEY, JSON.stringify({ volume, muted }));
     } catch {}
-  }, [audio, volume, muted, ready]);
+  }, [audio, volume, muted, level, ready]);
 
-  const level = muted ? 0 : volume;
+  const shown = muted ? 0 : volume;
   return (
     <div className="volume">
       <button
@@ -86,19 +83,19 @@ export default function VolumeControl({ audio }: { audio: RefObject<HTMLAudioEle
             setMuted(true);
           }
         }}
-        aria-label={level === 0 ? "Unmute" : "Mute"}
-        aria-pressed={level === 0}
+        aria-label={shown === 0 ? "Unmute" : "Mute"}
+        aria-pressed={shown === 0}
       >
-        <Speaker level={level} />
+        <Speaker level={shown} />
       </button>
       <input
         type="range"
         min={0}
         max={1}
         step={0.05}
-        value={level}
+        value={shown}
         aria-label="Volume"
-        style={{ "--fill": `${Math.round(level * 100)}%` } as React.CSSProperties}
+        style={{ "--fill": `${Math.round(shown * 100)}%` } as React.CSSProperties}
         onChange={(event) => {
           setVolume(Number(event.target.value));
           setMuted(false);

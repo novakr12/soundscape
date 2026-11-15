@@ -16,11 +16,13 @@ import {
   type NavidromePlaylist,
 } from "@/lib/navidrome-library";
 import { requireUserId } from "@/lib/session";
+import { unplayedAlbums } from "@/lib/unplayed";
 
 export const metadata = { title: "Music" };
 
 const PAGE_SIZE = 100;
 const ALBUMS_PER_PAGE = 20;
+const UNPLAYED_PER_PAGE = 5;
 
 type Props = {
   searchParams: Promise<{
@@ -31,6 +33,7 @@ type Props = {
     page?: string;
     sort?: string;
     play?: string;
+    unplayed?: string;
   }>;
 };
 
@@ -44,6 +47,7 @@ type Shown = {
   albumId?: string;
   subtitle?: string;
   query?: string;
+  unplayed?: number;
   sort: string;
   firstNumber: number;
 };
@@ -101,6 +105,18 @@ export default async function MusicPage({ searchParams }: Props) {
           firstNumber: 1,
         };
       }
+    } else if (params.unplayed) {
+      const albums = await unplayedAlbums(userId, server, new Date().toISOString().slice(0, 10));
+      const from = (page - 1) * UNPLAYED_PER_PAGE;
+      shown = {
+        title: "Never played",
+        songs: await toMusicSongs(await getSongsOfAlbums(server, albums.slice(from, from + UNPLAYED_PER_PAGE))),
+        page,
+        hasMore: albums.length > from + UNPLAYED_PER_PAGE,
+        unplayed: albums.length,
+        sort: "",
+        firstNumber: 1,
+      };
     } else if (params.playlist) {
       const playlist = await getPlaylistSongs(server, params.playlist);
       if (playlist) {
@@ -183,6 +199,14 @@ export default async function MusicPage({ searchParams }: Props) {
               </ul>
             </>
           )}
+          <h2>Discover</h2>
+          <ul>
+            <li>
+              <Link href={address({ unplayed: 1 })} aria-current={shown?.unplayed !== undefined ? "page" : undefined}>
+                Never played
+              </Link>
+            </li>
+          </ul>
           <h2>Playlists</h2>
           {playlists.length === 0 ? (
             <p className="muted">No playlists in Navidrome yet.</p>
@@ -206,7 +230,13 @@ export default async function MusicPage({ searchParams }: Props) {
           {shown ? (
             <>
               <h2>{shown.title}</h2>
-              {shown.albumId ? (
+              {shown.unplayed !== undefined ? (
+                <p className="muted">
+                  {shown.unplayed === 0
+                    ? "You've played something from every album in your Navidrome."
+                    : `${shown.unplayed.toLocaleString("en")} ${shown.unplayed === 1 ? "album" : "albums"} in your Navidrome you haven't played a song from yet, in a new order every day.`}
+                </p>
+              ) : shown.albumId ? (
                 <p className="muted">
                   {shown.subtitle ? `${shown.subtitle} · ` : ""}
                   {shown.songs.length} songs · {hours(shown.songs.reduce((sum, song) => sum + (song.duration ?? 0), 0))}
@@ -227,35 +257,39 @@ export default async function MusicPage({ searchParams }: Props) {
                   />
                 </Form>
               )}
-              <nav className="music-sort" aria-label="Sort by">
-                <span className="muted">Sort by</span>
-                {sortChoices(
-                  shown.albumId ? "album" : shown.playlistId ? "playlist" : shown.query ? "search" : "library",
-                ).map((choice) => {
-                  const library = !shown.playlistId && !shown.albumId && !shown.query;
-                  const value = library && choice.value === "artist" ? "" : choice.value;
-                  return (
-                    <Link
-                      key={choice.value}
-                      href={address({
-                        library: shown.playlistId || shown.albumId ? undefined : shown.libraryId,
-                        playlist: shown.playlistId,
-                        album: shown.albumId,
-                        q: shown.query,
-                        sort: value,
-                      })}
-                      aria-current={shown.sort === value ? "true" : undefined}
-                    >
-                      {choice.label}
-                    </Link>
-                  );
-                })}
-              </nav>
-              <MusicList
-                songs={shown.songs}
-                firstNumber={shown.firstNumber}
-                autoplay={params.play === "1" && Boolean(shown.playlistId)}
-              />
+              {shown.unplayed === undefined && (
+                <nav className="music-sort" aria-label="Sort by">
+                  <span className="muted">Sort by</span>
+                  {sortChoices(
+                    shown.albumId ? "album" : shown.playlistId ? "playlist" : shown.query ? "search" : "library",
+                  ).map((choice) => {
+                    const library = !shown.playlistId && !shown.albumId && !shown.query;
+                    const value = library && choice.value === "artist" ? "" : choice.value;
+                    return (
+                      <Link
+                        key={choice.value}
+                        href={address({
+                          library: shown.playlistId || shown.albumId ? undefined : shown.libraryId,
+                          playlist: shown.playlistId,
+                          album: shown.albumId,
+                          q: shown.query,
+                          sort: value,
+                        })}
+                        aria-current={shown.sort === value ? "true" : undefined}
+                      >
+                        {choice.label}
+                      </Link>
+                    );
+                  })}
+                </nav>
+              )}
+              {shown.unplayed !== 0 && (
+                <MusicList
+                  songs={shown.songs}
+                  firstNumber={shown.firstNumber}
+                  autoplay={params.play === "1" && Boolean(shown.playlistId)}
+                />
+              )}
               {(shown.page > 1 || shown.hasMore) && (
                 <nav className="pager" aria-label="Pages">
                   {shown.page > 1 ? (
@@ -264,6 +298,7 @@ export default async function MusicPage({ searchParams }: Props) {
                         library: shown.libraryId,
                         q: shown.query,
                         sort: shown.sort,
+                        unplayed: shown.unplayed === undefined ? undefined : 1,
                         page: shown.page - 1,
                       })}
                     >
@@ -279,6 +314,7 @@ export default async function MusicPage({ searchParams }: Props) {
                         library: shown.libraryId,
                         q: shown.query,
                         sort: shown.sort,
+                        unplayed: shown.unplayed === undefined ? undefined : 1,
                         page: shown.page + 1,
                       })}
                     >

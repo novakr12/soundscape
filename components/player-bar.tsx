@@ -5,8 +5,9 @@ import type { Ref, RefObject } from "react";
 import type { Repeat } from "@/lib/play-queue";
 import { ArtistLink, SongLink } from "./music-links";
 import type { PlayerTrack } from "./player";
-import { NextIcon, PreviousIcon, QueueIcon, RepeatIcon, ShuffleIcon } from "./player-icons";
+import { LyricsIcon, NextIcon, PreviousIcon, QueueIcon, RepeatIcon, ShuffleIcon } from "./player-icons";
 import { PlayPauseButton, SeekBar } from "./player-transport";
+import SleepTimer, { type Sleep } from "./sleep-timer";
 import VolumeControl from "./volume-control";
 
 const REPEAT_LABELS: Record<Repeat, string> = {
@@ -66,7 +67,12 @@ type PlayerBarProps = {
   repeat: Repeat;
   hasNext: boolean;
   showQueue: boolean;
+  showLyrics: boolean;
+  onLyrics: () => void;
   audio: RefObject<HTMLAudioElement | null>;
+  level: number;
+  sleep: Sleep;
+  onSleep: (sleep: Sleep) => void;
   live: RefObject<HTMLAudioElement | null>;
   holder: Ref<HTMLDivElement>;
   onShuffle: () => void;
@@ -86,7 +92,12 @@ export function PlayerBar({
   repeat,
   hasNext,
   showQueue,
+  showLyrics,
+  onLyrics,
   audio,
+  level,
+  sleep,
+  onSleep,
   live,
   holder,
   onShuffle,
@@ -187,7 +198,20 @@ export function PlayerBar({
         >
           <QueueIcon size={18} />
         </button>
-        <VolumeControl audio={audio} />
+        <button
+          type="button"
+          className="icon-button player-toggle"
+          data-player="lyrics"
+          aria-label="Lyrics"
+          aria-expanded={showLyrics}
+          aria-pressed={showLyrics}
+          title="Lyrics"
+          onClick={onLyrics}
+        >
+          <LyricsIcon size={18} />
+        </button>
+        <SleepTimer sleep={sleep} onChoose={onSleep} />
+        <VolumeControl audio={audio} level={level} />
       </div>
       <div className="player-audio" ref={holder} />
     </div>

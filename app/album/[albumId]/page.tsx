@@ -62,6 +62,7 @@ export default async function AlbumPage({ params }: Props) {
               albumHref: `/album/${encodeURIComponent(albumId)}`,
               ...(cover ? { cover } : {}),
               ...(song ? { songId: song.id } : {}),
+              ...(song?.gain ? { gain: song.gain } : {}),
               ...(track.trackId ? {} : { newSong: true }),
             }
           : undefined,
@@ -83,6 +84,7 @@ export default async function AlbumPage({ params }: Props) {
           albumHref: `/album/${encodeURIComponent(albumId)}`,
           ...(cover ? { cover } : {}),
           songId: song.id,
+          ...(song.gain ? { gain: song.gain } : {}),
           newSong: true,
         },
       };

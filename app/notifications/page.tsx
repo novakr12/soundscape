@@ -23,6 +23,18 @@ function Message({ notification, userId }: { notification: Notification; userId:
       </>
     );
   }
+  if (notification.kind === "release" && notification.release) {
+    const release = notification.release;
+    return (
+      <>
+        New {release.kind === "EP" ? "EP" : "album"} from{" "}
+        <Link href={`/artist/${encodeURIComponent(release.artistId)}`}>{release.artist}</Link>:{" "}
+        <a href={`https://musicbrainz.org/release-group/${release.mbid}`} rel="noreferrer" target="_blank">
+          {release.title}
+        </a>
+      </>
+    );
+  }
   if (notification.kind === "milestone" && notification.count) {
     return (
       <>

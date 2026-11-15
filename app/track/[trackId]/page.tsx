@@ -7,12 +7,14 @@ import { SongTools } from "@/components/library-tools";
 import LoveButton from "@/components/love-button";
 import { ArtistLink } from "@/components/music-links";
 import PlayButton from "@/components/play-button";
+import RadioButton from "@/components/radio-button";
 import { DailyPlaysChart } from "@/components/stats-charts";
 import { isAdmin } from "@/lib/admin";
 import { albumOf } from "@/lib/albums";
 import { trackAlias } from "@/lib/aliases";
 import { otherSongsBy } from "@/lib/library-edits";
 import { isLoved } from "@/lib/loved";
+import { getNavidrome } from "@/lib/navidrome";
 import { currentUserId } from "@/lib/session";
 import { getAlsoPlayed, getTrack, getTrackPlaysPerDay, getYourPlays } from "@/lib/tracks";
 
@@ -51,6 +53,7 @@ export default async function TrackPage({ params, searchParams }: Props) {
     admin ? otherSongsBy(trackId) : [],
     viewer ? isLoved(viewer, trackId) : false,
   ]);
+  const navidrome = viewer ? await getNavidrome(viewer) : null;
   const last30 = daily.reduce((sum, d) => sum + d.plays, 0);
 
   const tiles = [
@@ -83,6 +86,9 @@ export default async function TrackPage({ params, searchParams }: Props) {
             <div className="export-buttons">
               <PlayButton track={{ trackId, title: track.title, artist: track.artist, cover: track.cover }} />
               <LoveButton trackId={trackId} loved={loved} />
+              {navidrome && (
+                <RadioButton seed={{ trackId }} label="Play this song, then similar songs from your Navidrome" />
+              )}
             </div>
           )}
         </div>

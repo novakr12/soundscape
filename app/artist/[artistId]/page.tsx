@@ -6,11 +6,13 @@ import Cover from "@/components/cover";
 import { ArtistTools } from "@/components/library-tools";
 import PlayAllButton from "@/components/play-all-button";
 import PlayButton from "@/components/play-button";
+import RadioButton from "@/components/radio-button";
 import { isAdmin } from "@/lib/admin";
 import { albumsBy } from "@/lib/albums";
 import { artistAlias } from "@/lib/aliases";
 import { ensureArtistInfo } from "@/lib/artist-info";
 import { getArtist, getSimilarArtists, getTopSongs, getYourArtistPlays } from "@/lib/artists";
+import { getNavidrome } from "@/lib/navidrome";
 import { currentUserId } from "@/lib/session";
 
 type Props = { params: Promise<{ artistId: string }> };
@@ -40,6 +42,7 @@ export default async function ArtistPage({ params }: Props) {
     viewer ? getYourArtistPlays(viewer, artistId) : null,
     albumsBy(artistId),
   ]);
+  const navidrome = viewer ? await getNavidrome(viewer) : null;
 
   const tiles = [
     { label: "Plays", value: artist.plays },
@@ -97,16 +100,24 @@ export default async function ArtistPage({ params }: Props) {
       <section>
         <div className="section-head">
           <h2>Top songs</h2>
-          {viewer && (
-            <PlayAllButton
-              tracks={songs.map((song) => ({
-                trackId: song.trackId,
-                title: song.title,
-                artist: artist.name,
-                cover: song.cover,
-              }))}
-            />
-          )}
+          <div className="export-buttons">
+            {navidrome && (
+              <RadioButton
+                seed={{ artistId }}
+                label={`Songs by ${artist.name} and similar artists from your Navidrome`}
+              />
+            )}
+            {viewer && (
+              <PlayAllButton
+                tracks={songs.map((song) => ({
+                  trackId: song.trackId,
+                  title: song.title,
+                  artist: artist.name,
+                  cover: song.cover,
+                }))}
+              />
+            )}
+          </div>
         </div>
         {songs.length === 0 ? (
           <p className="muted">Nobody has played this artist yet.</p>

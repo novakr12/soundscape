@@ -102,6 +102,7 @@ const JOBS = [
   { name: "artist-photos", label: "Artist photos from Deezer", everyMinutes: 60 },
   { name: "artist-info", label: "Artist info from MusicBrainz and Wikipedia", everyMinutes: 60 },
   { name: "notifications", label: "Notifications for milestones and leaderboard passes", everyMinutes: 5 },
+  { name: "new-releases", label: "New releases from MusicBrainz", everyMinutes: 360 },
   { name: "cleanup", label: "Removing expired sessions and caches", everyMinutes: 10 },
 ];
 

@@ -24,6 +24,8 @@ export async function register() {
   startArtistInfoFilling();
   const { startNotificationChecks } = await import("./lib/notifications");
   startNotificationChecks();
+  const { startNewReleaseChecks } = await import("./lib/new-releases");
+  startNewReleaseChecks();
 }
 
 export async function onRequestError(error: unknown, request: { path: string; method: string }) {

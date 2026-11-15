@@ -4,7 +4,7 @@ import { resolveTracks } from "./aliases";
 import { slug, songArtist, songTitle } from "./catalog";
 import { saveTracks } from "./imports";
 import { getNavidrome } from "./navidrome";
-import { findNavidromeAlbum, getSong, type NavidromeSong } from "./navidrome-library";
+import { findNavidromeAlbum, getLibrarySongs, getSong, type NavidromeSong } from "./navidrome-library";
 import { sql } from "./postgres";
 
 export type MusicSong = PlayerTrack & { album?: string; duration?: number; artistHref?: string; albumHref?: string };
@@ -51,11 +51,12 @@ export async function toMusicSongs(songs: NavidromeSong[]): Promise<MusicSong[]>
       ...(song.duration ? { duration: song.duration } : {}),
       artistHref,
       ...(albumHref ? { albumHref } : {}),
+      ...(song.gain ? { gain: song.gain } : {}),
     };
   });
 }
 
-function albumKey(artistId: string, album: string) {
+export function albumKey(artistId: string, album: string) {
   const title = slug(cleanAlbum(album));
   return title ? `${artistId}-${title}` : null;
 }
@@ -71,6 +72,16 @@ export function matchAlbumSongs<T extends { title: string }>(tracks: T[], songs:
     return at >= 0 ? left.splice(at, 1)[0] : undefined;
   });
   return { matched, extra: left };
+}
+
+export async function navidromeSongsFor(userId: string, query: string, size: number) {
+  const server = await getNavidrome(userId);
+  if (!server) return null;
+  try {
+    return await toMusicSongs(await getLibrarySongs(server, { query, offset: 0, size }));
+  } catch {
+    return null;
+  }
 }
 
 export async function navidromeAlbumFor(userId: string, artist: string, title: string) {

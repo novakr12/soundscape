@@ -9,6 +9,7 @@ import DeleteAccountForm from "./delete-account-form";
 import DeleteHistoryForm from "./delete-history-form";
 import InviteForm from "./invite-form";
 import NowPlayingShare from "./now-playing-share";
+import PlayerSettings from "./player-settings";
 import PushSettings from "./push-settings";
 
 export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ password?: string }> }) {
@@ -42,6 +43,11 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
         <form action={togglePrivacy}>
           <button type="submit">{hidden ? "Make profile public" : "Make profile private"}</button>
         </form>
+      </section>
+
+      <section>
+        <h2>Player</h2>
+        <PlayerSettings />
       </section>
 
       <section>

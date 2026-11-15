@@ -89,3 +89,22 @@ export function QueueIcon(props: IconProps) {
     </Line>
   );
 }
+
+export function MoonIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5z" />
+    </Icon>
+  );
+}
+
+export function LyricsIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <rect x="3" y="5" width="11" height="2" rx="1" />
+      <rect x="3" y="10" width="11" height="2" rx="1" />
+      <rect x="3" y="15" width="7" height="2" rx="1" />
+      <path d="M18 4.5v9.3a2.7 2.7 0 1 0 2 2.6V8h2V4.5z" />
+    </Icon>
+  );
+}

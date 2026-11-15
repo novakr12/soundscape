@@ -307,6 +307,27 @@ main {
   color: var(--accent);
 }
 
+.sleep-menu summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.15rem;
+}
+
+.sleep-menu summary.active {
+  color: var(--accent);
+}
+
+.sleep-left {
+  font-size: 0.7rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.sleep-menu .queue-menu-items {
+  bottom: 100%;
+  margin: 0 0 0.25rem;
+  min-width: 11rem;
+}
+
 .player-toggle[aria-pressed="true"]::after {
   content: "";
   position: absolute;
@@ -442,6 +463,33 @@ main {
   box-shadow: 0 6px 20px rgb(0 0 0 / 0.2);
 }
 
+.playlist-picker {
+  display: flex;
+  flex-direction: column;
+  min-width: 12rem;
+  max-height: 16rem;
+  overflow-y: auto;
+}
+
+.playlist-picker p {
+  margin: 0.4rem 0.6rem;
+}
+
+.playlist-picker form {
+  display: flex;
+  gap: 0.25rem;
+  padding: 0.25rem;
+}
+
+.playlist-picker input {
+  flex: 1;
+  min-width: 0;
+}
+
+.play-note {
+  font-size: 0.85rem;
+}
+
 .queue-menu-items button {
   border: 0;
   background: none;
@@ -459,7 +507,7 @@ main {
 .queue-panel {
   position: fixed;
   right: max(1rem, calc((100% - 48rem) / 2));
-  bottom: 5rem;
+  bottom: 7rem;
   z-index: 30;
   width: min(26rem, calc(100% - 2rem));
   max-height: min(60vh, 32rem);
@@ -469,6 +517,15 @@ main {
   border-radius: 12px;
   background: var(--bg);
   box-shadow: 0 10px 30px rgb(0 0 0 / 0.25);
+}
+
+.queue-panel > .section-head {
+  position: sticky;
+  top: -0.75rem;
+  z-index: 1;
+  margin: -0.75rem -1rem 0;
+  padding: 0.75rem 1rem 0.5rem;
+  background: var(--bg);
 }
 
 .queue-panel h2 {
@@ -486,6 +543,46 @@ main {
   display: flex;
   align-items: center;
   gap: 0.25rem;
+}
+
+.lyrics-panel .lyrics {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-size: 1.05rem;
+  line-height: 1.4;
+}
+
+.lyrics-panel .lyrics li {
+  display: block;
+}
+
+.lyrics-panel .lyrics.synced li {
+  color: var(--muted);
+}
+
+.lyrics-panel .lyrics li button {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.lyrics-panel .lyrics.synced li.sung {
+  opacity: 0.6;
+}
+
+.lyrics-panel .lyrics.synced li.current {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.lyrics-source {
+  margin: 0.75rem 0 0;
+  font-size: 0.8rem;
 }
 
 .queue-panel li.played {

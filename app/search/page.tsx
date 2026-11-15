@@ -3,10 +3,14 @@ import Form from "next/form";
 import Link from "next/link";
 import Cover from "@/components/cover";
 import { ArtistLink, SongLink } from "@/components/music-links";
+import MusicList from "@/components/music-list";
+import { navidromeSongsFor } from "@/lib/music";
 import { MIN_QUERY_LENGTH, searchAlbums, searchArtists, searchSongs, searchUsers } from "@/lib/search";
 import { currentUserId } from "@/lib/session";
 
 export const metadata: Metadata = { title: "Search · Soundscape" };
+
+const NAVIDROME_RESULTS = 10;
 
 type Props = { searchParams: Promise<{ q?: string }> };
 
@@ -20,10 +24,16 @@ export default async function SearchPage({ searchParams }: Props) {
     .slice(0, 100);
   const ready = query.length >= MIN_QUERY_LENGTH;
   const viewer = await currentUserId();
-  const [songs, artists, albums, users] = ready
-    ? await Promise.all([searchSongs(query), searchArtists(query), searchAlbums(query), searchUsers(query, viewer)])
-    : [[], [], [], []];
-  const nothing = songs.length + artists.length + albums.length + users.length === 0;
+  const [songs, artists, albums, users, library] = ready
+    ? await Promise.all([
+        searchSongs(query),
+        searchArtists(query),
+        searchAlbums(query),
+        searchUsers(query, viewer),
+        viewer ? navidromeSongsFor(viewer, query, NAVIDROME_RESULTS) : null,
+      ])
+    : [[], [], [], [], null];
+  const nothing = songs.length + artists.length + albums.length + users.length + (library?.length ?? 0) === 0;
 
   return (
     <>
@@ -65,6 +75,16 @@ export default async function SearchPage({ searchParams }: Props) {
                   </li>
                 ))}
               </ul>
+            </section>
+          )}
+
+          {library && library.length > 0 && (
+            <section>
+              <div className="section-head">
+                <h2>In your Navidrome</h2>
+                <Link href={`/music?q=${encodeURIComponent(query)}`}>More in Music</Link>
+              </div>
+              <MusicList songs={library} />
             </section>
           )}
 
