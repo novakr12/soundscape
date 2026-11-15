@@ -70,6 +70,9 @@ const RESTART_AFTER_SECONDS = 3;
 const SKIP_BROKEN_AFTER_MS = 1500;
 const GIVE_UP_LOADING_AFTER_MS = 12_000;
 const PREPARE_NEXT_SECONDS = 30;
+const WATCH_END_SECONDS = 1.5;
+const START_NEXT_EARLY_MS = 13;
+const CLOSE_TO_END_SECONDS = 0.25;
 const KEEPS_ITS_KEYS =
   "input, textarea, select, button, audio, video, summary, [contenteditable]:not([contenteditable='false']), [role='slider'], [role='textbox'], [role='menuitem']";
 
@@ -90,6 +93,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const standbyRef = useRef<HTMLAudioElement | null>(null);
   const holderRef = useRef<HTMLDivElement>(null);
   const prepared = useRef<string | null>(null);
+  const early = useRef<number | null>(null);
   const [active, setActive] = useState<HTMLAudioElement | null>(null);
   const activeAudio = useMemo(() => ({ current: active }), [active]);
   const [tracks, setTracks] = useState<PlayerTrack[]>([]);
@@ -112,6 +116,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     listened: () => {},
     failed: () => {},
     prepare: () => {},
+    finish: (_id: number) => {},
   });
   const [error, setError] = useState<string | null>(null);
   const [full, setFull] = useState(false);
@@ -417,10 +422,36 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     listen.current = { full: listen.current.full, heard: 0, last: null, counted: false };
   }
 
+  function finishEarly(id: number) {
+    const audio = audioRef.current;
+    if (id !== playing.current || !audio || audio.paused) {
+      early.current = null;
+      return;
+    }
+    if ((audio.duration - audio.currentTime) / audio.playbackRate > CLOSE_TO_END_SECONDS) {
+      early.current = null;
+      return;
+    }
+    const index = nextPosition(positionRef.current, orderRef.current.length, repeatRef.current);
+    if (index !== null) handOver(index);
+  }
+
+  function startNextOnTime() {
+    const audio = audioRef.current;
+    if (!audio || audio.paused || !prepared.current || repeatRef.current === "one") return;
+    if (!Number.isFinite(audio.duration) || audio.playbackRate <= 0) return;
+    const left = (audio.duration - audio.currentTime) / audio.playbackRate;
+    const id = playing.current;
+    if (left > WATCH_END_SECONDS || early.current === id) return;
+    early.current = id;
+    setTimeout(() => skip.current.finish(id), Math.max(0, left * 1000 - START_NEXT_EARLY_MS));
+  }
+
   function listened() {
     const audio = audioRef.current;
     if (!audio) return;
     prepareNext();
+    startNextOnTime();
     const now = audio.currentTime;
     const state = listen.current;
     if (!audio.paused) state.heard += heardStep(state.last, now);
@@ -517,6 +548,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     listened,
     failed,
     prepare: () => audioElement(),
+    finish: finishEarly,
   };
   const hasNext = position + 1 < queue.length || (repeat === "all" && queue.length > 1);
 
