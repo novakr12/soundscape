@@ -19,9 +19,12 @@ import {
 } from "../../lib/navidrome";
 import { recordPlay } from "../../lib/plays";
 import { sql } from "../../lib/postgres";
+import { createToken } from "../../lib/tokens";
 import { closeConnections, createTestUser, removeTestUser, testUser } from "./helpers";
 
 process.env.AUTH_SECRET ??= "test-only-secret";
+
+const BASE_URL = process.env.BASE_URL ?? "http://localhost:3000";
 
 const user = testUser();
 const stranger = testUser();
@@ -213,6 +216,15 @@ describe("Browsing Navidrome", () => {
     });
     assert.equal(listed[1].newSong, true);
     assert.equal(listed[1].cover, undefined);
+  });
+
+  it("answers the desktop app only with a token, and says when Navidrome isn't connected", async () => {
+    const theirs = await createToken(stranger.userId, "Music test");
+    const ask = (token?: string) =>
+      fetch(`${BASE_URL}/api/music/playlists`, token ? { headers: { authorization: `Token ${token}` } } : {});
+    assert.equal((await ask()).status, 401);
+    assert.equal((await ask("not-a-token")).status, 401);
+    assert.deepEqual(await (await ask(theirs)).json(), { connected: false, playlists: [] });
   });
 
   it("adds a new song to Soundscape when it is played", async () => {

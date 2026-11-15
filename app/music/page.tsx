@@ -22,7 +22,14 @@ const PAGE_SIZE = 100;
 const ALBUMS_PER_PAGE = 20;
 
 type Props = {
-  searchParams: Promise<{ library?: string; playlist?: string; q?: string; page?: string; sort?: string }>;
+  searchParams: Promise<{
+    library?: string;
+    playlist?: string;
+    q?: string;
+    page?: string;
+    sort?: string;
+    play?: string;
+  }>;
 };
 
 type Shown = {
@@ -216,7 +223,11 @@ export default async function MusicPage({ searchParams }: Props) {
                   );
                 })}
               </nav>
-              <MusicList songs={shown.songs} firstNumber={shown.firstNumber} />
+              <MusicList
+                songs={shown.songs}
+                firstNumber={shown.firstNumber}
+                autoplay={params.play === "1" && Boolean(shown.playlistId)}
+              />
               {(shown.page > 1 || shown.hasMore) && (
                 <nav className="pager" aria-label="Pages">
                   {shown.page > 1 ? (
