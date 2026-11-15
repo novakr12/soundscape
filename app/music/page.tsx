@@ -7,6 +7,7 @@ import {
   getLibraryAlbums,
   getLibrarySongs,
   getNavidrome,
+  getNavidromeAlbum,
   getPlaylistSongs,
   getPlaylists,
   getSongsOfAlbums,
@@ -25,6 +26,7 @@ type Props = {
   searchParams: Promise<{
     library?: string;
     playlist?: string;
+    album?: string;
     q?: string;
     page?: string;
     sort?: string;
@@ -39,6 +41,8 @@ type Shown = {
   hasMore: boolean;
   libraryId?: string;
   playlistId?: string;
+  albumId?: string;
+  subtitle?: string;
   query?: string;
   sort: string;
   firstNumber: number;
@@ -82,7 +86,22 @@ export default async function MusicPage({ searchParams }: Props) {
 
   try {
     [libraries, playlists] = await Promise.all([getLibraries(server), getPlaylists(server)]);
-    if (params.playlist) {
+    if (params.album) {
+      const album = await getNavidromeAlbum(server, params.album);
+      if (album) {
+        const order = songOrder(params.sort);
+        shown = {
+          title: album.name,
+          subtitle: album.artist,
+          songs: await toMusicSongs(sortSongs(album.songs, order)),
+          page: 1,
+          hasMore: false,
+          albumId: params.album,
+          sort: order ?? "",
+          firstNumber: 1,
+        };
+      }
+    } else if (params.playlist) {
       const playlist = await getPlaylistSongs(server, params.playlist);
       if (playlist) {
         const order = songOrder(params.sort);
@@ -187,7 +206,12 @@ export default async function MusicPage({ searchParams }: Props) {
           {shown ? (
             <>
               <h2>{shown.title}</h2>
-              {shown.playlistId ? (
+              {shown.albumId ? (
+                <p className="muted">
+                  {shown.subtitle ? `${shown.subtitle} · ` : ""}
+                  {shown.songs.length} songs · {hours(shown.songs.reduce((sum, song) => sum + (song.duration ?? 0), 0))}
+                </p>
+              ) : shown.playlistId ? (
                 <p className="muted">
                   {shown.songs.length} songs · {hours(shown.songs.reduce((sum, song) => sum + (song.duration ?? 0), 0))}
                 </p>
@@ -205,14 +229,18 @@ export default async function MusicPage({ searchParams }: Props) {
               )}
               <nav className="music-sort" aria-label="Sort by">
                 <span className="muted">Sort by</span>
-                {sortChoices(shown.playlistId ? "playlist" : shown.query ? "search" : "library").map((choice) => {
-                  const value = !shown.playlistId && !shown.query && choice.value === "artist" ? "" : choice.value;
+                {sortChoices(
+                  shown.albumId ? "album" : shown.playlistId ? "playlist" : shown.query ? "search" : "library",
+                ).map((choice) => {
+                  const library = !shown.playlistId && !shown.albumId && !shown.query;
+                  const value = library && choice.value === "artist" ? "" : choice.value;
                   return (
                     <Link
                       key={choice.value}
                       href={address({
-                        library: shown.playlistId ? undefined : shown.libraryId,
+                        library: shown.playlistId || shown.albumId ? undefined : shown.libraryId,
                         playlist: shown.playlistId,
+                        album: shown.albumId,
                         q: shown.query,
                         sort: value,
                       })}
@@ -263,7 +291,7 @@ export default async function MusicPage({ searchParams }: Props) {
               )}
             </>
           ) : (
-            !problem && <p className="muted">That playlist is gone from Navidrome.</p>
+            !problem && <p className="muted">That {params.album ? "album" : "playlist"} is gone from Navidrome.</p>
           )}
         </section>
       </div>

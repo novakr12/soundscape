@@ -1,10 +1,10 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import AlbumSongs, { type AlbumSongRow } from "@/components/album-songs";
 import Cover from "@/components/cover";
-import PlayAllButton from "@/components/play-all-button";
-import PlayButton from "@/components/play-button";
 import { getAlbum } from "@/lib/albums";
+import { guessTrackId, matchAlbumSongs, navidromeAlbumFor, navidromeCover } from "@/lib/music";
 import { currentUserId } from "@/lib/session";
 import { ensureTracklist } from "@/lib/tracklists";
 
@@ -35,6 +35,72 @@ export default async function AlbumPage({ params }: Props) {
         ? ""
         : String(index + 1);
 
+  const navidrome = viewer ? await navidromeAlbumFor(viewer, album.artist, album.title) : null;
+  const { matched, extra } = matchAlbumSongs(album.tracks, navidrome?.songs ?? []);
+  const found: (AlbumSongRow & { songId?: string })[] = [
+    ...album.tracks.map((track, index) => {
+      const song = matched[index];
+      const cover = track.cover ?? navidromeCover(song?.coverArt);
+      const stats = [
+        track.plays === 0 ? "Not played yet" : plural(track.plays, "play"),
+        ...(viewer && track.yourPlays > 0 ? [`${plural(track.yourPlays, "play")} by you`] : []),
+      ].join(" · ");
+      const playable = track.trackId ?? (song ? guessTrackId(album.artistId, track.title) : undefined);
+      return {
+        songId: song?.id,
+        key: track.trackId ?? `${track.disc}-${track.number}-${track.title}-${index}`,
+        position: position(track, index),
+        title: track.title,
+        href: track.trackId ? `/track/${encodeURIComponent(track.trackId)}` : undefined,
+        stats,
+        track: playable
+          ? {
+              trackId: playable,
+              title: track.title,
+              artist: album.artist,
+              ...(cover ? { cover } : {}),
+              ...(song ? { songId: song.id } : {}),
+              ...(track.trackId ? {} : { newSong: true }),
+            }
+          : undefined,
+      };
+    }),
+    ...extra.map((song, index) => {
+      const cover = navidromeCover(song.coverArt);
+      return {
+        songId: song.id,
+        key: `navidrome-${song.id}`,
+        position: String(album.tracks.length + index + 1),
+        title: song.title,
+        stats: "Not played yet · in your Navidrome",
+        track: {
+          trackId: guessTrackId(album.artistId, song.title),
+          title: song.title,
+          artist: album.artist,
+          ...(cover ? { cover } : {}),
+          songId: song.id,
+          newSong: true,
+        },
+      };
+    }),
+  ];
+
+  const navidromeDiscs = new Set(navidrome?.songs.map((song) => song.disc ?? 1)).size;
+  const bySong = new Map(found.flatMap((row) => (row.songId ? [[row.songId, row] as const] : [])));
+  const rows: AlbumSongRow[] =
+    navidrome && extra.length > 0 && matched.every(Boolean)
+      ? navidrome.songs.flatMap((song, index) => {
+          const row = bySong.get(song.id);
+          if (!row) return [];
+          const number = song.track
+            ? navidromeDiscs > 1
+              ? `${song.disc ?? 1}.${song.track}`
+              : String(song.track)
+            : String(index + 1);
+          return [{ ...row, position: number }];
+        })
+      : found;
+
   const tiles = [
     { label: "Plays", value: album.plays },
     { label: "Listeners", value: album.listeners },
@@ -64,49 +130,7 @@ export default async function AlbumPage({ params }: Props) {
         ))}
       </div>
 
-      <section>
-        <div className="section-head">
-          <h2>Songs</h2>
-          {viewer && (
-            <PlayAllButton
-              tracks={album.tracks.flatMap((track) =>
-                track.trackId
-                  ? [{ trackId: track.trackId, title: track.title, artist: album.artist, cover: track.cover }]
-                  : [],
-              )}
-            />
-          )}
-        </div>
-        <ol className={viewer ? "chart playable" : "chart"}>
-          {album.tracks.map((track, index) =>
-            track.trackId ? (
-              <li key={track.trackId}>
-                <span className="muted">{position(track, index)}</span>
-                <span>
-                  <Link href={`/track/${encodeURIComponent(track.trackId)}`}>{track.title}</Link>
-                  <small className="muted stats">
-                    {track.plays === 0 ? "Not played yet" : plural(track.plays, "play")}
-                    {viewer && track.yourPlays > 0 && ` · ${plural(track.yourPlays, "play")} by you`}
-                  </small>
-                </span>
-                {viewer && (
-                  <PlayButton
-                    track={{ trackId: track.trackId, title: track.title, artist: album.artist, cover: track.cover }}
-                  />
-                )}
-              </li>
-            ) : (
-              <li key={`${track.disc}-${track.number}-${track.title}`} className="unplayed">
-                <span className="muted">{position(track, index)}</span>
-                <span className="muted">
-                  {track.title}
-                  <small className="stats">Not played yet</small>
-                </span>
-              </li>
-            ),
-          )}
-        </ol>
-      </section>
+      <AlbumSongs rows={rows} canPlay={Boolean(viewer)} />
     </>
   );
 }

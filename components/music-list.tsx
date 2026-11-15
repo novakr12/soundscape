@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useRef } from "react";
 import type { MusicSong } from "@/lib/music";
 import PlayButton from "./play-button";
@@ -75,8 +76,22 @@ export default function MusicList({
             <span className="music-song">
               <strong>{song.title}</strong>
               <span className="muted">
-                {song.artist}
-                {song.album ? ` · ${song.album}` : ""}
+                {song.artistHref ? (
+                  <Link className="music-link" href={song.artistHref}>
+                    {song.artist}
+                  </Link>
+                ) : (
+                  song.artist
+                )}
+                {song.album && " · "}
+                {song.album &&
+                  (song.albumHref ? (
+                    <Link className="music-link" href={song.albumHref}>
+                      {song.album}
+                    </Link>
+                  ) : (
+                    song.album
+                  ))}
               </span>
             </span>
             <span className="music-length muted">{length(song.duration)}</span>

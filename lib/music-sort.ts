@@ -19,9 +19,9 @@ const LIST_SORTS: { value: SongOrder; label: string }[] = [
   { value: "length", label: "Length" },
 ];
 
-export function sortChoices(kind: "library" | "search" | "playlist") {
+export function sortChoices(kind: "library" | "search" | "playlist" | "album") {
   if (kind === "library") return LIBRARY_SORTS;
-  const first = kind === "playlist" ? "Playlist order" : "Best match";
+  const first = kind === "playlist" ? "Playlist order" : kind === "album" ? "Album order" : "Best match";
   return [{ value: "", label: first }, ...LIST_SORTS];
 }
 

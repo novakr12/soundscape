@@ -3,9 +3,9 @@ import { createHash } from "node:crypto";
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { after, before, describe, it } from "node:test";
-import { trackIdFor } from "../../lib/catalog";
+import { artistIdFor, trackIdFor } from "../../lib/catalog";
 import { importListens } from "../../lib/imports";
-import { saveNavidromeSong, toMusicSongs } from "../../lib/music";
+import { matchAlbumSongs, navidromeAlbumFor, saveNavidromeSong, toMusicSongs } from "../../lib/music";
 import {
   getLibraries,
   getLibraryAlbums,
@@ -34,6 +34,7 @@ const songs = [
     title: "Known Song",
     artist: user.artist,
     album: "First",
+    albumId: "al-first",
     duration: 200,
     coverArt: "al-first",
     folder: "1",
@@ -103,6 +104,14 @@ function fakeNavidrome() {
       if (!song)
         return response.end(JSON.stringify({ "subsonic-response": { status: "failed", error: { code: 70 } } }));
       return response.end(subsonic({ song }));
+    }
+    if (method === "search3" && Number(params.get("albumCount") ?? 0) > 0) {
+      const album = [
+        { id: "al-elsewhere", name: "First", artist: "Someone Else" },
+        { id: "al-first", name: "First", artist: user.artist },
+        { id: "al-nope", name: "Firstborn", artist: user.artist },
+      ].filter((a) => a.name.toLowerCase().includes((params.get("query") ?? "").toLowerCase()));
+      return response.end(subsonic({ searchResult3: { album } }));
     }
     if (method === "search3") {
       const query = params.get("query") ?? "";
@@ -213,9 +222,33 @@ describe("Browsing Navidrome", () => {
       cover: "/api/navidrome/cover/al-first",
       album: "First",
       duration: 200,
+      artistHref: `/artist/${encodeURIComponent(artistIdFor(user.artist))}`,
+      albumHref: "/music?album=al-first",
     });
     assert.equal(listed[1].newSong, true);
     assert.equal(listed[1].cover, undefined);
+  });
+
+  it("finds the same album in Navidrome and matches its songs by title", async () => {
+    const album = await navidromeAlbumFor(user.userId, user.artist, "First");
+    assert.deepEqual(
+      album?.songs.map((song) => song.title),
+      ["Track One", "Track Two", "Disc Two Opener"],
+    );
+    assert.equal(await navidromeAlbumFor(stranger.userId, user.artist, "First"), null);
+    assert.equal(await navidromeAlbumFor(user.userId, user.artist, "Missing"), null);
+    const { matched, extra } = matchAlbumSongs(
+      [{ title: "track two" }, { title: "Not In Navidrome" }, { title: "Track One" }],
+      album?.songs ?? [],
+    );
+    assert.deepEqual(
+      matched.map((song) => song?.id),
+      ["first-2", undefined, "first-1"],
+    );
+    assert.deepEqual(
+      extra.map((song) => song.id),
+      ["first-3"],
+    );
   });
 
   it("answers the desktop app only with a token, and says when Navidrome isn't connected", async () => {
@@ -240,6 +273,9 @@ describe("Browsing Navidrome", () => {
     assert.deepEqual({ ...track }, { title: "New Song", duration_ms: 180_000, album: "Second" });
     const play = await recordPlay(user.userId, trackId);
     assert.equal(play?.title, "New Song");
+    const [listed] = await toMusicSongs([{ id: "new-1", title: "New Song", artist: user.artist, album: "Second" }]);
+    assert.equal(listed.albumHref, `/album/${encodeURIComponent(`${artistIdFor(user.artist)}-second`)}`);
+    assert.equal(listed.newSong, undefined);
     assert.equal(await getSong((await getNavidrome(user.userId))!, "../bad"), null);
   });
 });

@@ -1,12 +1,12 @@
 import type { PlayerTrack } from "@/components/player";
-import { linkAlbums } from "./albums";
+import { cleanAlbum, linkAlbums } from "./albums";
 import { resolveTracks } from "./aliases";
-import { songArtist, songTitle } from "./catalog";
+import { slug, songArtist, songTitle } from "./catalog";
 import { saveTracks } from "./imports";
-import { getNavidrome, getSong, type NavidromeSong } from "./navidrome";
+import { findNavidromeAlbum, getNavidrome, getSong, type NavidromeSong } from "./navidrome";
 import { sql } from "./postgres";
 
-export type MusicSong = PlayerTrack & { album?: string; duration?: number };
+export type MusicSong = PlayerTrack & { album?: string; duration?: number; artistHref?: string; albumHref?: string };
 
 export function navidromeCover(coverArt: string | undefined) {
   return coverArt ? `/api/navidrome/cover/${encodeURIComponent(coverArt)}` : undefined;
@@ -16,10 +16,29 @@ export async function toMusicSongs(songs: NavidromeSong[]): Promise<MusicSong[]>
   if (songs.length === 0) return [];
   const resolved = await resolveTracks(songs);
   const ids = [...new Set(resolved.map((song) => song.trackId))];
-  const known = new Set((await sql`SELECT id FROM tracks WHERE id = ANY(${ids})`).map((row) => row.id as string));
+  const albumIds = songs.map((song, i) => (song.album ? albumKey(resolved[i].artistId, song.album) : null));
+  const [tracks, artists, albums] = await Promise.all([
+    sql`SELECT id FROM tracks WHERE id = ANY(${ids})`,
+    sql`SELECT id FROM artists WHERE id = ANY(${[...new Set(resolved.map((song) => song.artistId))]})`,
+    sql`SELECT id FROM albums WHERE id = ANY(${albumIds.filter((id): id is string => Boolean(id))})`,
+  ]);
+  const known = new Set(tracks.map((row) => row.id as string));
+  const knownArtists = new Set(artists.map((row) => row.id as string));
+  const knownAlbums = new Set(albums.map((row) => row.id as string));
   return songs.map((song, i) => {
     const trackId = resolved[i].trackId;
+    const artistId = resolved[i].artistId;
+    const albumId = albumIds[i];
     const cover = navidromeCover(song.coverArt);
+    const artistHref = knownArtists.has(artistId)
+      ? `/artist/${encodeURIComponent(artistId)}`
+      : `/music?q=${encodeURIComponent(song.artist)}`;
+    const albumHref =
+      albumId && knownAlbums.has(albumId)
+        ? `/album/${encodeURIComponent(albumId)}`
+        : song.albumId
+          ? `/music?album=${encodeURIComponent(song.albumId)}`
+          : undefined;
     return {
       trackId,
       songId: song.id,
@@ -29,8 +48,42 @@ export async function toMusicSongs(songs: NavidromeSong[]): Promise<MusicSong[]>
       ...(known.has(trackId) ? {} : { newSong: true }),
       ...(song.album ? { album: song.album } : {}),
       ...(song.duration ? { duration: song.duration } : {}),
+      artistHref,
+      ...(albumHref ? { albumHref } : {}),
     };
   });
+}
+
+function albumKey(artistId: string, album: string) {
+  const title = slug(cleanAlbum(album));
+  return title ? `${artistId}-${title}` : null;
+}
+
+function titleKey(title: string) {
+  return slug(songTitle(title));
+}
+
+export function matchAlbumSongs<T extends { title: string }>(tracks: T[], songs: NavidromeSong[]) {
+  const left = [...songs];
+  const matched = tracks.map((track) => {
+    const at = left.findIndex((song) => titleKey(song.title) === titleKey(track.title));
+    return at >= 0 ? left.splice(at, 1)[0] : undefined;
+  });
+  return { matched, extra: left };
+}
+
+export async function navidromeAlbumFor(userId: string, artist: string, title: string) {
+  const server = await getNavidrome(userId);
+  if (!server) return null;
+  try {
+    return await findNavidromeAlbum(server, artist, title);
+  } catch {
+    return null;
+  }
+}
+
+export function guessTrackId(artistId: string, title: string) {
+  return `${artistId}-${titleKey(title)}`;
 }
 
 export async function saveNavidromeSong(userId: string, songId: string): Promise<string | null> {

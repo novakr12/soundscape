@@ -300,6 +300,7 @@ export type NavidromeSong = {
   title: string;
   artist: string;
   album?: string;
+  albumId?: string;
   duration?: number;
   coverArt?: string;
   track?: number;
@@ -311,6 +312,7 @@ type RawSong = {
   title?: unknown;
   artist?: unknown;
   album?: unknown;
+  albumId?: unknown;
   duration?: unknown;
   coverArt?: unknown;
   track?: unknown;
@@ -330,11 +332,13 @@ function toSong(raw: RawSong): NavidromeSong | null {
   const title = text(raw.title);
   if (!id || !isSongId(id) || !title) return null;
   const coverArt = text(raw.coverArt);
+  const albumId = typeof raw.albumId === "string" && isSongId(raw.albumId) ? raw.albumId : undefined;
   return {
     id,
     title,
     artist: text(raw.artist) ?? "Unknown artist",
     album: text(raw.album),
+    albumId,
     duration: count(raw.duration),
     coverArt: coverArt && isSongId(coverArt) ? coverArt : undefined,
     track: count(raw.track),
@@ -447,10 +451,45 @@ function byDiscAndTrack(a: NavidromeSong, b: NavidromeSong) {
   return (a.disc ?? 1) - (b.disc ?? 1) || (a.track ?? 0) - (b.track ?? 0);
 }
 
+export async function getNavidromeAlbum(server: Navidrome, albumId: string) {
+  if (!isSongId(albumId)) return null;
+  const result = await call<{ album?: { name?: unknown; artist?: unknown; song?: RawSong[] } }>(server, "getAlbum", [
+    ["id", albumId],
+  ]);
+  if (!result.album) return null;
+  return {
+    name: text(result.album.name) ?? "Untitled album",
+    artist: text(result.album.artist),
+    songs: songs(result.album.song).sort(byDiscAndTrack),
+  };
+}
+
 export async function getAlbumSongs(server: Navidrome, albumId: string) {
-  if (!isSongId(albumId)) return [];
-  const result = await call<{ album?: { song?: RawSong[] } }>(server, "getAlbum", [["id", albumId]]);
-  return songs(result.album?.song).sort(byDiscAndTrack);
+  return (await getNavidromeAlbum(server, albumId))?.songs ?? [];
+}
+
+export async function findNavidromeAlbum(server: Navidrome, artist: string, title: string) {
+  const result = await call<{ searchResult3?: { album?: { id?: unknown; name?: unknown; artist?: unknown }[] } }>(
+    server,
+    "search3",
+    [
+      ["query", title],
+      ["albumCount", "20"],
+      ["artistCount", "0"],
+      ["songCount", "0"],
+    ],
+  );
+  const wanted = slug(title);
+  const candidates = (result.searchResult3?.album ?? []).flatMap((album) =>
+    typeof album.id === "string" && isSongId(album.id) && slug(text(album.name) ?? "") === wanted
+      ? [{ id: album.id, artist: text(album.artist) ?? "" }]
+      : [],
+  );
+  const artistId = artistIdFor(artist);
+  const match =
+    candidates.find((album) => artistIdFor(album.artist) === artistId) ??
+    (candidates.length === 1 ? candidates[0] : undefined);
+  return match ? getNavidromeAlbum(server, match.id) : null;
 }
 
 export async function getSongsOfAlbums(server: Navidrome, albumIds: string[], concurrency = 5) {
