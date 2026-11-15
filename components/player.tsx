@@ -9,6 +9,7 @@ import {
   LONGEST_QUEUE,
   nextPosition,
   nextRepeat,
+  queueWindow,
   type Repeat,
   removeAt,
   restoreQueue,
@@ -17,6 +18,7 @@ import {
   shortcutFor,
   shuffleAfter,
   shuffleAll,
+  startingWith,
   unshuffle,
 } from "@/lib/play-queue";
 import { ArtistLink, SongLink } from "./music-links";
@@ -29,6 +31,8 @@ export type PlayerTrack = {
   title: string;
   artist: string;
   cover?: string;
+  songId?: string;
+  newSong?: boolean;
 };
 
 type PlayerContextValue = {
@@ -37,6 +41,7 @@ type PlayerContextValue = {
   position: number;
   play: (track: PlayerTrack) => void;
   playAll: (tracks: PlayerTrack[], start?: number) => void;
+  playFrom: (tracks: PlayerTrack[], chosen: number) => void;
   next: () => void;
   previous: () => void;
   shuffle: boolean;
@@ -293,11 +298,23 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     const listOrder = shuffleRef.current
       ? first === 0
         ? shuffleAll(list.length)
-        : [chosen, ...shuffleAll(list.length).filter((index) => index !== chosen)]
+        : startingWith(chosen, shuffleAll(list.length))
       : inOrder(list.length);
     const index = shuffleRef.current ? 0 : chosen;
     arrange(list, listOrder, index);
     start(list[listOrder[index]]);
+  }
+
+  function playFrom(list: PlayerTrack[], chosen: number) {
+    if (list.length === 0) return;
+    const at = Math.min(Math.max(chosen, 0), list.length - 1);
+    const { from, to } = queueWindow(list.length, at);
+    const part = list.slice(from, to);
+    const index = at - from;
+    const listOrder = shuffleRef.current ? startingWith(index, shuffleAll(part.length)) : inOrder(part.length);
+    const position = shuffleRef.current ? 0 : index;
+    arrange(part, listOrder, position);
+    start(part[listOrder[position]]);
   }
 
   function next() {
@@ -327,7 +344,9 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     fetch("/api/play", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ trackId: track.trackId }),
+      body: JSON.stringify(
+        track.songId ? { trackId: track.trackId, songId: track.songId } : { trackId: track.trackId },
+      ),
     }).catch(() => {});
   }
 
@@ -413,8 +432,10 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     autoplay.current = play;
     listen.current = { full: false, heard: 0, last: null, counted: false };
     setError(null);
-    describe(track, false);
-    const path = `/api/listen/${encodeURIComponent(track.trackId)}`;
+    describe(track, Boolean(track.songId));
+    const path = track.songId
+      ? `/api/full-song/${encodeURIComponent(track.songId)}`
+      : `/api/listen/${encodeURIComponent(track.trackId)}`;
     audio.src = path;
     pendingTime.current = at;
     if (at > 0) {
@@ -429,6 +450,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       );
     }
     if (play) audio.play().catch(() => {});
+    if (track.songId) return;
     fetch(`${path}?info`)
       .then((response) => (response.ok ? response.json() : { full: false }))
       .then((info: { full?: boolean }) => {
@@ -463,6 +485,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         position,
         play,
         playAll,
+        playFrom,
         next,
         previous,
         shuffle,
@@ -511,10 +534,11 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
           {current && (
             <>
               <strong>
-                <SongLink trackId={current.trackId}>{current.title}</SongLink>
+                {current.newSong ? current.title : <SongLink trackId={current.trackId}>{current.title}</SongLink>}
               </strong>
               <span className="muted">
-                <ArtistLink name={current.artist} /> · {full ? "full song from Navidrome" : "30-second preview"}
+                {current.newSong ? current.artist : <ArtistLink name={current.artist} />} ·{" "}
+                {full ? "full song from Navidrome" : "30-second preview"}
                 {queue.length > 1 && ` · ${position + 1} of ${queue.length}`}
               </span>
             </>

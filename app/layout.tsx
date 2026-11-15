@@ -38,6 +38,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           </form>
           <nav>
             <NavLink href="/feed">Feed</NavLink>
+            <NavLink href="/music">Music</NavLink>
             <NavLink href="/history">History</NavLink>
             <NavLink href="/charts">Charts</NavLink>
             <NavLink href="/recommendations">Recommendations</NavLink>

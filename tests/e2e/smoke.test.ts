@@ -9,6 +9,7 @@ const PASSWORD = "smoke-test-password";
 const PAGES = [
   "/",
   "/feed",
+  "/music",
   "/history",
   "/charts",
   "/recommendations",

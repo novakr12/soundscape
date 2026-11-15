@@ -8,12 +8,14 @@ import {
   LONGEST_QUEUE,
   nextPosition,
   nextRepeat,
+  queueWindow,
   removeAt,
   restoreQueue,
   seekTarget,
   shortcutFor,
   shuffleAfter,
   shuffleAll,
+  startingWith,
   unshuffle,
 } from "../lib/play-queue";
 
@@ -140,5 +142,38 @@ describe("keyboard shortcuts", () => {
     assert.equal(seekTarget(28, 5, 30), 30);
     assert.equal(seekTarget(3, -5, 30), 0);
     assert.equal(seekTarget(10, 5, Number.NaN), 15);
+  });
+});
+
+describe("playing from a list", () => {
+  it("starts with the chosen song and shuffles the rest", () => {
+    assert.deepEqual(startingWith(2, [3, 0, 2, 1]), [2, 3, 0, 1]);
+    assert.deepEqual(startingWith(0, [0, 1]), [0, 1]);
+  });
+
+  it("keeps long lists to the longest queue, starting at the chosen song", () => {
+    assert.deepEqual(queueWindow(10, 4, 500), { from: 0, to: 10 });
+    assert.deepEqual(queueWindow(1200, 100, 500), { from: 100, to: 600 });
+    assert.deepEqual(queueWindow(1200, 1100, 500), { from: 700, to: 1200 });
+  });
+
+  it("remembers songs that come straight from Navidrome", () => {
+    const saved = restoreQueue({
+      tracks: [
+        { trackId: "air-la-femme-d-argent", title: "La femme d'argent", artist: "Air", songId: "nd-1", newSong: true },
+      ],
+      order: [0],
+      position: 0,
+    });
+    assert.equal(saved?.tracks[0].songId, "nd-1");
+    assert.equal(saved?.tracks[0].newSong, true);
+    assert.equal(
+      restoreQueue({
+        tracks: [{ trackId: "a", title: "b", artist: "c", songId: "../rest/x" }],
+        order: [0],
+        position: 0,
+      }),
+      null,
+    );
   });
 });

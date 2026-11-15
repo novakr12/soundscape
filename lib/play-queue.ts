@@ -43,9 +43,28 @@ export function removeAt(order: number[], position: number, at: number) {
 
 export const LONGEST_QUEUE = 500;
 
+export function queueWindow(length: number, chosen: number, longest = LONGEST_QUEUE) {
+  if (length <= longest) return { from: 0, to: length };
+  const from = Math.min(Math.max(chosen, 0), length - longest);
+  return { from, to: from + longest };
+}
+
+export function startingWith(chosen: number, shuffled: number[]) {
+  return [chosen, ...shuffled.filter((index) => index !== chosen)];
+}
+
 export type SavedQueue<T> = { tracks: T[]; order: number[]; position: number; time: number };
 
-type SavedTrack = { trackId: string; title: string; artist: string; cover?: string };
+type SavedTrack = {
+  trackId: string;
+  title: string;
+  artist: string;
+  cover?: string;
+  songId?: string;
+  newSong?: boolean;
+};
+
+const SONG_ID = /^[A-Za-z0-9_-]{1,64}$/;
 
 function isTrack(value: unknown): value is SavedTrack {
   if (typeof value !== "object" || value === null) return false;
@@ -54,7 +73,9 @@ function isTrack(value: unknown): value is SavedTrack {
     typeof track.trackId === "string" &&
     typeof track.title === "string" &&
     typeof track.artist === "string" &&
-    (track.cover === undefined || typeof track.cover === "string")
+    (track.cover === undefined || typeof track.cover === "string") &&
+    (track.songId === undefined || (typeof track.songId === "string" && SONG_ID.test(track.songId))) &&
+    (track.newSong === undefined || typeof track.newSong === "boolean")
   );
 }
 
@@ -75,11 +96,13 @@ export function restoreQueue(raw: unknown): SavedQueue<SavedTrack> | null {
     : 0;
   const time = typeof saved.time === "number" && Number.isFinite(saved.time) && saved.time > 0 ? saved.time : 0;
   return {
-    tracks: tracks.map(({ trackId, title, artist, cover }) => ({
+    tracks: tracks.map(({ trackId, title, artist, cover, songId, newSong }) => ({
       trackId,
       title,
       artist,
       ...(cover ? { cover } : {}),
+      ...(songId ? { songId } : {}),
+      ...(newSong ? { newSong } : {}),
     })),
     order,
     position,

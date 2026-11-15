@@ -290,3 +290,122 @@ export async function savePlaylist(server: Navidrome, name: string, songIds: str
   const target: [string, string] = existing ? ["playlistId", existing.id] : ["name", name];
   await call(server, "createPlaylist", [target, ...songIds.map((id): [string, string] => ["songId", id])]);
 }
+
+export type NavidromeLibrary = { id: string; name: string };
+
+export type NavidromePlaylist = { id: string; name: string; songCount: number; duration: number };
+
+export type NavidromeSong = {
+  id: string;
+  title: string;
+  artist: string;
+  album?: string;
+  duration?: number;
+  coverArt?: string;
+  track?: number;
+};
+
+type RawSong = {
+  id?: unknown;
+  title?: unknown;
+  artist?: unknown;
+  album?: unknown;
+  duration?: unknown;
+  coverArt?: unknown;
+  track?: unknown;
+};
+
+function text(value: unknown) {
+  return typeof value === "string" && value.trim() !== "" ? value.trim() : undefined;
+}
+
+function count(value: unknown) {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : undefined;
+}
+
+function toSong(raw: RawSong): NavidromeSong | null {
+  const id = typeof raw.id === "string" ? raw.id : null;
+  const title = text(raw.title);
+  if (!id || !isSongId(id) || !title) return null;
+  const coverArt = text(raw.coverArt);
+  return {
+    id,
+    title,
+    artist: text(raw.artist) ?? "Unknown artist",
+    album: text(raw.album),
+    duration: count(raw.duration),
+    coverArt: coverArt && isSongId(coverArt) ? coverArt : undefined,
+    track: count(raw.track),
+  };
+}
+
+function songs(list: RawSong[] | undefined) {
+  return (list ?? []).flatMap((raw) => {
+    const song = toSong(raw);
+    return song ? [song] : [];
+  });
+}
+
+export async function getLibraries(server: Navidrome): Promise<NavidromeLibrary[]> {
+  const result = await call<{ musicFolders?: { musicFolder?: { id?: unknown; name?: unknown }[] } }>(
+    server,
+    "getMusicFolders",
+  );
+  return (result.musicFolders?.musicFolder ?? []).flatMap((folder) => {
+    const id = typeof folder.id === "number" || typeof folder.id === "string" ? String(folder.id) : null;
+    return id && isSongId(id) ? [{ id, name: text(folder.name) ?? `Library ${id}` }] : [];
+  });
+}
+
+export async function getPlaylists(server: Navidrome): Promise<NavidromePlaylist[]> {
+  const result = await call<{
+    playlists?: { playlist?: { id?: unknown; name?: unknown; songCount?: unknown; duration?: unknown }[] };
+  }>(server, "getPlaylists");
+  return (result.playlists?.playlist ?? []).flatMap((playlist) => {
+    const id = typeof playlist.id === "string" ? playlist.id : null;
+    if (!id || !isSongId(id)) return [];
+    return [
+      {
+        id,
+        name: text(playlist.name) ?? "Untitled playlist",
+        songCount: count(playlist.songCount) ?? 0,
+        duration: count(playlist.duration) ?? 0,
+      },
+    ];
+  });
+}
+
+export async function getPlaylistSongs(server: Navidrome, playlistId: string) {
+  if (!isSongId(playlistId)) return null;
+  const result = await call<{ playlist?: { name?: unknown; entry?: RawSong[] } }>(server, "getPlaylist", [
+    ["id", playlistId],
+  ]);
+  if (!result.playlist) return null;
+  return { name: text(result.playlist.name) ?? "Untitled playlist", songs: songs(result.playlist.entry) };
+}
+
+export async function getLibrarySongs(
+  server: Navidrome,
+  options: { libraryId?: string; query?: string; offset: number; size: number },
+) {
+  const params: [string, string][] = [
+    ["query", options.query?.trim() || '""'],
+    ["songCount", String(options.size)],
+    ["songOffset", String(options.offset)],
+    ["artistCount", "0"],
+    ["albumCount", "0"],
+  ];
+  if (options.libraryId && isSongId(options.libraryId)) params.push(["musicFolderId", options.libraryId]);
+  const result = await call<{ searchResult3?: { song?: RawSong[] } }>(server, "search3", params);
+  return songs(result.searchResult3?.song);
+}
+
+export async function getSong(server: Navidrome, songId: string) {
+  if (!isSongId(songId)) return null;
+  try {
+    const result = await call<{ song?: RawSong }>(server, "getSong", [["id", songId]]);
+    return result.song ? toSong(result.song) : null;
+  } catch {
+    return null;
+  }
+}

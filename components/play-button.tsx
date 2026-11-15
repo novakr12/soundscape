@@ -3,7 +3,7 @@
 import { useRef } from "react";
 import { type PlayerTrack, usePlayer } from "./player";
 
-export default function PlayButton({ track }: { track: PlayerTrack }) {
+export default function PlayButton({ track, onPlay }: { track: PlayerTrack; onPlay?: () => void }) {
   const { current, play, playNext, addToQueue } = usePlayer();
   const menu = useRef<HTMLDetailsElement>(null);
   const isCurrent = current?.trackId === track.trackId;
@@ -15,7 +15,7 @@ export default function PlayButton({ track }: { track: PlayerTrack }) {
 
   return (
     <span className="play-controls">
-      <button type="button" onClick={() => play(track)} aria-pressed={isCurrent}>
+      <button type="button" onClick={() => (onPlay ? onPlay() : play(track))} aria-pressed={isCurrent}>
         {isCurrent ? "♪ Playing" : "▶ Play"}
       </button>
       <details className="queue-menu" ref={menu}>
