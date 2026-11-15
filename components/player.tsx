@@ -20,6 +20,8 @@ import {
   unshuffle,
 } from "@/lib/play-queue";
 import { ArtistLink, SongLink } from "./music-links";
+import { NextIcon, PreviousIcon, QueueIcon, RepeatIcon, ShuffleIcon } from "./player-icons";
+import { PlayPauseButton, SeekBar } from "./player-transport";
 import VolumeControl from "./volume-control";
 
 export type PlayerTrack = {
@@ -519,60 +521,72 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
           )}
           {error && <span className="error">{error}</span>}
         </div>
-        <div className="player-skip">
+        <div className="player-center">
+          <div className="player-skip">
+            <button
+              type="button"
+              className="icon-button player-toggle"
+              data-player="shuffle"
+              aria-label="Shuffle"
+              aria-pressed={shuffle}
+              title={shuffle ? "Shuffle is on" : "Shuffle is off"}
+              onClick={toggleShuffle}
+            >
+              <ShuffleIcon size={18} />
+            </button>
+            <button
+              type="button"
+              className="icon-button"
+              data-player="previous"
+              aria-label="Previous song"
+              title="Previous song (Shift+←)"
+              onClick={previous}
+            >
+              <PreviousIcon />
+            </button>
+            <PlayPauseButton audio={audioRef} />
+            <button
+              type="button"
+              className="icon-button"
+              data-player="next"
+              aria-label="Next song"
+              title="Next song (Shift+→)"
+              onClick={next}
+              disabled={!hasNext}
+            >
+              <NextIcon />
+            </button>
+            <button
+              type="button"
+              className="icon-button player-toggle"
+              data-player="repeat"
+              data-repeat={repeat}
+              aria-label={REPEAT_LABELS[repeat]}
+              aria-pressed={repeat !== "off"}
+              title={REPEAT_LABELS[repeat]}
+              onClick={cycleRepeat}
+            >
+              <RepeatIcon size={18} one={repeat === "one"} />
+            </button>
+          </div>
+          <SeekBar audio={audioRef} />
+        </div>
+        <div className="player-side">
           <button
             type="button"
-            data-player="shuffle"
-            aria-label="Shuffle"
-            aria-pressed={shuffle}
-            title={shuffle ? "Shuffle is on" : "Shuffle is off"}
-            onClick={toggleShuffle}
-          >
-            🔀
-          </button>
-          <button
-            type="button"
-            data-player="previous"
-            aria-label="Previous song"
-            title="Previous song (Shift+←)"
-            onClick={previous}
-          >
-            ⏮
-          </button>
-          <button
-            type="button"
-            data-player="next"
-            aria-label="Next song"
-            title="Next song (Shift+→)"
-            onClick={next}
-            disabled={!hasNext}
-          >
-            ⏭
-          </button>
-          <button
-            type="button"
-            data-player="repeat"
-            data-repeat={repeat}
-            aria-label={REPEAT_LABELS[repeat]}
-            aria-pressed={repeat !== "off"}
-            title={REPEAT_LABELS[repeat]}
-            onClick={cycleRepeat}
-          >
-            {repeat === "one" ? "🔂" : "🔁"}
-          </button>
-          <button
-            type="button"
+            className="icon-button player-toggle"
             data-player="queue"
             aria-label="Queue"
             aria-expanded={showQueue}
+            aria-pressed={showQueue}
             title="Queue"
             onClick={() => setShowQueue(!showQueue)}
           >
-            ☰
+            <QueueIcon size={18} />
           </button>
+          <VolumeControl audio={audioRef} />
         </div>
-        <audio ref={audioRef} controls onError={failed} />
-        <VolumeControl audio={audioRef} />
+        <audio ref={audioRef} onError={failed} />
       </div>
     </PlayerContext.Provider>
   );
