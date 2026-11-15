@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { createContext, useContext, useEffect, useRef, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import {
   countsAsPlay,
   heardStep,
@@ -69,6 +69,7 @@ const REPEAT_LABELS: Record<Repeat, string> = {
 const RESTART_AFTER_SECONDS = 3;
 const SKIP_BROKEN_AFTER_MS = 1500;
 const GIVE_UP_LOADING_AFTER_MS = 12_000;
+const PREPARE_NEXT_SECONDS = 30;
 const KEEPS_ITS_KEYS =
   "input, textarea, select, button, audio, video, summary, [contenteditable]:not([contenteditable='false']), [role='slider'], [role='textbox'], [role='menuitem']";
 
@@ -85,7 +86,12 @@ export function usePlayer() {
 }
 
 export function PlayerProvider({ children }: { children: React.ReactNode }) {
-  const audioRef = useRef<HTMLAudioElement>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const standbyRef = useRef<HTMLAudioElement | null>(null);
+  const holderRef = useRef<HTMLDivElement>(null);
+  const prepared = useRef<string | null>(null);
+  const [active, setActive] = useState<HTMLAudioElement | null>(null);
+  const activeAudio = useMemo(() => ({ current: active }), [active]);
   const [tracks, setTracks] = useState<PlayerTrack[]>([]);
   const [order, setOrder] = useState<number[]>([]);
   const [position, setPosition] = useState(0);
@@ -105,6 +111,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     restore: () => {},
     listened: () => {},
     failed: () => {},
+    prepare: () => {},
   });
   const [error, setError] = useState<string | null>(null);
   const [full, setFull] = useState(false);
@@ -115,16 +122,62 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const pendingTime = useRef(0);
   const [showQueue, setShowQueue] = useState(false);
 
+  function bind(element: HTMLAudioElement) {
+    const mine = () => element === audioRef.current;
+    const session = "mediaSession" in navigator ? navigator.mediaSession : null;
+    element.addEventListener("timeupdate", () => {
+      if (mine()) skip.current.listened();
+    });
+    element.addEventListener("seeking", () => {
+      if (mine()) listen.current.last = null;
+    });
+    element.addEventListener("play", () => {
+      if (!mine()) return;
+      autoplay.current = true;
+      if (session) session.playbackState = "playing";
+    });
+    element.addEventListener("pause", () => {
+      if (mine() && session) session.playbackState = "paused";
+    });
+    element.addEventListener("ended", () => {
+      if (!mine()) return;
+      if (session) session.playbackState = "paused";
+      skip.current.ended();
+    });
+    element.addEventListener("error", () => {
+      if (mine()) skip.current.failed();
+      else prepared.current = null;
+    });
+  }
+
+  function audioElement() {
+    if (audioRef.current) return audioRef.current;
+    const holder = holderRef.current;
+    if (!holder) return null;
+    const first = document.createElement("audio");
+    const second = document.createElement("audio");
+    second.preload = "auto";
+    bind(first);
+    bind(second);
+    holder.appendChild(first);
+    audioRef.current = first;
+    standbyRef.current = second;
+    setActive(first);
+    return first;
+  }
+
   useEffect(() => {
-    const audio = audioRef.current;
-    if (!audio || !("mediaSession" in navigator)) return;
+    skip.current.prepare();
+    if (!("mediaSession" in navigator)) return;
     const session = navigator.mediaSession;
     const handlers: [MediaSessionAction, MediaSessionActionHandler][] = [
-      ["play", () => audio.play().catch(() => {})],
-      ["pause", () => audio.pause()],
+      ["play", () => audioRef.current?.play().catch(() => {})],
+      ["pause", () => audioRef.current?.pause()],
       [
         "stop",
         () => {
+          const audio = audioRef.current;
+          if (!audio) return;
           audio.pause();
           audio.currentTime = 0;
         },
@@ -132,7 +185,8 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       [
         "seekto",
         (details) => {
-          if (details.seekTime !== undefined) audio.currentTime = details.seekTime;
+          const audio = audioRef.current;
+          if (audio && details.seekTime !== undefined) audio.currentTime = details.seekTime;
         },
       ],
       ["nexttrack", () => skip.current.next()],
@@ -143,36 +197,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         session.setActionHandler(action, handler);
       } catch {}
     }
-    const playing = () => {
-      session.playbackState = "playing";
-    };
-    const paused = () => {
-      session.playbackState = "paused";
-    };
-    const ended = () => {
-      paused();
-      skip.current.ended();
-    };
-    const started = () => {
-      autoplay.current = true;
-    };
-    const listened = () => skip.current.listened();
-    const jumped = () => {
-      listen.current.last = null;
-    };
-    audio.addEventListener("timeupdate", listened);
-    audio.addEventListener("seeking", jumped);
-    audio.addEventListener("play", started);
-    audio.addEventListener("play", playing);
-    audio.addEventListener("pause", paused);
-    audio.addEventListener("ended", ended);
     return () => {
-      audio.removeEventListener("timeupdate", listened);
-      audio.removeEventListener("seeking", jumped);
-      audio.removeEventListener("play", started);
-      audio.removeEventListener("play", playing);
-      audio.removeEventListener("pause", paused);
-      audio.removeEventListener("ended", ended);
       for (const [action] of handlers) {
         try {
           session.setActionHandler(action, null);
@@ -288,8 +313,65 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   }
 
   function moveTo(index: number) {
+    if (handOver(index)) return;
     arrange(tracksRef.current, orderRef.current, index);
     start(tracksRef.current[orderRef.current[index]]);
+  }
+
+  function sourceFor(track: PlayerTrack) {
+    return track.songId
+      ? `/api/full-song/${encodeURIComponent(track.songId)}`
+      : `/api/listen/${encodeURIComponent(track.trackId)}`;
+  }
+
+  function preparedKey(index: number) {
+    const track = tracksRef.current[orderRef.current[index]];
+    return track ? `${index}|${track.trackId}|${track.songId ?? ""}|${sourceFor(track)}` : null;
+  }
+
+  function prepareNext() {
+    const audio = audioRef.current;
+    const standby = standbyRef.current;
+    if (!audio || !standby || repeatRef.current === "one" || !Number.isFinite(audio.duration)) return;
+    if (audio.duration - audio.currentTime > PREPARE_NEXT_SECONDS) return;
+    const index = nextPosition(positionRef.current, orderRef.current.length, repeatRef.current);
+    if (index === null || index === positionRef.current) return;
+    const key = preparedKey(index);
+    if (!key || key === prepared.current) return;
+    prepared.current = key;
+    standby.src = sourceFor(tracksRef.current[orderRef.current[index]]);
+    standby.load();
+  }
+
+  function handOver(index: number) {
+    const old = audioRef.current;
+    const standby = standbyRef.current;
+    const key = preparedKey(index);
+    if (!old || !standby || !key || key !== prepared.current) return false;
+    if (standby.error || standby.readyState < HTMLMediaElement.HAVE_FUTURE_DATA) return false;
+    const track = tracksRef.current[orderRef.current[index]];
+    prepared.current = null;
+    standby.volume = old.volume;
+    standby.muted = old.muted;
+    standby.currentTime = 0;
+    audioRef.current = standby;
+    standbyRef.current = old;
+    old.replaceWith(standby);
+    standby.play().catch(() => {});
+    old.pause();
+    old.removeAttribute("src");
+    old.load();
+    setActive(standby);
+    arrange(tracksRef.current, orderRef.current, index);
+    const id = ++playing.current;
+    fellBack.current = false;
+    autoplay.current = true;
+    pendingTime.current = 0;
+    listen.current = { full: false, heard: 0, last: null, counted: false };
+    setError(null);
+    describe(track, Boolean(track.songId));
+    learn(track, id);
+    return true;
   }
 
   function play(track: PlayerTrack) {
@@ -338,6 +420,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   function listened() {
     const audio = audioRef.current;
     if (!audio) return;
+    prepareNext();
     const now = audio.currentTime;
     const state = listen.current;
     if (!audio.paused) state.heard += heardStep(state.last, now);
@@ -426,11 +509,19 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     remember();
   }
 
-  skip.current = { next, previous, ended, restore: restoreSaved, listened, failed };
+  skip.current = {
+    next,
+    previous,
+    ended,
+    restore: restoreSaved,
+    listened,
+    failed,
+    prepare: () => audioElement(),
+  };
   const hasNext = position + 1 < queue.length || (repeat === "all" && queue.length > 1);
 
   function start(track: PlayerTrack, play = true, at = 0) {
-    const audio = audioRef.current;
+    const audio = audioElement();
     if (!audio) return;
     const id = ++playing.current;
     fellBack.current = false;
@@ -438,10 +529,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     listen.current = { full: false, heard: 0, last: null, counted: false };
     setError(null);
     describe(track, Boolean(track.songId));
-    const path = track.songId
-      ? `/api/full-song/${encodeURIComponent(track.songId)}`
-      : `/api/listen/${encodeURIComponent(track.trackId)}`;
-    audio.src = path;
+    audio.src = sourceFor(track);
     pendingTime.current = at;
     if (at > 0) {
       audio.addEventListener(
@@ -458,8 +546,12 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       audio.play().catch(() => {});
       watchLoading(id);
     }
+    learn(track, id);
+  }
+
+  function learn(track: PlayerTrack, id: number) {
     if (track.songId) return;
-    fetch(`${path}?info`)
+    fetch(`${sourceFor(track)}?info`)
       .then((response) => (response.ok ? response.json() : { full: false }))
       .then((info: { full?: boolean }) => {
         if (id === playing.current && !fellBack.current) describe(track, info.full === true);
@@ -598,7 +690,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
             >
               <PreviousIcon />
             </button>
-            <PlayPauseButton audio={audioRef} />
+            <PlayPauseButton audio={activeAudio} />
             <button
               type="button"
               className="icon-button"
@@ -623,7 +715,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
               <RepeatIcon size={18} one={repeat === "one"} />
             </button>
           </div>
-          <SeekBar audio={audioRef} />
+          <SeekBar audio={activeAudio} />
         </div>
         <div className="player-side">
           <button
@@ -638,9 +730,9 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
           >
             <QueueIcon size={18} />
           </button>
-          <VolumeControl audio={audioRef} />
+          <VolumeControl audio={activeAudio} />
         </div>
-        <audio ref={audioRef} onError={failed} />
+        <div className="player-audio" ref={holderRef} />
       </div>
     </PlayerContext.Provider>
   );
