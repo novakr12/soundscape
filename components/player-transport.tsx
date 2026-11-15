@@ -49,9 +49,43 @@ const LOAD_EVENTS = [
   "emptied",
   "loadeddata",
   "error",
+  "timeupdate",
 ];
-const readLoading = (element: HTMLAudioElement) =>
-  !element.paused && !element.error && element.readyState < HTMLMediaElement.HAVE_FUTURE_DATA ? 1 : 0;
+
+const STILL_AFTER_MS = 600;
+
+function useLoading(audio: RefObject<HTMLAudioElement | null>) {
+  const [loading, setLoading] = useState(false);
+  useEffect(() => {
+    let last: { element: HTMLAudioElement | null; time: number; movedAt: number } = {
+      element: null,
+      time: -1,
+      movedAt: 0,
+    };
+    const follow = () => {
+      const element = audio.current;
+      const now = performance.now();
+      if (!element || element.paused || element.error) {
+        last = { element, time: -1, movedAt: 0 };
+        setLoading(false);
+        return;
+      }
+      if (last.element !== element) last = { element, time: element.currentTime, movedAt: 0 };
+      else if (element.currentTime !== last.time) last = { element, time: element.currentTime, movedAt: now };
+      const moving = now - last.movedAt < STILL_AFTER_MS;
+      setLoading(!moving && element.readyState < HTMLMediaElement.HAVE_FUTURE_DATA);
+    };
+    follow();
+    const timer = setInterval(follow, REFRESH_MS);
+    for (const event of LOAD_EVENTS) document.addEventListener(event, follow, true);
+    return () => {
+      clearInterval(timer);
+      for (const event of LOAD_EVENTS) document.removeEventListener(event, follow, true);
+    };
+  }, [audio]);
+  return loading;
+}
+
 const TIME_EVENTS = ["timeupdate", "seeking", "emptied", "loadedmetadata"];
 const readTime = (element: HTMLAudioElement) => element.currentTime;
 const LENGTH_EVENTS = ["durationchange", "loadedmetadata", "emptied"];
@@ -59,7 +93,7 @@ const readLength = (element: HTMLAudioElement) => (Number.isFinite(element.durat
 
 export function PlayPauseButton({ audio }: { audio: RefObject<HTMLAudioElement | null> }) {
   const paused = useAudio(audio, PLAY_EVENTS, readPaused) === 1;
-  const loading = useAudio(audio, LOAD_EVENTS, readLoading) === 1;
+  const loading = useLoading(audio);
   return (
     <button
       type="button"
