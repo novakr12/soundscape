@@ -3,6 +3,7 @@ import { scrobbleToLastfm } from "@/lib/lastfm-scrobble";
 import { saveNavidromeSong } from "@/lib/music";
 import { isSongId } from "@/lib/navidrome";
 import { recordPlay } from "@/lib/plays";
+import { relayPlay } from "@/lib/relay";
 import { currentUserId } from "@/lib/session";
 
 export async function POST(request: Request) {
@@ -31,5 +32,6 @@ export async function POST(request: Request) {
   after(() =>
     scrobbleToLastfm(userId, [{ artist: play.artist, title: play.title, playedAt: new Date(play.playedAt) }]),
   );
+  after(() => relayPlay(userId, play));
   return NextResponse.json(play, { status: 201 });
 }

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Form from "next/form";
 import Link from "next/link";
 import Cover from "@/components/cover";
 import { ArtistLink, SongLink } from "@/components/music-links";
@@ -27,7 +28,7 @@ export default async function SearchPage({ searchParams }: Props) {
   return (
     <>
       <h1>Search</h1>
-      <form action="/search" role="search" className="search search-page">
+      <Form action="/search" role="search" className="search search-page">
         <input
           type="search"
           name="q"
@@ -37,7 +38,7 @@ export default async function SearchPage({ searchParams }: Props) {
           autoFocus={!query}
         />
         <button type="submit">Search</button>
-      </form>
+      </Form>
 
       {!ready ? (
         <p className="muted">Type at least {MIN_QUERY_LENGTH} characters.</p>

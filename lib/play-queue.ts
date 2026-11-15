@@ -62,7 +62,11 @@ type SavedTrack = {
   cover?: string;
   songId?: string;
   newSong?: boolean;
+  album?: string;
+  albumHref?: string;
 };
+
+const ALBUM_HREF = /^\/(album\/[^/?#]+|music\?album=[A-Za-z0-9_-]+)$/;
 
 const SONG_ID = /^[A-Za-z0-9_-]{1,64}$/;
 
@@ -75,7 +79,9 @@ function isTrack(value: unknown): value is SavedTrack {
     typeof track.artist === "string" &&
     (track.cover === undefined || typeof track.cover === "string") &&
     (track.songId === undefined || (typeof track.songId === "string" && SONG_ID.test(track.songId))) &&
-    (track.newSong === undefined || typeof track.newSong === "boolean")
+    (track.newSong === undefined || typeof track.newSong === "boolean") &&
+    (track.album === undefined || (typeof track.album === "string" && track.album.length <= 300)) &&
+    (track.albumHref === undefined || (typeof track.albumHref === "string" && ALBUM_HREF.test(track.albumHref)))
   );
 }
 
@@ -96,13 +102,15 @@ export function restoreQueue(raw: unknown): SavedQueue<SavedTrack> | null {
     : 0;
   const time = typeof saved.time === "number" && Number.isFinite(saved.time) && saved.time > 0 ? saved.time : 0;
   return {
-    tracks: tracks.map(({ trackId, title, artist, cover, songId, newSong }) => ({
+    tracks: tracks.map(({ trackId, title, artist, cover, songId, newSong, album, albumHref }) => ({
       trackId,
       title,
       artist,
       ...(cover ? { cover } : {}),
       ...(songId ? { songId } : {}),
       ...(newSong ? { newSong } : {}),
+      ...(album ? { album } : {}),
+      ...(album && albumHref ? { albumHref } : {}),
     })),
     order,
     position,

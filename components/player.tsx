@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { createContext, useContext, useEffect, useRef, useState } from "react";
 import {
   countsAsPlay,
@@ -33,6 +34,8 @@ export type PlayerTrack = {
   cover?: string;
   songId?: string;
   newSong?: boolean;
+  album?: string;
+  albumHref?: string;
 };
 
 type PlayerContextValue = {
@@ -65,6 +68,7 @@ const REPEAT_LABELS: Record<Repeat, string> = {
 
 const RESTART_AFTER_SECONDS = 3;
 const SKIP_BROKEN_AFTER_MS = 1500;
+const GIVE_UP_LOADING_AFTER_MS = 12_000;
 const KEEPS_ITS_KEYS =
   "input, textarea, select, button, audio, video, summary, [contenteditable]:not([contenteditable='false']), [role='slider'], [role='textbox'], [role='menuitem']";
 
@@ -100,6 +104,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     ended: () => {},
     restore: () => {},
     listened: () => {},
+    failed: () => {},
   });
   const [error, setError] = useState<string | null>(null);
   const [full, setFull] = useState(false);
@@ -183,7 +188,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     navigator.mediaSession.metadata = new MediaMetadata({
       title: track.title,
       artist: track.artist,
-      album: isFull ? "Full song from Navidrome" : "30-second preview",
+      album: isFull ? (track.album ?? "Soundscape") : "30-second preview",
       artwork: track.cover ? [{ src: track.cover }] : [],
     });
   }
@@ -421,7 +426,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     remember();
   }
 
-  skip.current = { next, previous, ended, restore: restoreSaved, listened };
+  skip.current = { next, previous, ended, restore: restoreSaved, listened, failed };
   const hasNext = position + 1 < queue.length || (repeat === "all" && queue.length > 1);
 
   function start(track: PlayerTrack, play = true, at = 0) {
@@ -449,7 +454,10 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         { once: true },
       );
     }
-    if (play) audio.play().catch(() => {});
+    if (play) {
+      audio.play().catch(() => {});
+      watchLoading(id);
+    }
     if (track.songId) return;
     fetch(`${path}?info`)
       .then((response) => (response.ok ? response.json() : { full: false }))
@@ -457,6 +465,17 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         if (id === playing.current && !fellBack.current) describe(track, info.full === true);
       })
       .catch(() => {});
+  }
+
+  function watchLoading(id: number) {
+    setTimeout(() => {
+      const audio = audioRef.current;
+      if (!audio || id !== playing.current || audio.paused) return;
+      if (audio.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) return;
+      const before = fellBack.current;
+      skip.current.failed();
+      if (!before && fellBack.current && id === playing.current) watchLoading(id);
+    }, GIVE_UP_LOADING_AFTER_MS);
   }
 
   function failed() {
@@ -529,21 +548,32 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         </section>
       )}
       <div className="player" hidden={!current}>
-        {current?.cover && <img src={current.cover} alt="" width={48} height={48} />}
-        <div className="now-playing">
-          {current && (
-            <>
-              <strong>
-                {current.newSong ? current.title : <SongLink trackId={current.trackId}>{current.title}</SongLink>}
-              </strong>
-              <span className="muted">
-                {current.newSong ? current.artist : <ArtistLink name={current.artist} />} ·{" "}
-                {full ? "full song from Navidrome" : "30-second preview"}
-                {queue.length > 1 && ` · ${position + 1} of ${queue.length}`}
-              </span>
-            </>
-          )}
-          {error && <span className="error">{error}</span>}
+        <div className="player-song">
+          {current?.cover && <img src={current.cover} alt="" width={48} height={48} />}
+          <div className="now-playing">
+            {current && (
+              <>
+                <strong title={current.title}>
+                  {current.newSong ? current.title : <SongLink trackId={current.trackId}>{current.title}</SongLink>}
+                </strong>
+                <span className="muted" title={[current.artist, current.album].filter(Boolean).join(" · ")}>
+                  {current.newSong ? current.artist : <ArtistLink name={current.artist} />}
+                  {current.album && " · "}
+                  {current.album &&
+                    (current.albumHref ? (
+                      <Link className="music-link" href={current.albumHref}>
+                        {current.album}
+                      </Link>
+                    ) : (
+                      current.album
+                    ))}
+                  {!full && " · 30-second preview"}
+                  {queue.length > 1 && ` · ${position + 1} of ${queue.length}`}
+                </span>
+              </>
+            )}
+            {error && <span className="error">{error}</span>}
+          </div>
         </div>
         <div className="player-center">
           <div className="player-skip">

@@ -157,6 +157,27 @@ describe("playing from a list", () => {
     assert.deepEqual(queueWindow(1200, 1100, 500), { from: 700, to: 1200 });
   });
 
+  it("remembers the album, and only links that stay on Soundscape", () => {
+    const saved = restoreQueue({
+      tracks: [
+        { trackId: "a", title: "b", artist: "c", album: "Clayman", albumHref: "/album/in-flames-clayman" },
+        { trackId: "d", title: "e", artist: "f", album: "Far", albumHref: "/music?album=al-far" },
+      ],
+      order: [0, 1],
+      position: 0,
+    });
+    assert.equal(saved?.tracks[0].albumHref, "/album/in-flames-clayman");
+    assert.equal(saved?.tracks[1].albumHref, "/music?album=al-far");
+    assert.equal(
+      restoreQueue({
+        tracks: [{ trackId: "a", title: "b", artist: "c", album: "x", albumHref: "https://evil.example/" }],
+        order: [0],
+        position: 0,
+      }),
+      null,
+    );
+  });
+
   it("remembers songs that come straight from Navidrome", () => {
     const saved = restoreQueue({
       tracks: [

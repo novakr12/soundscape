@@ -110,6 +110,26 @@ export async function relaySubmission(userId: string, body: Submission) {
   }
 }
 
+export function playedSubmission(play: { artist: string; title: string; playedAt: string | Date }) {
+  return {
+    listen_type: "single",
+    payload: [
+      {
+        listened_at: Math.floor(new Date(play.playedAt).getTime() / 1000),
+        track_metadata: {
+          artist_name: play.artist,
+          track_name: play.title,
+          additional_info: { media_player: "Soundscape", submission_client: "Soundscape" },
+        },
+      },
+    ],
+  };
+}
+
+export async function relayPlay(userId: string, play: { artist: string; title: string; playedAt: string | Date }) {
+  await relaySubmission(userId, playedSubmission(play));
+}
+
 export async function queuedForUser(userId: string): Promise<number> {
   const [{ queued }] = await sql`SELECT count(*) AS queued FROM relay_queue WHERE user_id = ${userId}`;
   return queued;

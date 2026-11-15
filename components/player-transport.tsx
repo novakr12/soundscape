@@ -34,6 +34,19 @@ function useAudio(
 
 const PLAY_EVENTS = ["play", "pause", "playing", "ended", "emptied"];
 const readPaused = (element: HTMLAudioElement) => (element.paused ? 1 : 0);
+const LOAD_EVENTS = [
+  "loadstart",
+  "waiting",
+  "stalled",
+  "canplay",
+  "playing",
+  "pause",
+  "emptied",
+  "loadeddata",
+  "error",
+];
+const readLoading = (element: HTMLAudioElement) =>
+  !element.paused && !element.error && element.readyState < HTMLMediaElement.HAVE_FUTURE_DATA ? 1 : 0;
 const TIME_EVENTS = ["timeupdate", "seeking", "emptied", "loadedmetadata"];
 const readTime = (element: HTMLAudioElement) => element.currentTime;
 const LENGTH_EVENTS = ["durationchange", "loadedmetadata", "emptied"];
@@ -41,10 +54,12 @@ const readLength = (element: HTMLAudioElement) => (Number.isFinite(element.durat
 
 export function PlayPauseButton({ audio }: { audio: RefObject<HTMLAudioElement | null> }) {
   const paused = useAudio(audio, PLAY_EVENTS, readPaused) === 1;
+  const loading = useAudio(audio, LOAD_EVENTS, readLoading) === 1;
   return (
     <button
       type="button"
-      className="player-play"
+      className={loading ? "player-play loading" : "player-play"}
+      aria-busy={loading}
       data-player="play"
       aria-label={paused ? "Play" : "Pause"}
       title={paused ? "Play (Space)" : "Pause (Space)"}

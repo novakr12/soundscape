@@ -1,3 +1,4 @@
+import Form from "next/form";
 import Link from "next/link";
 import MusicList from "@/components/music-list";
 import { type MusicSong, toMusicSongs } from "@/lib/music";
@@ -216,7 +217,7 @@ export default async function MusicPage({ searchParams }: Props) {
                   {shown.songs.length} songs · {hours(shown.songs.reduce((sum, song) => sum + (song.duration ?? 0), 0))}
                 </p>
               ) : (
-                <form action="/music" className="music-search" role="search">
+                <Form action="/music" className="music-search" role="search">
                   {shown.libraryId && <input type="hidden" name="library" value={shown.libraryId} />}
                   <input
                     type="search"
@@ -225,7 +226,7 @@ export default async function MusicPage({ searchParams }: Props) {
                     placeholder={`Search ${shown.title}`}
                     aria-label={`Search ${shown.title}`}
                   />
-                </form>
+                </Form>
               )}
               <nav className="music-sort" aria-label="Sort by">
                 <span className="muted">Sort by</span>

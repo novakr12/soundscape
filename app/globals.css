@@ -258,10 +258,11 @@ main {
   left: 0;
   right: 0;
   bottom: 0;
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(16rem, 26rem) minmax(0, 1fr);
   align-items: center;
   gap: 1rem;
-  padding: 0.75rem max(1rem, calc((100% - 48rem) / 2));
+  padding: 0.75rem 1rem;
   background: var(--bg);
   border-top: 1px solid color-mix(in srgb, var(--muted) 30%, transparent);
 }
@@ -287,12 +288,18 @@ main {
   white-space: nowrap;
 }
 
+.player-song {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
 .player-center {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 0.1rem;
-  flex: 0 1 24rem;
   min-width: 0;
 }
 
@@ -376,8 +383,9 @@ main {
 .player-side {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   gap: 0.25rem;
-  flex: none;
+  min-width: 0;
 }
 
 .play-controls {
@@ -505,11 +513,12 @@ main {
   }
 
   .player {
+    display: flex;
     flex-wrap: wrap;
     gap: 0.5rem 0.75rem;
   }
 
-  .player .now-playing {
+  .player .player-song {
     flex: 1 1 0;
   }
 
@@ -787,7 +796,6 @@ header a[aria-current="page"] {
 
   .player {
     left: var(--sidebar-width);
-    padding: 0.75rem max(1rem, calc((100% - var(--sidebar-width) - 48rem) / 2));
   }
 }
 
@@ -2094,4 +2102,60 @@ tr.selected {
   border-color: var(--accent);
   background: color-mix(in srgb, var(--accent) 18%, transparent);
   color: var(--accent);
+}
+
+.app-nav {
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+  padding: 0.5rem 1rem;
+  background: var(--bg);
+}
+
+.app-nav .icon-button {
+  color: var(--fg);
+  text-decoration: none;
+}
+
+.app-nav .icon-button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.app-nav .icon-button[aria-current="page"] {
+  color: var(--accent);
+}
+
+@media (min-width: 760px) {
+  .app-nav {
+    position: fixed;
+    top: 0;
+    left: var(--sidebar-width);
+    right: 0;
+    z-index: 25;
+  }
+
+  .app-nav ~ main {
+    padding-top: 3rem;
+  }
+}
+
+.player-play.loading {
+  position: relative;
+}
+
+.player-play.loading::after {
+  content: "";
+  position: absolute;
+  inset: -4px;
+  border: 2px solid transparent;
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: player-spin 0.8s linear infinite;
+}
+
+@keyframes player-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
