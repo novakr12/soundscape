@@ -15,6 +15,7 @@ import {
   shortcutFor,
   shuffleAfter,
   shuffleAll,
+  songLength,
   startingWith,
   unshuffle,
 } from "../lib/play-queue";
@@ -195,6 +196,33 @@ describe("playing from a list", () => {
         position: 0,
       }),
       null,
+    );
+  });
+});
+
+describe("song length", () => {
+  it("uses the length Navidrome reports when the audio doesn't know it", () => {
+    assert.equal(songLength(200, 180), 200);
+    assert.equal(songLength(Number.NaN, 180), 180);
+    assert.equal(songLength(Number.POSITIVE_INFINITY, 180), 180);
+    assert.equal(songLength(0, 180), 180);
+    assert.ok(Number.isNaN(songLength(Number.NaN, undefined)));
+    assert.ok(Number.isNaN(songLength(Number.NaN, -5)));
+  });
+
+  it("keeps the length when the queue is saved and restored", () => {
+    const saved = restoreQueue({
+      tracks: [
+        { trackId: "t1", title: "One", artist: "A", duration: 245 },
+        { trackId: "t2", title: "Two", artist: "A", duration: "long" },
+        { trackId: "t3", title: "Three", artist: "A", duration: 999_999 },
+      ],
+      order: [0, 1, 2],
+      position: 0,
+    });
+    assert.deepEqual(
+      saved?.tracks.map((track) => track.duration),
+      [245, undefined, undefined],
     );
   });
 });

@@ -183,7 +183,7 @@ export function PlayerBar({
             <RepeatIcon size={18} one={repeat === "one"} />
           </button>
         </div>
-        <SeekBar audio={live} />
+        <SeekBar audio={live} known={current?.duration} />
       </div>
       <div className="player-side">
         <button

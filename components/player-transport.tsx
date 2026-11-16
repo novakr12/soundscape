@@ -1,6 +1,7 @@
 "use client";
 
 import { type RefObject, useEffect, useState } from "react";
+import { songLength } from "@/lib/play-queue";
 import { PauseIcon, PlayIcon } from "./player-icons";
 
 function clock(seconds: number) {
@@ -114,10 +115,10 @@ export function PlayPauseButton({ audio }: { audio: RefObject<HTMLAudioElement |
   );
 }
 
-export function SeekBar({ audio }: { audio: RefObject<HTMLAudioElement | null> }) {
+export function SeekBar({ audio, known }: { audio: RefObject<HTMLAudioElement | null>; known?: number }) {
   const time = useAudio(audio, TIME_EVENTS, readTime);
-  const length = useAudio(audio, LENGTH_EVENTS, readLength);
-  const at = length > 0 ? Math.min(time, length) : 0;
+  const length = songLength(useAudio(audio, LENGTH_EVENTS, readLength), known) || 0;
+  const at = length > 0 ? Math.min(time, length) : time;
   return (
     <div className="player-seek">
       <span className="player-time">{clock(at)}</span>

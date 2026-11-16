@@ -67,7 +67,21 @@ type SavedTrack = {
   album?: string;
   albumHref?: string;
   gain?: Gain;
+  duration?: number;
 };
+
+const LONGEST_SONG_SECONDS = 24 * 60 * 60;
+
+export function songLength(elementDuration: number, known: number | undefined) {
+  if (Number.isFinite(elementDuration) && elementDuration > 0) return elementDuration;
+  return known !== undefined && Number.isFinite(known) && known > 0 ? known : Number.NaN;
+}
+
+function savedDuration(value: unknown) {
+  return typeof value === "number" && Number.isFinite(value) && value > 0 && value <= LONGEST_SONG_SECONDS
+    ? value
+    : undefined;
+}
 
 const ALBUM_HREF = /^\/(album\/[^/?#]+|music\?album=[A-Za-z0-9_-]+)$/;
 
@@ -105,8 +119,9 @@ export function restoreQueue(raw: unknown): SavedQueue<SavedTrack> | null {
     : 0;
   const time = typeof saved.time === "number" && Number.isFinite(saved.time) && saved.time > 0 ? saved.time : 0;
   return {
-    tracks: tracks.map(({ trackId, title, artist, cover, songId, newSong, album, albumHref, gain }) => {
+    tracks: tracks.map(({ trackId, title, artist, cover, songId, newSong, album, albumHref, gain, duration }) => {
       const level = savedGain(gain);
+      const length = savedDuration(duration);
       return {
         trackId,
         title,
@@ -117,6 +132,7 @@ export function restoreQueue(raw: unknown): SavedQueue<SavedTrack> | null {
         ...(album ? { album } : {}),
         ...(album && albumHref ? { albumHref } : {}),
         ...(level ? { gain: level } : {}),
+        ...(length ? { duration: length } : {}),
       };
     }),
     order,

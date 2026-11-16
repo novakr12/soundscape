@@ -16,6 +16,7 @@ import {
   restoreQueue,
   shuffleAfter,
   shuffleAll,
+  songLength,
   startingWith,
   unshuffle,
 } from "@/lib/play-queue";
@@ -36,6 +37,7 @@ export type PlayerTrack = {
   album?: string;
   albumHref?: string;
   gain?: Gain;
+  duration?: number;
 };
 
 type PlayerContextValue = {
@@ -362,11 +364,17 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     return track ? `${index}|${track.trackId}|${track.songId ?? ""}|${sourceFor(track)}` : null;
   }
 
+  function lengthOf(audio: HTMLAudioElement | null | undefined) {
+    const track = tracksRef.current[orderRef.current[positionRef.current]];
+    return songLength(audio?.duration ?? Number.NaN, track?.duration);
+  }
+
   function prepareNext() {
     const audio = audioRef.current;
     const standby = standbyRef.current;
-    if (!audio || !standby || fading.current || repeatRef.current === "one" || !Number.isFinite(audio.duration)) return;
-    if (audio.duration - audio.currentTime > PREPARE_NEXT_SECONDS) return;
+    const length = lengthOf(audio);
+    if (!audio || !standby || fading.current || repeatRef.current === "one" || !Number.isFinite(length)) return;
+    if (length - audio.currentTime > PREPARE_NEXT_SECONDS) return;
     const index = nextPosition(positionRef.current, orderRef.current.length, repeatRef.current);
     if (index === null || index === positionRef.current) return;
     const key = preparedKey(index);
@@ -441,12 +449,12 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   function startCrossfade() {
     const audio = audioRef.current;
     if (!audio || audio.paused || fading.current || !prepared.current) return;
-    if (sleepRef.current?.kind === "song" || !Number.isFinite(audio.duration)) return;
+    if (sleepRef.current?.kind === "song" || !Number.isFinite(lengthOf(audio))) return;
     const index = nextPosition(positionRef.current, orderRef.current.length, repeatRef.current);
     if (index === null || index === positionRef.current) return;
     const seconds = crossfadeSeconds(index);
-    if (seconds <= 0 || audio.duration < seconds * 3) return;
-    if ((audio.duration - audio.currentTime) / audio.playbackRate > seconds) return;
+    if (seconds <= 0 || lengthOf(audio) < seconds * 3) return;
+    if ((lengthOf(audio) - audio.currentTime) / audio.playbackRate > seconds) return;
     handOver(index, seconds);
   }
 
@@ -502,7 +510,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       early.current = null;
       return;
     }
-    if ((audio.duration - audio.currentTime) / audio.playbackRate > CLOSE_TO_END_SECONDS) {
+    if ((lengthOf(audio) - audio.currentTime) / audio.playbackRate > CLOSE_TO_END_SECONDS) {
       early.current = null;
       return;
     }
@@ -514,8 +522,8 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     const audio = audioRef.current;
     if (!audio || audio.paused || !prepared.current || repeatRef.current === "one") return;
     if (sleepRef.current?.kind === "song") return;
-    if (!Number.isFinite(audio.duration) || audio.playbackRate <= 0) return;
-    const left = (audio.duration - audio.currentTime) / audio.playbackRate;
+    if (!Number.isFinite(lengthOf(audio)) || audio.playbackRate <= 0) return;
+    const left = (lengthOf(audio) - audio.currentTime) / audio.playbackRate;
     const id = playing.current;
     if (left > WATCH_END_SECONDS || early.current === id) return;
     early.current = id;
@@ -532,7 +540,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     const state = listen.current;
     if (!audio.paused) state.heard += heardStep(state.last, now);
     state.last = audio.paused ? null : now;
-    if (state.counted || !state.full || !countsAsPlay(state.heard, audio.duration)) return;
+    if (state.counted || !state.full || !countsAsPlay(state.heard, lengthOf(audio))) return;
     const track = tracksRef.current[orderRef.current[positionRef.current]];
     if (!track) return;
     state.counted = true;
@@ -728,7 +736,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         "loadedmetadata",
         () => {
           if (id !== playing.current) return;
-          audio.currentTime = Math.min(at, Math.max(audio.duration - 1, 0));
+          audio.currentTime = Number.isFinite(lengthOf(audio)) ? Math.min(at, Math.max(lengthOf(audio) - 1, 0)) : at;
           pendingTime.current = 0;
         },
         { once: true },

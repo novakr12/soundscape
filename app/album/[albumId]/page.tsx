@@ -63,6 +63,7 @@ export default async function AlbumPage({ params }: Props) {
               ...(cover ? { cover } : {}),
               ...(song ? { songId: song.id } : {}),
               ...(song?.gain ? { gain: song.gain } : {}),
+              ...(song?.duration ? { duration: song.duration } : {}),
               ...(track.trackId ? {} : { newSong: true }),
             }
           : undefined,
@@ -85,6 +86,7 @@ export default async function AlbumPage({ params }: Props) {
           ...(cover ? { cover } : {}),
           songId: song.id,
           ...(song.gain ? { gain: song.gain } : {}),
+          ...(song.duration ? { duration: song.duration } : {}),
           newSong: true,
         },
       };
