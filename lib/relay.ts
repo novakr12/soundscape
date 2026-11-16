@@ -1,8 +1,7 @@
-import type { JSONValue } from "postgres";
 import { request } from "./http";
 import { deleteValues, takeLock } from "./kv";
 import { advanceImportState } from "./listenbrainz";
-import { sql } from "./postgres";
+import { type JSONValue, sql } from "./postgres";
 
 const RELAY_URL = process.env.LISTENBRAINZ_RELAY_URL ?? "https://api.listenbrainz.org/1/";
 const MAX_QUEUE = 10_000;

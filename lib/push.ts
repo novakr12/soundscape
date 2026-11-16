@@ -1,8 +1,7 @@
-import type { JSONValue } from "postgres";
 import webpush from "web-push";
 import { request as send } from "./http";
 import { getValue } from "./kv";
-import { sql } from "./postgres";
+import { type JSONValue, sql } from "./postgres";
 
 const VAPID_KEY = "push:vapid";
 const MAX_DEVICES = 20;

@@ -15,6 +15,8 @@ export function createPostgres() {
   });
 }
 
+export type JSONValue = Parameters<Sql["json"]>[0];
+
 const globalForPostgres = globalThis as unknown as { sql?: Sql };
 
 export const sql = globalForPostgres.sql ?? createPostgres();

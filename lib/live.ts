@@ -1,6 +1,5 @@
-import type { JSONValue } from "postgres";
 import { deleteValues, getValue, increment, keys } from "./kv";
-import { sql } from "./postgres";
+import { type JSONValue, sql } from "./postgres";
 import { isPrivate } from "./privacy";
 
 const RECENT_LIMIT = 20;

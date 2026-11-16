@@ -1,5 +1,4 @@
-import type { JSONValue } from "postgres";
-import { sql } from "./postgres";
+import { type JSONValue, sql } from "./postgres";
 
 export const keys = {
   loginFailures: (username: string) => `login:fail:${username}`,
