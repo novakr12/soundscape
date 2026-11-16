@@ -42,6 +42,17 @@ describe("the desktop app's own player", () => {
     assert.equal(listen.status, 307);
   });
 
+  it("tells the app where a cover can be seen without logging in", async () => {
+    const anonymous = await fetch(`${BASE_URL}/api/cover-link?artist=a&title=b`);
+    assert.equal(anonymous.status, 401);
+    const answer = await fetch(
+      `${BASE_URL}/api/cover-link?${new URLSearchParams({ artist: user.artist, title: "Known Song" })}`,
+      { headers: withToken(token) },
+    );
+    assert.equal(answer.status, 200);
+    assert.deepEqual(await answer.json(), { url: null });
+  });
+
   it("counts plays and shares what is playing with the app's token", async () => {
     const trackId = trackIdFor(user.artist, "Known Song");
     const nowPlaying = await fetch(`${BASE_URL}/api/now-playing`, {

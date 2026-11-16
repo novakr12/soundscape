@@ -25,6 +25,17 @@ export function coverUrl(trackId: string) {
   return `/api/cover/${encodeURIComponent(trackId)}`;
 }
 
+export function publicCover(
+  trackId: string,
+  row: { cover: string | null; navidrome_cover: string | null } | undefined,
+  origin: string,
+) {
+  if (!row) return null;
+  if (row.cover?.startsWith("https://") && !row.cover.startsWith(`${origin}/`)) return row.cover;
+  if ((row.cover || row.navidrome_cover) && origin.startsWith("https://")) return `${origin}${coverUrl(trackId)}`;
+  return null;
+}
+
 export async function fillCoversFromNavidrome(userId: string, limit = 50, now = Date.now()) {
   const server = await getNavidrome(userId);
   if (!server) return 0;
