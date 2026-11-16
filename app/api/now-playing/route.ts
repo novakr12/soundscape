@@ -6,7 +6,7 @@ import { getNavidrome, isSongId } from "@/lib/navidrome";
 import { getSong } from "@/lib/navidrome-library";
 import { sql } from "@/lib/postgres";
 import { relayNowPlaying } from "@/lib/relay";
-import { currentUserId } from "@/lib/session";
+import { sessionOrTokenUser } from "@/lib/token-auth";
 
 async function knownTrack(trackId: string) {
   const [row] = await sql`
@@ -31,7 +31,7 @@ async function navidromeTrack(userId: string, songId: string) {
 }
 
 export async function POST(request: Request) {
-  const userId = await currentUserId();
+  const userId = await sessionOrTokenUser(request);
   if (!userId) return NextResponse.json({ error: "Log in to share what you play" }, { status: 401 });
   const body = await request.json().catch(() => null);
   const trackId = typeof body?.trackId === "string" ? body.trackId : "";

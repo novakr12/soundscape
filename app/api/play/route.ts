@@ -4,10 +4,10 @@ import { saveNavidromeSong } from "@/lib/music";
 import { isSongId } from "@/lib/navidrome";
 import { recordPlay } from "@/lib/plays";
 import { relayPlay } from "@/lib/relay";
-import { currentUserId } from "@/lib/session";
+import { sessionOrTokenUser } from "@/lib/token-auth";
 
 export async function POST(request: Request) {
-  const userId = await currentUserId();
+  const userId = await sessionOrTokenUser(request);
   if (!userId) {
     return NextResponse.json({ error: "Log in to play tracks" }, { status: 401 });
   }

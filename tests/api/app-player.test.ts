@@ -1,0 +1,60 @@
+import assert from "node:assert/strict";
+import { after, before, describe, it } from "node:test";
+import { trackIdFor } from "../../lib/catalog";
+import { importListens } from "../../lib/imports";
+import { clearListening } from "../../lib/live";
+import { createToken } from "../../lib/tokens";
+import { closeConnections, createTestUser, removeTestUser, testUser } from "./helpers";
+
+const BASE_URL = process.env.BASE_URL ?? "http://localhost:3000";
+const user = testUser();
+let token = "";
+
+const withToken = (value: string) => ({ authorization: `Token ${value}`, "user-agent": "SoundscapeDesktop/test" });
+
+before(async () => {
+  await createTestUser(user.userId);
+  await importListens(user.userId, [
+    { artist: user.artist, title: "Known Song", playedAt: new Date(Date.now() - 86_400_000) },
+  ]);
+  token = await createToken(user.userId, "App player test");
+});
+
+after(async () => {
+  await clearListening(user.userId);
+  await removeTestUser(user);
+  await closeConnections();
+});
+
+describe("the desktop app's own player", () => {
+  it("streams with the app's token instead of a browser login", async () => {
+    const anonymous = await fetch(`${BASE_URL}/api/full-song/some-song`);
+    assert.equal(anonymous.status, 401);
+    const wrong = await fetch(`${BASE_URL}/api/full-song/some-song`, { headers: withToken("not-a-token") });
+    assert.equal(wrong.status, 401);
+    const signed = await fetch(`${BASE_URL}/api/full-song/some-song`, { headers: withToken(token) });
+    assert.equal(signed.status, 404);
+    assert.match((await signed.json()).error, /Navidrome/);
+    const listen = await fetch(`${BASE_URL}/api/listen/${trackIdFor(user.artist, "Known Song")}`, {
+      headers: withToken(token),
+      redirect: "manual",
+    });
+    assert.equal(listen.status, 307);
+  });
+
+  it("counts plays and shares what is playing with the app's token", async () => {
+    const trackId = trackIdFor(user.artist, "Known Song");
+    const nowPlaying = await fetch(`${BASE_URL}/api/now-playing`, {
+      method: "POST",
+      headers: { ...withToken(token), "content-type": "application/json" },
+      body: JSON.stringify({ trackId }),
+    });
+    assert.equal(nowPlaying.status, 200);
+    const play = await fetch(`${BASE_URL}/api/play`, {
+      method: "POST",
+      headers: { ...withToken(token), "content-type": "application/json" },
+      body: JSON.stringify({ trackId }),
+    });
+    assert.equal(play.status, 201);
+  });
+});
