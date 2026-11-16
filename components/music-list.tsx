@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { MusicSong } from "@/lib/music";
 import PlayButton from "./play-button";
 import { usePlayer } from "./player";
@@ -16,12 +16,35 @@ export default function MusicList({
   songs,
   firstNumber = 1,
   autoplay = false,
+  shuffleAll,
 }: {
   songs: MusicSong[];
   firstNumber?: number;
   autoplay?: boolean;
+  shuffleAll?: { library?: string; q?: string };
 }) {
-  const { playFrom, shuffle, toggleShuffle } = usePlayer();
+  const { playAll, playFrom, shuffle, toggleShuffle } = usePlayer();
+  const [busy, setBusy] = useState(false);
+
+  async function play() {
+    if (!shuffle || !shuffleAll) {
+      playFrom(songs, shuffle ? Math.floor(Math.random() * songs.length) : 0);
+      return;
+    }
+    setBusy(true);
+    try {
+      const query = new URLSearchParams();
+      if (shuffleAll.library) query.set("library", shuffleAll.library);
+      if (shuffleAll.q) query.set("q", shuffleAll.q);
+      const response = await fetch(`/api/music/shuffle?${query}`);
+      const answer = (await response.json().catch(() => null)) as { songs?: MusicSong[] } | null;
+      const everything = response.ok ? (answer?.songs ?? []) : [];
+      if (everything.length > 0) playAll(everything);
+      else playFrom(songs, Math.floor(Math.random() * songs.length));
+    } finally {
+      setBusy(false);
+    }
+  }
   const started = useRef(false);
   const latest = useRef({ playFrom, shuffle, songs });
   latest.current = { playFrom, shuffle, songs };
@@ -49,7 +72,9 @@ export default function MusicList({
         <button
           type="button"
           className="music-play"
-          onClick={() => playFrom(songs, shuffle ? Math.floor(Math.random() * songs.length) : 0)}
+          onClick={play}
+          disabled={busy}
+          title={shuffle && shuffleAll ? "Shuffle everything here, not just this page" : undefined}
         >
           <PlayIcon size={18} /> Play
         </button>

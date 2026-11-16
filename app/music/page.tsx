@@ -288,6 +288,11 @@ export default async function MusicPage({ searchParams }: Props) {
                   songs={shown.songs}
                   firstNumber={shown.firstNumber}
                   autoplay={params.play === "1" && Boolean(shown.playlistId)}
+                  shuffleAll={
+                    shown.libraryId !== undefined && (shown.page > 1 || shown.hasMore)
+                      ? { library: shown.libraryId, ...(shown.query ? { q: shown.query } : {}) }
+                      : undefined
+                  }
                 />
               )}
               {(shown.page > 1 || shown.hasMore) && (

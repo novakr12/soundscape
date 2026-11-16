@@ -17,6 +17,7 @@ export type NavidromeSong = {
   track?: number;
   disc?: number;
   gain?: Gain;
+  genre?: string;
 };
 
 type RawSong = {
@@ -30,6 +31,7 @@ type RawSong = {
   track?: unknown;
   discNumber?: unknown;
   replayGain?: unknown;
+  genre?: unknown;
 };
 
 function text(value: unknown) {
@@ -57,6 +59,7 @@ function toSong(raw: RawSong): NavidromeSong | null {
     track: count(raw.track),
     disc: count(raw.discNumber),
     gain: fromReplayGain(raw.replayGain),
+    genre: text(raw.genre),
   };
 }
 
@@ -247,4 +250,12 @@ export async function createPlaylistWith(server: Navidrome, name: string, songId
     ["name", name],
     ["songId", songId],
   ]);
+}
+
+export async function getRandomSongs(server: Navidrome, options: { size: number; genre?: string; libraryId?: string }) {
+  const params: [string, string][] = [["size", String(options.size)]];
+  if (options.genre) params.push(["genre", options.genre]);
+  if (options.libraryId && isSongId(options.libraryId)) params.push(["musicFolderId", options.libraryId]);
+  const result = await call<{ randomSongs?: { song?: RawSong[] } }>(server, "getRandomSongs", params);
+  return songs(result.randomSongs?.song);
 }

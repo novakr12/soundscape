@@ -19,6 +19,7 @@ const SONGS = ["First Light", "Second Wind", "Third Rail"].map((title, index) =>
   coverArt: "e2e-album",
   track: index + 1,
   duration: SONG_SECONDS,
+  genre: "Test Rock",
   replayGain: { trackGain: -6 - index, albumGain: -4, trackPeak: 0.9, albumPeak: 0.95 },
 }));
 
@@ -60,6 +61,7 @@ function answers(method: string, query: URLSearchParams): object {
   if (method === "getLyricsBySongId") return { lyricsList: { structuredLyrics: [] } };
   if (method === "getAlbum")
     return { album: { id: "e2e-album", name: "Player Test Album", artist: "Player Test Band", song: SONGS } };
+  if (method === "getRandomSongs") return { randomSongs: { song: [...SONGS].reverse() } };
   if (method === "getMusicFolders") return { musicFolders: { musicFolder: [{ id: 1, name: "music" }] } };
   if (method === "getPlaylists")
     return { playlists: { playlist: [{ id: "e2e-trip", name: "Road Trip", songCount: 0 }] } };
@@ -376,6 +378,18 @@ describe("player", () => {
     await row.getByRole("button", { name: "Create" }).click();
     await row.getByText("Added to Fresh Finds").waitFor();
     assert.deepEqual(playlistCalls, ["updatePlaylist e2e-trip e2e-song-2", "createPlaylist Fresh Finds e2e-song-2"]);
+  });
+
+  it("shuffles the whole library, not just one page", async () => {
+    const answer = await page.evaluate(async () => {
+      const response = await fetch("/api/music/shuffle?library=1");
+      return { status: response.status, body: await response.json() };
+    });
+    assert.equal(answer.status, 200);
+    assert.deepEqual(
+      answer.body.songs.map((song: { title: string }) => song.title).sort(),
+      SONGS.map((song) => song.title).sort(),
+    );
   });
 
   it("finds Navidrome songs in the search", async () => {

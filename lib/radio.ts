@@ -2,19 +2,21 @@ import { getSimilarArtists } from "./artists";
 import { artistIdFor, slug, songTitle } from "./catalog";
 import { type MusicSong, toMusicSongs } from "./music";
 import { getNavidrome } from "./navidrome";
-import { getLibrarySongs, type NavidromeSong } from "./navidrome-library";
+import { getLibrarySongs, getRandomSongs, type NavidromeSong } from "./navidrome-library";
 import { sql } from "./postgres";
 import { getAlsoPlayed } from "./tracks";
 
 export type RadioSeed = { trackId: string } | { artistId: string };
 
 export const RADIO_BATCH = 25;
-const MOST_ARTISTS = 10;
-const SONGS_PER_ARTIST = 60;
-const SEED_EVERY = 3;
+const SIMILAR_ARTISTS = 8;
+const GENRE_ARTISTS = 12;
+const SONGS_PER_ARTIST = 40;
+const GENRE_SONGS = 80;
 const SEARCHES_AT_ONCE = 4;
-
-export type RadioGroup = { artistId: string; songs: NavidromeSong[] };
+const SEED_EVERY = 5;
+const SPACING = 4;
+const MOST_PER_ARTIST = 2;
 
 function shuffled<T>(items: T[], random: () => number) {
   const out = [...items];
@@ -30,41 +32,56 @@ function songKey(song: NavidromeSong) {
 }
 
 export function mixRadio(
-  groups: RadioGroup[],
+  seed: NavidromeSong[],
+  pools: NavidromeSong[][],
   options: { first?: NavidromeSong; exclude: Set<string>; limit: number; random?: () => number },
 ) {
   const random = options.random ?? Math.random;
   const seen = new Set<string>();
+  const perArtist = new Map<string, number>();
   const out: NavidromeSong[] = [];
-  const take = (song: NavidromeSong | undefined) => {
-    if (!song || options.exclude.has(song.id) || seen.has(song.id) || seen.has(songKey(song))) return false;
+  const recent = () => out.slice(-SPACING).map((song) => artistIdFor(song.artist));
+  const usable = (song: NavidromeSong, spaced: boolean) =>
+    !options.exclude.has(song.id) &&
+    !seen.has(song.id) &&
+    !seen.has(songKey(song)) &&
+    (perArtist.get(artistIdFor(song.artist)) ?? 0) < MOST_PER_ARTIST &&
+    (!spaced || !recent().includes(artistIdFor(song.artist)));
+  const take = (song: NavidromeSong) => {
     seen.add(song.id);
     seen.add(songKey(song));
+    const artist = artistIdFor(song.artist);
+    perArtist.set(artist, (perArtist.get(artist) ?? 0) + 1);
     out.push(song);
+  };
+  const pick = (pile: NavidromeSong[], spaced: boolean) => {
+    const at = pile.findIndex((song) => usable(song, spaced));
+    if (at < 0) return false;
+    take(pile.splice(at, 1)[0]);
     return true;
   };
-  take(options.first);
-  const piles = groups.map((group) => shuffled(group.songs, random));
-  const [seed, ...others] = piles;
-  let turn = 0;
-  let other = 0;
-  while (out.length < options.limit && piles.some((pile) => pile.length > 0)) {
+  if (options.first && !options.exclude.has(options.first.id)) take(options.first);
+  const seedPile = shuffled(seed, random);
+  const piles = shuffled(
+    pools.filter((pool) => pool.length > 0).map((pool) => shuffled(pool, random)),
+    random,
+  );
+  let turn = out.length;
+  let next = 0;
+  while (out.length < options.limit) {
     turn++;
-    const fromSeed = turn % SEED_EVERY === 1 || others.every((pile) => pile.length === 0);
-    if (fromSeed && seed && seed.length > 0) {
-      take(seed.shift());
-      continue;
-    }
-    for (let tries = 0; tries < others.length; tries++) {
-      const pile = others[other % others.length];
-      other++;
-      if (pile.length > 0) {
-        take(pile.shift());
-        break;
+    if (turn % SEED_EVERY === 0 && pick(seedPile, true)) continue;
+    let placed = false;
+    for (const spaced of [true, false]) {
+      for (let tries = 0; tries < piles.length && !placed; tries++) {
+        placed = pick(piles[next % piles.length], spaced);
+        next++;
       }
+      if (placed) break;
     }
+    if (!placed && !pick(seedPile, false)) break;
   }
-  return out.slice(0, options.limit);
+  return out;
 }
 
 async function seedArtist(seed: RadioSeed) {
@@ -77,12 +94,33 @@ async function seedArtist(seed: RadioSeed) {
   return row ? { artistId: row.id as string, name: row.name as string, title: undefined } : null;
 }
 
+async function genreNeighbours(artistId: string, limit: number) {
+  const rows = await sql`
+    SELECT a.id, a.name, count(*) AS shared
+    FROM artist_genres mine
+    JOIN artist_genres theirs ON theirs.genre = mine.genre AND theirs.artist_id <> mine.artist_id
+    JOIN artists a ON a.id = theirs.artist_id
+    WHERE mine.artist_id = ${artistId}
+    GROUP BY a.id, a.name
+    ORDER BY shared DESC, random()
+    LIMIT ${limit}`;
+  return rows.map((row) => row.name as string);
+}
+
 async function inBatches<T, R>(items: T[], size: number, run: (item: T) => Promise<R>) {
   const out: R[] = [];
   for (let i = 0; i < items.length; i += size) {
     out.push(...(await Promise.all(items.slice(i, i + size).map(run))));
   }
   return out;
+}
+
+export function mainGenre(songs: NavidromeSong[]) {
+  const counts = new Map<string, number>();
+  for (const song of songs) {
+    if (song.genre) counts.set(song.genre, (counts.get(song.genre) ?? 0) + 1);
+  }
+  return [...counts].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0]?.[0];
 }
 
 export async function radioSongs(
@@ -95,26 +133,47 @@ export async function radioSongs(
   if (!server) return null;
   const start = await seedArtist(seed);
   if (!start) return [];
-  const [similar, alsoPlayed] = await Promise.all([
-    getSimilarArtists(start.artistId, MOST_ARTISTS),
-    "trackId" in seed ? getAlsoPlayed(seed.trackId, 30) : Promise.resolve([]),
+  const [similar, alsoPlayed, genreArtists] = await Promise.all([
+    getSimilarArtists(start.artistId, SIMILAR_ARTISTS),
+    "trackId" in seed ? getAlsoPlayed(seed.trackId, 20) : Promise.resolve([]),
+    genreNeighbours(start.artistId, GENRE_ARTISTS),
   ]);
-  const names = new Map<string, string>([[start.artistId, start.name]]);
-  for (const name of [...alsoPlayed.map((track) => track.artist), ...similar.map((artist) => artist.name)]) {
-    if (names.size >= MOST_ARTISTS) break;
-    if (!names.has(artistIdFor(name))) names.set(artistIdFor(name), name);
+  const names = new Map<string, string>();
+  for (const name of [
+    ...alsoPlayed.map((track) => track.artist),
+    ...similar.map((artist) => artist.name),
+    ...genreArtists,
+  ]) {
+    const id = artistIdFor(name);
+    if (id !== start.artistId && !names.has(id)) names.set(id, name);
   }
-  const groups = await inBatches([...names], SEARCHES_AT_ONCE, async ([artistId, name]) => {
+  const songsBy = async (artistId: string, name: string) => {
     try {
       const found = await getLibrarySongs(server, { query: name, offset: 0, size: SONGS_PER_ARTIST });
-      return { artistId, songs: found.filter((song) => artistIdFor(song.artist) === artistId) };
+      return found.filter((song) => artistIdFor(song.artist) === artistId);
     } catch {
-      return { artistId, songs: [] };
+      return [];
     }
-  });
+  };
+  const seedSongs = await songsBy(start.artistId, start.name);
+  const genre = mainGenre(seedSongs);
+  const [artistPools, genrePool] = await Promise.all([
+    inBatches([...names], SEARCHES_AT_ONCE, ([artistId, name]) => songsBy(artistId, name)),
+    genre ? getRandomSongs(server, { size: GENRE_SONGS, genre }).catch(() => []) : Promise.resolve([]),
+  ]);
+  const byArtist = new Map<string, NavidromeSong[]>();
+  for (const song of genrePool) {
+    const id = artistIdFor(song.artist);
+    if (id === start.artistId) continue;
+    byArtist.set(id, [...(byArtist.get(id) ?? []), song]);
+  }
   const first = start.title
-    ? groups[0].songs.find((song) => slug(songTitle(song.title)) === slug(songTitle(start.title ?? "")))
+    ? seedSongs.find((song) => slug(songTitle(song.title)) === slug(songTitle(start.title ?? "")))
     : undefined;
-  const mixed = mixRadio(groups, { first, exclude: new Set(exclude), limit });
+  const mixed = mixRadio(seedSongs, [...artistPools, ...byArtist.values()], {
+    first,
+    exclude: new Set(exclude),
+    limit,
+  });
   return toMusicSongs(mixed);
 }
