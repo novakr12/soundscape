@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { BRIDGE_VERSION, bridgeTracks, type HandBack, readCommand, readHandBack, savedVolume } from "@/lib/app-bridge";
+import type { DeviceCommand, DeviceState } from "@/lib/devices";
 import { type Gain, gainLevel, playingAnAlbum } from "@/lib/levelling";
 import {
   countsAsPlay,
@@ -26,6 +27,7 @@ import {
 } from "@/lib/play-queue";
 import { DEFAULT_OPTIONS, type PlayerOptions, watchOptions } from "@/lib/player-options";
 import type { RadioSeed } from "@/lib/radio";
+import { DevicesPanel, type LocalPlayer, PlayingElsewhere, useDeviceLink } from "./devices";
 import LyricsPanel from "./lyrics-panel";
 import { PlayerBar, QueuePanel } from "./player-bar";
 import { usePlayerKeys } from "./player-keys";
@@ -82,6 +84,8 @@ const WATCH_END_SECONDS = 1.5;
 const START_NEXT_EARLY_MS = 13;
 const ANNOUNCE_AGAIN_AFTER_MS = 60_000;
 const CLOSE_TO_END_SECONDS = 0.25;
+const HAND_BACK_BEFORE = 50;
+const MOST_HANDED = 500;
 
 const PlayerContext = createContext<PlayerContextValue | null>(null);
 
@@ -91,7 +95,11 @@ export function usePlayer() {
   return player;
 }
 
-export function PlayerProvider({ children }: { children: React.ReactNode }) {
+function idleState(): DeviceState {
+  return { track: null, playing: false, time: 0, duration: null, volume: 0.8, blocked: false };
+}
+
+export function PlayerProvider({ children, username }: { children: React.ReactNode; username: string | null }) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const standbyRef = useRef<HTMLAudioElement | null>(null);
   const holderRef = useRef<HTMLDivElement>(null);
@@ -144,6 +152,10 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const pendingTime = useRef(0);
   const [showQueue, setShowQueue] = useState(false);
   const [showLyrics, setShowLyrics] = useState(false);
+  const [showDevices, setShowDevices] = useState(false);
+  const blocked = useRef(false);
+  const local = useRef<LocalPlayer>({ state: () => idleState(), obey: () => {} });
+  const link = useDeviceLink(local, username);
 
   function bind(element: HTMLAudioElement) {
     const mine = () => element === audioRef.current;
@@ -157,6 +169,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     element.addEventListener("play", () => {
       if (!mine()) return;
       autoplay.current = true;
+      blocked.current = false;
       if (session) session.playbackState = "playing";
       skip.current.announce();
     });
@@ -813,6 +826,101 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     return true;
   };
 
+  function noteBlocked(error: unknown) {
+    if ((error as { name?: unknown } | null)?.name !== "NotAllowedError") return;
+    blocked.current = true;
+    link.report();
+  }
+
+  function deviceState(): DeviceState {
+    const audio = audioRef.current;
+    const track = tracksRef.current[orderRef.current[positionRef.current]];
+    if (!audio || !track) return { ...idleState(), blocked: blocked.current };
+    const length = songLength(audio.duration, track.duration);
+    return {
+      track: {
+        trackId: track.trackId,
+        title: track.title,
+        artist: track.artist,
+        album: track.album ?? null,
+        cover: track.cover ?? null,
+        songId: track.songId ?? null,
+      },
+      playing: Boolean(audio.currentSrc) && !audio.paused && !audio.ended,
+      time: pendingTime.current || (Number.isFinite(audio.currentTime) ? audio.currentTime : 0),
+      duration: Number.isFinite(length) && length > 0 ? length : null,
+      volume: savedVolume(localStorage.getItem("soundscape-volume")),
+      blocked: blocked.current,
+    };
+  }
+
+  function handOff() {
+    const audio = audioRef.current;
+    const inPlayOrder = orderRef.current.map((index) => tracksRef.current[index]).filter(Boolean);
+    if (inPlayOrder.length === 0) return null;
+    const from = Math.max(0, positionRef.current - HAND_BACK_BEFORE);
+    return {
+      tracks: inPlayOrder.slice(from, from + MOST_HANDED).map((track) => ({
+        trackId: track.trackId,
+        title: track.title,
+        artist: track.artist,
+        ...(track.album ? { album: track.album } : {}),
+        ...(track.albumHref ? { albumHref: track.albumHref } : {}),
+        ...(track.cover ? { cover: track.cover } : {}),
+        ...(track.songId ? { songId: track.songId } : {}),
+        ...(track.duration ? { duration: track.duration } : {}),
+      })),
+      position: positionRef.current - from,
+      time: pendingTime.current || audio?.currentTime || 0,
+      playing: true,
+    };
+  }
+
+  async function moveMusicTo(to: string) {
+    const handed = handOff();
+    if (!handed) return "Nothing is playing here to send.";
+    const failure = await link.send(to, { do: "take", ...handed });
+    if (!failure) audioRef.current?.pause();
+    return failure;
+  }
+
+  function obey(command: DeviceCommand) {
+    const audio = audioRef.current;
+    if (command.do === "take") {
+      setRadio(null);
+      const order = command.tracks.map((_, index) => index);
+      arrange(command.tracks, order, command.position);
+      start(command.tracks[command.position], command.playing, command.time);
+      return;
+    }
+    if (command.do === "send") {
+      moveMusicTo(command.to);
+      return;
+    }
+    if (command.do === "volume") {
+      window.dispatchEvent(new CustomEvent("soundscape-set-volume", { detail: command.volume }));
+      return;
+    }
+    if (!audio?.currentSrc) {
+      const track = tracksRef.current[orderRef.current[positionRef.current]];
+      if ((command.do === "play" || command.do === "toggle") && track) start(track, true, pendingTime.current);
+      return;
+    }
+    if (command.do === "play") audio.play().catch(noteBlocked);
+    else if (command.do === "pause") audio.pause();
+    else if (command.do === "toggle") {
+      if (audio.paused) audio.play().catch(noteBlocked);
+      else audio.pause();
+    } else if (command.do === "next") next();
+    else if (command.do === "previous") previous();
+    else if (command.do === "seek") {
+      const known = tracksRef.current[orderRef.current[positionRef.current]]?.duration;
+      audio.currentTime = seekTarget(0, command.time, songLength(audio.duration, known));
+    }
+  }
+
+  local.current = { state: deviceState, obey };
+
   skip.current = {
     next,
     previous,
@@ -826,6 +934,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     refill,
     sleep: fallAsleep,
   };
+  const elsewhere = link.devices.find((device) => device.state.playing) ?? null;
   const hasNext = position + 1 < queue.length || (repeat === "all" && queue.length > 1);
 
   function start(track: PlayerTrack, play = true, at = 0) {
@@ -851,7 +960,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       );
     }
     if (play) {
-      audio.play().catch(() => {});
+      audio.play().catch(noteBlocked);
       watchLoading(id);
     }
     learn(track, id);
@@ -932,6 +1041,18 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       }}
     >
       {children}
+      {showDevices && (
+        <DevicesPanel
+          link={link}
+          hasQueue={queue.length > 0}
+          alone={!current}
+          onClose={() => setShowDevices(false)}
+          onMoveTo={moveMusicTo}
+        />
+      )}
+      {!current && !showDevices && elsewhere && (
+        <PlayingElsewhere device={elsewhere} onOpen={() => setShowDevices(true)} />
+      )}
       {current && showLyrics && <LyricsPanel track={current} audio={audioRef} onClose={() => setShowLyrics(false)} />}
       {current && showQueue && (
         <QueuePanel
@@ -965,12 +1086,21 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         onRepeat={cycleRepeat}
         onQueue={() => {
           setShowLyrics(false);
+          setShowDevices(false);
           setShowQueue(!showQueue);
         }}
         showLyrics={showLyrics}
         onLyrics={() => {
           setShowQueue(false);
+          setShowDevices(false);
           setShowLyrics(!showLyrics);
+        }}
+        showDevices={showDevices}
+        elsewhere={elsewhere !== null}
+        onDevices={() => {
+          setShowQueue(false);
+          setShowLyrics(false);
+          setShowDevices(!showDevices);
         }}
       />
     </PlayerContext.Provider>

@@ -5,7 +5,7 @@ import type { Ref, RefObject } from "react";
 import type { Repeat } from "@/lib/play-queue";
 import { ArtistLink, SongLink } from "./music-links";
 import type { PlayerTrack } from "./player";
-import { LyricsIcon, NextIcon, PreviousIcon, QueueIcon, RepeatIcon, ShuffleIcon } from "./player-icons";
+import { DevicesIcon, LyricsIcon, NextIcon, PreviousIcon, QueueIcon, RepeatIcon, ShuffleIcon } from "./player-icons";
 import { PlayPauseButton, SeekBar } from "./player-transport";
 import SleepTimer, { type Sleep } from "./sleep-timer";
 import VolumeControl from "./volume-control";
@@ -80,6 +80,9 @@ type PlayerBarProps = {
   onNext: () => void;
   onRepeat: () => void;
   onQueue: () => void;
+  showDevices: boolean;
+  elsewhere: boolean;
+  onDevices: () => void;
 };
 
 export function PlayerBar({
@@ -105,6 +108,9 @@ export function PlayerBar({
   onNext,
   onRepeat,
   onQueue,
+  showDevices,
+  elsewhere,
+  onDevices,
 }: PlayerBarProps) {
   return (
     <div className="player" hidden={!current}>
@@ -209,6 +215,18 @@ export function PlayerBar({
           onClick={onLyrics}
         >
           <LyricsIcon size={18} />
+        </button>
+        <button
+          type="button"
+          className={elsewhere ? "icon-button player-toggle active" : "icon-button player-toggle"}
+          data-player="devices"
+          aria-label={elsewhere ? "Devices, playing on another device" : "Devices"}
+          aria-expanded={showDevices}
+          aria-pressed={showDevices}
+          title="Devices"
+          onClick={onDevices}
+        >
+          <DevicesIcon size={18} />
         </button>
         <SleepTimer sleep={sleep} onChoose={onSleep} />
         <VolumeControl audio={audio} level={level} />

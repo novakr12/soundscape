@@ -615,6 +615,70 @@ describe("player", () => {
     await page.waitForFunction(() => document.querySelector<HTMLAudioElement>(".player audio")?.paused === true);
   });
 
+  it("controls this player from another device and moves the music there", async () => {
+    const context = await browser.newContext();
+    const other = await context.newPage();
+    other.on("pageerror", (error) => problems.push(`other ${other.url()}: ${error.message}`));
+    try {
+      await page.goto(`${BASE_URL}/music?album=e2e-album`, { waitUntil: "domcontentloaded" });
+      await page.locator(".music-songs li").first().getByRole("button", { name: "▶ Play" }).click();
+      await waitForSong("First Light");
+      const playing = (await title()) ?? "";
+      assert.ok(playing);
+      await other.goto(`${BASE_URL}/login`, { waitUntil: "domcontentloaded" });
+      await other.fill('input[name="username"]', USERNAME);
+      await other.fill('input[name="password"]', PASSWORD);
+      await other.click('button[type="submit"]');
+      await other.waitForURL((url) => !url.pathname.startsWith("/login"), { timeout: 30_000 });
+      const elsewhere = other.locator(".playing-elsewhere");
+      await elsewhere.waitFor({ timeout: 15_000 });
+      assert.ok(((await elsewhere.textContent()) ?? "").startsWith(`Playing on Chrome on Linux · ${playing} · `));
+      await elsewhere.click();
+      const panel = other.getByRole("region", { name: "Devices" });
+      await panel.getByRole("button", { name: "Pause on Chrome on Linux" }).click();
+      await page.waitForFunction(
+        () => document.querySelector<HTMLAudioElement>(".player audio")?.paused === true,
+        null,
+        {
+          timeout: 10_000,
+        },
+      );
+      await panel.getByRole("button", { name: "Play on Chrome on Linux" }).waitFor({ timeout: 10_000 });
+      await panel.getByRole("slider", { name: "Volume on Chrome on Linux" }).fill("0.3");
+      await page.waitForFunction(
+        () => localStorage.getItem("soundscape-volume")?.includes('"volume":0.3') === true,
+        null,
+        {
+          timeout: 10_000,
+        },
+      );
+      await panel.getByRole("button", { name: "Play here" }).click();
+      await other.waitForFunction(
+        (expected) => {
+          const audio = document.querySelector<HTMLAudioElement>(".player audio");
+          const shown = document.querySelector(".player .now-playing strong")?.textContent ?? "";
+          return shown === expected && audio && !audio.paused && audio.currentTime > 0;
+        },
+        playing,
+        { timeout: 30_000 },
+      );
+      assert.equal(await page.evaluate(() => document.querySelector<HTMLAudioElement>(".player audio")?.paused), true);
+      await page.locator('[data-player="devices"]').click();
+      const mine = page.getByRole("region", { name: "Devices" });
+      await mine.getByRole("button", { name: "Pause on Chrome on Linux" }).click();
+      await other.waitForFunction(
+        () => document.querySelector<HTMLAudioElement>(".player audio")?.paused === true,
+        null,
+        {
+          timeout: 10_000,
+        },
+      );
+      await mine.getByRole("button", { name: "Close" }).click();
+    } finally {
+      await context.close();
+    }
+  });
+
   it("saw no errors in the browser", () => {
     assert.deepEqual(problems, []);
   });

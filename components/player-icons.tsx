@@ -108,3 +108,12 @@ export function LyricsIcon(props: IconProps) {
     </Icon>
   );
 }
+
+export function DevicesIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M3 5.5A1.5 1.5 0 0 1 4.5 4h11A1.5 1.5 0 0 1 17 5.5V7h-2V6H5v8h7v2H4.5A1.5 1.5 0 0 1 3 14.5zM7 18h5v2H7z" />
+      <path d="M15 9h5a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1h-5a1 1 0 0 1-1-1v-9a1 1 0 0 1 1-1zm1 2v7h3v-7zm1.5 7.25a.75.75 0 1 0 0-.01z" />
+    </Icon>
+  );
+}

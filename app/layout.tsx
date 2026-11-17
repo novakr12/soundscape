@@ -91,7 +91,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <AppNav />
         <ServiceWorker />
         <CoverRetry />
-        <PlayerProvider>
+        <PlayerProvider username={username ?? null}>
           <Finder username={username ?? null} admin={Boolean(username && isAdmin(username))} />
           <main>
             {children}

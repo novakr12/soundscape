@@ -51,6 +51,17 @@ export default function VolumeControl({ audio, level }: { audio: RefObject<HTMLA
   }, []);
 
   useEffect(() => {
+    const change = (event: Event) => {
+      const value = (event as CustomEvent<unknown>).detail;
+      if (typeof value !== "number" || value < 0 || value > 1) return;
+      setVolume(value);
+      setMuted(false);
+    };
+    window.addEventListener("soundscape-set-volume", change);
+    return () => window.removeEventListener("soundscape-set-volume", change);
+  }, []);
+
+  useEffect(() => {
     const element = audio.current;
     if (!element || !ready) return;
     const follow = () => setMuted(element.muted);
