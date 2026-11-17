@@ -97,7 +97,7 @@ export function waitingStatus(waiting: number) {
   return `${waiting.toLocaleString("en")} ${waiting === 1 ? "play" : "plays"} waiting to be sent.`;
 }
 
-export const ANDROID_OPTIONS = ["background_playback", "notifications"] as const;
+export const ANDROID_OPTIONS = ["background_playback", "notifications", "downloads_wifi_only"] as const;
 
 export type AndroidOption = (typeof ANDROID_OPTIONS)[number];
 
@@ -106,6 +106,7 @@ export type AndroidSettings = Record<AndroidOption, boolean> & {
   connected: boolean;
   user: string | null;
   notifications_allowed: boolean;
+  downloads: string | null;
 };
 
 export type AndroidPush = { settings: AndroidSettings; error: string | null };
@@ -115,7 +116,8 @@ export type AndroidCommand =
   | { do: "connect" }
   | { do: "disconnect" }
   | { do: "change-server" }
-  | { do: "notification-settings" };
+  | { do: "notification-settings" }
+  | { do: "open-downloads" };
 
 export function readAndroidPush(value: unknown): AndroidPush | null {
   if (!isRecord(value) || !isRecord(value.settings)) return null;
@@ -131,6 +133,8 @@ export function readAndroidPush(value: unknown): AndroidPush | null {
       background_playback: raw.background_playback === true,
       notifications: raw.notifications === true,
       notifications_allowed: raw.notifications_allowed === true,
+      downloads_wifi_only: raw.downloads_wifi_only === true,
+      downloads: text(raw.downloads),
     },
     error: text(value.error),
   };

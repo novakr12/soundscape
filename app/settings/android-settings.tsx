@@ -71,6 +71,23 @@ export default function AndroidSettings({
         {!settings.connected && " Needs the app to be connected."}
       </p>
 
+      <h3>Downloads</h3>
+      <div className="app-row">
+        <span className="muted">{settings.downloads ?? "Nothing downloaded yet."}</span>
+        <button type="button" className="secondary" onClick={() => send({ do: "open-downloads" })}>
+          Manage downloads
+        </button>
+      </div>
+      <Toggle
+        label="Download only on Wi-Fi"
+        checked={settings.downloads_wifi_only}
+        onChange={option("downloads_wifi_only")}
+      />
+      <p className="muted">
+        Download albums and playlists from their pages in the app. Downloaded songs play without a connection, and
+        without using mobile data when you're online.
+      </p>
+
       <h3>Notifications</h3>
       <Toggle
         label="Show new followers, leaderboard passes, milestones and new releases"

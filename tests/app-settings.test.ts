@@ -88,6 +88,8 @@ describe("readAndroidPush", () => {
     background_playback: true,
     notifications: true,
     notifications_allowed: false,
+    downloads_wifi_only: true,
+    downloads: "12 songs · 84 MB",
   };
 
   it("reads what the Android app sends", () => {
@@ -95,6 +97,8 @@ describe("readAndroidPush", () => {
     assert.equal(pushed?.settings.version, "0.4.0");
     assert.equal(pushed?.settings.user, "ana");
     assert.equal(pushed?.settings.notifications_allowed, false);
+    assert.equal(pushed?.settings.downloads_wifi_only, true);
+    assert.equal(pushed?.settings.downloads, "12 songs · 84 MB");
   });
 
   it("keeps the desktop and Android sections apart", () => {

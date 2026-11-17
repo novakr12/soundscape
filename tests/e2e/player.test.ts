@@ -568,6 +568,48 @@ describe("player", () => {
     await finder.waitFor({ state: "hidden" });
   });
 
+  it("offers downloads only inside the Android app", async () => {
+    await page.goto(`${BASE_URL}/music?album=e2e-album`, { waitUntil: "load" });
+    await page.locator(".music-songs li").first().waitFor();
+    assert.equal(await page.getByRole("button", { name: /^Download / }).count(), 0);
+    const tell = (downloads: Record<string, string>) =>
+      page.evaluate(
+        (detail) => {
+          (window as Window & { soundscapeAndroid?: unknown }).soundscapeAndroid = detail;
+          window.dispatchEvent(new CustomEvent("soundscape-android", { detail }));
+        },
+        { version: "0.5.0", downloads },
+      );
+    await page.waitForFunction(() =>
+      [...document.querySelectorAll(".music-actions button")].some((button) =>
+        Object.keys(button).some((key) => key.startsWith("__reactProps")),
+      ),
+    );
+    await tell({});
+    const download = page.getByRole("button", { name: "Download Player Test Album to this phone" });
+    await download.click();
+    const asked = (await page.evaluate(
+      () => (window as Window & { soundscapeDownloadRequests?: unknown[] }).soundscapeDownloadRequests,
+    )) as { do: string; tracks: { trackId: string; songId?: string; title: string }[] }[];
+    assert.equal(asked.length, 1);
+    assert.equal(asked[0].do, "download");
+    assert.deepEqual(
+      asked[0].tracks.map((track) => track.title),
+      SONGS.map((song) => song.title),
+    );
+    assert.ok(asked[0].tracks.every((track) => track.songId?.startsWith("e2e-song-")));
+    const ids = asked[0].tracks.map((track) => track.trackId);
+    await tell({ [ids[0]]: "done", [ids[1]]: "waiting" });
+    await page.getByText("Downloading 1 of 3…").waitFor();
+    await tell(Object.fromEntries(ids.map((id) => [id, "done"])));
+    await page.getByText("Downloaded ✓").waitFor();
+    await page.getByRole("button", { name: "Remove the download of Player Test Album" }).click();
+    const removed = (await page.evaluate(
+      () => (window as Window & { soundscapeDownloadRequests?: unknown[] }).soundscapeDownloadRequests,
+    )) as { do: string; trackIds?: string[] }[];
+    assert.deepEqual(removed[1], { do: "remove", trackIds: ids });
+  });
+
   it("pauses with the play button", async () => {
     await page.locator('[data-player="play"]').click();
     await page.waitForFunction(() => document.querySelector<HTMLAudioElement>(".player audio")?.paused === true);

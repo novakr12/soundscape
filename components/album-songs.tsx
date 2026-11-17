@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import { downloadTracks } from "@/lib/app-downloads";
+import DownloadButton from "./download-button";
 import PlayAllButton from "./play-all-button";
 import PlayButton from "./play-button";
 import { type PlayerTrack, usePlayer } from "./player";
@@ -14,7 +16,7 @@ export type AlbumSongRow = {
   track?: PlayerTrack;
 };
 
-export default function AlbumSongs({ rows, canPlay }: { rows: AlbumSongRow[]; canPlay: boolean }) {
+export default function AlbumSongs({ rows, canPlay, name }: { rows: AlbumSongRow[]; canPlay: boolean; name?: string }) {
   const { playFrom } = usePlayer();
   const discs = rows.some((row) => row.position.includes("."));
   const playable = rows.flatMap((row) => (row.track ? [row.track] : []));
@@ -23,7 +25,12 @@ export default function AlbumSongs({ rows, canPlay }: { rows: AlbumSongRow[]; ca
     <section>
       <div className="section-head">
         <h2>Songs</h2>
-        {canPlay && <PlayAllButton tracks={playable} />}
+        {canPlay && (
+          <span className="play-and-download">
+            <PlayAllButton tracks={playable} />
+            {name && <DownloadButton tracks={downloadTracks(playable)} name={name} />}
+          </span>
+        )}
       </div>
       <ol className={["chart", canPlay && "playable", discs && "disc-numbers"].filter(Boolean).join(" ")}>
         {rows.map((row) => (

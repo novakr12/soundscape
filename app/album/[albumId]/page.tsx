@@ -138,7 +138,7 @@ export default async function AlbumPage({ params }: Props) {
         ))}
       </div>
 
-      <AlbumSongs rows={rows} canPlay={Boolean(viewer)} />
+      <AlbumSongs rows={rows} canPlay={Boolean(viewer)} name={album.title} />
     </>
   );
 }

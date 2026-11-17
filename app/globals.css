@@ -2455,3 +2455,11 @@ tr.selected {
 .app-buttons {
   justify-content: flex-start;
 }
+
+.play-and-download,
+.download-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}

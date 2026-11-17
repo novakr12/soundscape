@@ -2,7 +2,9 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
+import { downloadTracks } from "@/lib/app-downloads";
 import type { MusicSong } from "@/lib/music";
+import DownloadButton from "./download-button";
 import { SongLink } from "./music-links";
 import PlayButton from "./play-button";
 import { usePlayer } from "./player";
@@ -18,8 +20,10 @@ export default function MusicList({
   firstNumber = 1,
   autoplay = false,
   shuffleAll,
+  download,
 }: {
   songs: MusicSong[];
+  download?: string;
   firstNumber?: number;
   autoplay?: boolean;
   shuffleAll?: { library?: string; q?: string };
@@ -89,6 +93,7 @@ export default function MusicList({
         >
           <ShuffleIcon size={18} />
         </button>
+        {download && <DownloadButton tracks={downloadTracks(songs)} name={download} />}
       </div>
       <ol className="music-songs" start={firstNumber}>
         {songs.map((song, i) => (
