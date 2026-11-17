@@ -272,6 +272,13 @@ main {
   display: none;
 }
 
+.player-audio {
+  position: absolute;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+}
+
 .player img {
   border-radius: 4px;
 }
@@ -2252,6 +2259,30 @@ tr.selected {
   }
 }
 
-.app-settings-note p {
-  margin: 0 0 0.6rem;
+.app-settings {
+  scroll-margin-top: 4rem;
+}
+
+.app-toggle {
+  display: block;
+  margin: 0.35rem 0;
+}
+
+.app-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  margin: 0.5rem 0;
+}
+
+.app-players {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.app-more {
+  margin-top: 1.25rem;
 }

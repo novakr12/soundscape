@@ -141,25 +141,65 @@ describe("smoke test", () => {
     await context.close();
   });
 
-  it("points to the app's own settings only from an app that can open them", async () => {
+  it("shows the desktop app's settings on the Settings page only when the app sends them", async () => {
     await open("/settings");
-    assert.equal(await page.getByRole("button", { name: "Open app settings" }).count(), 0);
-    for (const [version, shown] of [
-      ["0.9.7", false],
-      ["0.9.8", true],
-    ] as const) {
-      const context = await browser.newContext({ storageState: await page.context().storageState() });
-      const inApp = await context.newPage();
-      await inApp.addInitScript((value) => {
-        Object.defineProperty(window, "soundscapeDesktop", { value: true });
-        Object.defineProperty(window, "soundscapeDesktopVersion", { value });
-      }, version);
-      await inApp.goto(`${BASE_URL}/settings`, { waitUntil: "load" });
-      await inApp.getByRole("heading", { name: "Player" }).waitFor();
-      await inApp.waitForTimeout(500);
-      assert.equal(await inApp.getByRole("button", { name: "Open app settings" }).count(), shown ? 1 : 0, version);
-      await context.close();
-    }
+    await page.getByRole("heading", { name: "Player" }).waitFor();
+    assert.equal(await page.getByRole("heading", { name: "This app" }).count(), 0);
+    const settings = {
+      connected: true,
+      scrobbling: true,
+      notifications: true,
+      weekly_recap: false,
+      streak_reminder: false,
+      yearscape_notification: true,
+      update_notice: true,
+      discord: false,
+      autostart: false,
+      keep_running: true,
+      native_player: true,
+      discord_app_id: null,
+      waiting: 3,
+      listening: null,
+      players: [{ id: "spotify", name: "Spotify", enabled: true, open: true }],
+      paused_minutes: null,
+      version: "9.9.9",
+      update: null,
+    };
+    await page.waitForFunction(() =>
+      [...document.querySelectorAll("h2")].some((heading) =>
+        Object.keys(heading).some((key) => key.startsWith("__reactFiber")),
+      ),
+    );
+    await page.evaluate(
+      (detail) => {
+        window.dispatchEvent(new CustomEvent("soundscape-app-settings", { detail }));
+      },
+      { settings, error: null },
+    );
+    await page.getByRole("heading", { name: "This app" }).waitFor();
+    await page.getByText("3 plays waiting to be sent.").waitFor();
+    const weekly = page.getByLabel("Sum up last week on Monday");
+    assert.equal(await weekly.isChecked(), false);
+    await weekly.check();
+    await page.getByLabel("Spotify").uncheck();
+    await page.getByRole("button", { name: "Send now" }).click();
+    const sent = await page.evaluate(
+      () => (window as Window & { soundscapeAppCommands?: unknown[] }).soundscapeAppCommands,
+    );
+    assert.deepEqual(sent, [
+      { do: "option", name: "weekly_recap", value: true },
+      { do: "player", id: "spotify", value: false },
+      { do: "send-now" },
+    ]);
+    await page.evaluate(() => {
+      (window as Window & { soundscapeAppCommands?: unknown[] }).soundscapeAppCommands = [];
+      window.dispatchEvent(
+        new CustomEvent("soundscape-app-settings", {
+          detail: { settings: { version: "9.9.9" }, error: "Couldn't reach the server." },
+        }),
+      );
+    });
+    await page.getByRole("alert").filter({ hasText: "Couldn't reach the server." }).waitFor();
   });
 
   it("opens the admin page", async () => {
