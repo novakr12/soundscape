@@ -99,6 +99,20 @@ describe("readAndroidPush", () => {
     assert.equal(pushed?.settings.notifications_allowed, false);
     assert.equal(pushed?.settings.downloads_wifi_only, true);
     assert.equal(pushed?.settings.downloads, "12 songs · 84 MB");
+    assert.equal(pushed?.settings.extras, false);
+    assert.equal(pushed?.settings.update, null);
+  });
+
+  it("reads the recap, streak and update switches from newer apps", () => {
+    const pushed = readAndroidPush({
+      settings: { ...android, weekly_recap: false, streak_reminder: true, update_notice: true, update: "0.7.0" },
+      error: null,
+    });
+    assert.equal(pushed?.settings.extras, true);
+    assert.equal(pushed?.settings.weekly_recap, false);
+    assert.equal(pushed?.settings.streak_reminder, true);
+    assert.equal(pushed?.settings.update_notice, true);
+    assert.equal(pushed?.settings.update, "0.7.0");
   });
 
   it("keeps the desktop and Android sections apart", () => {

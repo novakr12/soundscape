@@ -97,7 +97,14 @@ export function waitingStatus(waiting: number) {
   return `${waiting.toLocaleString("en")} ${waiting === 1 ? "play" : "plays"} waiting to be sent.`;
 }
 
-export const ANDROID_OPTIONS = ["background_playback", "notifications", "downloads_wifi_only"] as const;
+export const ANDROID_OPTIONS = [
+  "background_playback",
+  "notifications",
+  "downloads_wifi_only",
+  "weekly_recap",
+  "streak_reminder",
+  "update_notice",
+] as const;
 
 export type AndroidOption = (typeof ANDROID_OPTIONS)[number];
 
@@ -107,6 +114,8 @@ export type AndroidSettings = Record<AndroidOption, boolean> & {
   user: string | null;
   notifications_allowed: boolean;
   downloads: string | null;
+  update: string | null;
+  extras: boolean;
 };
 
 export type AndroidPush = { settings: AndroidSettings; error: string | null };
@@ -117,7 +126,8 @@ export type AndroidCommand =
   | { do: "disconnect" }
   | { do: "change-server" }
   | { do: "notification-settings" }
-  | { do: "open-downloads" };
+  | { do: "open-downloads" }
+  | { do: "download-update" };
 
 export function readAndroidPush(value: unknown): AndroidPush | null {
   if (!isRecord(value) || !isRecord(value.settings)) return null;
@@ -135,6 +145,11 @@ export function readAndroidPush(value: unknown): AndroidPush | null {
       notifications_allowed: raw.notifications_allowed === true,
       downloads_wifi_only: raw.downloads_wifi_only === true,
       downloads: text(raw.downloads),
+      weekly_recap: raw.weekly_recap !== false,
+      streak_reminder: raw.streak_reminder === true,
+      update_notice: raw.update_notice !== false,
+      update: text(raw.update),
+      extras: typeof raw.weekly_recap === "boolean",
     },
     error: text(value.error),
   };

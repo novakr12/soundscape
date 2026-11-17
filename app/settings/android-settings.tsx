@@ -31,6 +31,14 @@ export default function AndroidSettings({
     <section id="this-app" className="app-settings">
       <h2>This app</h2>
       <p className="muted">Soundscape for Android {settings.version} on this phone.</p>
+      {settings.update && (
+        <div className="app-row">
+          <span>Version {settings.update} is out.</span>
+          <button type="button" onClick={() => send({ do: "download-update" })}>
+            Download
+          </button>
+        </div>
+      )}
 
       <h3>Connection</h3>
       {settings.connected ? (
@@ -102,10 +110,36 @@ export default function AndroidSettings({
           </button>
         </div>
       )}
+      {settings.extras && (
+        <>
+          <Toggle
+            label="Your week in music, on Monday"
+            checked={settings.weekly_recap}
+            onChange={option("weekly_recap")}
+          />
+          <Toggle
+            label="Remind me at 9 pm when my streak is about to end"
+            checked={settings.streak_reminder}
+            onChange={option("streak_reminder")}
+          />
+        </>
+      )}
       <p className="muted">
         The app checks every 15 minutes while the phone is online.
         {!settings.connected && " Needs the app to be connected."}
       </p>
+
+      {settings.extras && (
+        <>
+          <h3>Updates</h3>
+          <Toggle
+            label="Tell me when a new version of the app is out"
+            checked={settings.update_notice}
+            onChange={option("update_notice")}
+          />
+          <p className="muted">The app looks for a new release on GitHub once a day.</p>
+        </>
+      )}
 
       {message && (
         <p className="error" role="alert">
