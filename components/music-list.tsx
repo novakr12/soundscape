@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import type { MusicSong } from "@/lib/music";
+import { SongLink } from "./music-links";
 import PlayButton from "./play-button";
 import { usePlayer } from "./player";
 import { PlayIcon, ShuffleIcon } from "./player-icons";
@@ -99,7 +100,7 @@ export default function MusicList({
               <span className="music-cover-empty" aria-hidden="true" />
             )}
             <span className="music-song">
-              <strong>{song.title}</strong>
+              <strong>{song.newSong ? song.title : <SongLink trackId={song.trackId}>{song.title}</SongLink>}</strong>
               <span className="muted">
                 {song.artistHref ? (
                   <Link className="music-link" href={song.artistHref}>

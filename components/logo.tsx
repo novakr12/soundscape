@@ -1,3 +1,5 @@
+import AppVersion from "./app-version";
+
 const LOGO_AREA = "M14 47 L26 33 L36 43 L50 21 L59 47 Z";
 const LOGO_LINE = "M12 49 L25 34 L35 44 L51 22 L60 49";
 
@@ -56,6 +58,7 @@ export function Lockup({ animated = false, heading = false }: { animated?: boole
           <Wordmark />
         )}
         <span className="tagline">Music tracker</span>
+        <AppVersion />
       </div>
     </div>
   );

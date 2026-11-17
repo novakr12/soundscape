@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Cover from "@/components/cover";
 import { Lockup } from "@/components/logo";
 import { ArtistLink, SongLink } from "@/components/music-links";
 import PlayAllButton from "@/components/play-all-button";
@@ -110,10 +111,11 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ d
             <Link href="/import">import your ListenBrainz history</Link>.
           </p>
         ) : (
-          <ol className="chart playable">
+          <ol className="chart playable with-covers">
             {recent.map((play, index) => (
               <li key={`${play.playedAt}-${index}`}>
                 <span className="muted">{index + 1}</span>
+                <Cover src={play.cover} />
                 <span>
                   <SongLink trackId={play.trackId}>{play.title}</SongLink>{" "}
                   <span className="muted">

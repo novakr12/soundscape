@@ -120,6 +120,27 @@ describe("smoke test", () => {
     assert.equal(card.headers()["content-type"], "image/png");
   });
 
+  it("shows covers next to the songs played recently", async () => {
+    await open("/");
+    const rows = page.locator("section", { hasText: "Recently played" }).locator("li");
+    await rows.first().waitFor();
+    assert.equal(await rows.locator(".cover").count(), await rows.count());
+  });
+
+  it("shows the desktop app's version under the logo only inside the app", async () => {
+    await open("/");
+    assert.equal(await page.locator(".app-version").count(), 0);
+    const context = await browser.newContext({ storageState: await page.context().storageState() });
+    const inApp = await context.newPage();
+    await inApp.addInitScript(() => {
+      Object.defineProperty(window, "soundscapeDesktop", { value: true });
+      Object.defineProperty(window, "soundscapeDesktopVersion", { value: "1.2.3" });
+    });
+    await inApp.goto(`${BASE_URL}/`, { waitUntil: "domcontentloaded" });
+    await inApp.locator(".lockup .app-version", { hasText: "v1.2.3" }).waitFor();
+    await context.close();
+  });
+
   it("opens the admin page", async () => {
     await open("/admin");
   });

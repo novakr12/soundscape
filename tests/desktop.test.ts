@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { deviceName } from "../app/desktop/connect/device";
+import { desktopVersion } from "../components/app-version";
 import { safeNext } from "../lib/safe-next";
 
 describe("safeNext", () => {
@@ -40,5 +41,16 @@ describe("notification text", () => {
     const { notificationMessage } = await import("../lib/notifications");
     assert.equal(notificationMessage("listener", { kind: "milestone", count: 1 }).body, "You reached 1 play.");
     assert.equal(notificationMessage("listener", { kind: "milestone", count: 1000 }).body, "You reached 1,000 plays.");
+  });
+});
+
+describe("desktopVersion", () => {
+  it("only accepts a plain version number from the app", () => {
+    assert.equal(desktopVersion("0.9.7"), "0.9.7");
+    assert.equal(desktopVersion("1.10.0"), "1.10.0");
+    assert.equal(desktopVersion(undefined), null);
+    assert.equal(desktopVersion(true), null);
+    assert.equal(desktopVersion("0.9"), null);
+    assert.equal(desktopVersion("<b>1.0.0</b>"), null);
   });
 });

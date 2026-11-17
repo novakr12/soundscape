@@ -421,6 +421,13 @@ describe("player", () => {
     await panel.waitFor({ state: "detached" });
   });
 
+  it("links the song titles in the music list to their pages", async () => {
+    await page.goto(`${BASE_URL}/music?album=e2e-album`, { waitUntil: "domcontentloaded" });
+    const title = page.locator(".music-song strong a", { hasText: "First Light" });
+    await title.waitFor();
+    assert.match((await title.getAttribute("href")) ?? "", /^\/track\//);
+  });
+
   it("shows the album of a song played from the home page", async () => {
     await page.goto(`${BASE_URL}/`, { waitUntil: "load" });
     const recent = page.locator("section", { hasText: "Recently played" }).locator(".play-controls > button").first();

@@ -112,6 +112,14 @@ a { color: var(--accent);
   line-height: 1.1;
 }
 
+.app-version {
+  display: block;
+  margin-top: 0.35rem;
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+}
+
 .tagline {
   display: block;
   margin-top: 0.2rem;
@@ -202,6 +210,10 @@ th, td {
 .chart.playable li {
   grid-template-columns: 1.5rem 1fr auto auto;
   align-items: center;
+}
+
+.chart.playable.with-covers li {
+  grid-template-columns: 1.5rem 40px 1fr auto auto;
 }
 
 .chart.disc-numbers li {
@@ -1470,7 +1482,8 @@ tr.selected {
   animation: logo-reveal 0.7s ease-out 0.35s forwards;
 }
 
-.lockup.animated .tagline {
+.lockup.animated .tagline,
+.lockup.animated .app-version {
   opacity: 0;
   animation: logo-show 0.4s ease-out 1.05s forwards;
 }
