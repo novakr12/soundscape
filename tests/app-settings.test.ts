@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { readAppPush, scrobblingStatus, waitingStatus } from "../lib/app-settings";
+import { readAndroidPush, readAppPush, scrobblingStatus, waitingStatus } from "../lib/app-settings";
 
 const settings = {
   connected: true,
@@ -76,5 +76,30 @@ describe("app status lines", () => {
     assert.equal(waitingStatus(0), "No plays waiting to be sent.");
     assert.equal(waitingStatus(1), "1 play waiting to be sent.");
     assert.equal(waitingStatus(1200), "1,200 plays waiting to be sent.");
+  });
+});
+
+describe("readAndroidPush", () => {
+  const android = {
+    app: "android",
+    version: "0.4.0",
+    connected: true,
+    user: "ana",
+    background_playback: true,
+    notifications: true,
+    notifications_allowed: false,
+  };
+
+  it("reads what the Android app sends", () => {
+    const pushed = readAndroidPush({ settings: android, error: null });
+    assert.equal(pushed?.settings.version, "0.4.0");
+    assert.equal(pushed?.settings.user, "ana");
+    assert.equal(pushed?.settings.notifications_allowed, false);
+  });
+
+  it("keeps the desktop and Android sections apart", () => {
+    assert.equal(readAppPush({ settings: android, error: null }), null);
+    assert.equal(readAndroidPush({ settings: { ...android, app: "desktop" }, error: null }), null);
+    assert.equal(readAndroidPush({ settings: { ...android, version: null } }), null);
   });
 });

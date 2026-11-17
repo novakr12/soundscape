@@ -60,6 +60,7 @@ function player(value: unknown): AppPlayer | null {
 export function readAppPush(value: unknown): AppPush | null {
   if (!isRecord(value) || !isRecord(value.settings)) return null;
   const raw = value.settings;
+  if (raw.app === "android") return null;
   const version = text(raw.version);
   if (!version) return null;
   const options = Object.fromEntries(APP_OPTIONS.map((name) => [name, raw[name] === true])) as Record<
@@ -94,4 +95,43 @@ export function scrobblingStatus(settings: AppSettings) {
 export function waitingStatus(waiting: number) {
   if (waiting === 0) return "No plays waiting to be sent.";
   return `${waiting.toLocaleString("en")} ${waiting === 1 ? "play" : "plays"} waiting to be sent.`;
+}
+
+export const ANDROID_OPTIONS = ["background_playback", "notifications"] as const;
+
+export type AndroidOption = (typeof ANDROID_OPTIONS)[number];
+
+export type AndroidSettings = Record<AndroidOption, boolean> & {
+  version: string;
+  connected: boolean;
+  user: string | null;
+  notifications_allowed: boolean;
+};
+
+export type AndroidPush = { settings: AndroidSettings; error: string | null };
+
+export type AndroidCommand =
+  | { do: "option"; name: AndroidOption; value: boolean }
+  | { do: "connect" }
+  | { do: "disconnect" }
+  | { do: "change-server" }
+  | { do: "notification-settings" };
+
+export function readAndroidPush(value: unknown): AndroidPush | null {
+  if (!isRecord(value) || !isRecord(value.settings)) return null;
+  const raw = value.settings;
+  if (raw.app !== "android") return null;
+  const version = text(raw.version);
+  if (!version) return null;
+  return {
+    settings: {
+      version,
+      connected: raw.connected === true,
+      user: text(raw.user),
+      background_playback: raw.background_playback === true,
+      notifications: raw.notifications === true,
+      notifications_allowed: raw.notifications_allowed === true,
+    },
+    error: text(value.error),
+  };
 }

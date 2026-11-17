@@ -2,16 +2,24 @@
 
 import { useEffect, useRef, useState } from "react";
 import {
+  type AndroidCommand,
+  type AndroidPush,
   APP_SETTINGS_EVENT,
   type AppCommand,
   type AppOption,
   type AppPush,
+  readAndroidPush,
   readAppPush,
   scrobblingStatus,
   waitingStatus,
 } from "@/lib/app-settings";
 
-type AppWindow = Window & { soundscapeAppSettings?: unknown; soundscapeAppCommands?: AppCommand[] };
+import AndroidSettings from "./android-settings";
+
+type AppWindow = Window & {
+  soundscapeAppSettings?: unknown;
+  soundscapeAppCommands?: (AppCommand | AndroidCommand)[];
+};
 
 const SECTION = "this-app";
 
@@ -25,6 +33,7 @@ function Toggle({ label, checked, onChange }: { label: string; checked: boolean;
 
 export default function AppSettings() {
   const [pushed, setPushed] = useState<AppPush | null>(null);
+  const [android, setAndroid] = useState<AndroidPush | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [discordId, setDiscordId] = useState("");
   const typing = useRef(false);
@@ -33,6 +42,13 @@ export default function AppSettings() {
   useEffect(() => {
     const view = window as AppWindow;
     const take = (value: unknown) => {
+      const phone = readAndroidPush(value);
+      if (phone) {
+        if (phone.error) setMessage(phone.error);
+        if ((view.soundscapeAppCommands?.length ?? 0) > 0) return;
+        setAndroid(phone);
+        return;
+      }
       const next = readAppPush(value);
       if (!next) return;
       if (next.error) setMessage(next.error);
@@ -47,11 +63,28 @@ export default function AppSettings() {
   }, []);
 
   useEffect(() => {
-    if (!pushed || scrolled.current) return;
+    if ((!pushed && !android) || scrolled.current) return;
     scrolled.current = true;
     if (window.location.hash === `#${SECTION}`) document.getElementById(SECTION)?.scrollIntoView();
-  }, [pushed]);
+  }, [pushed, android]);
 
+  if (android) {
+    return (
+      <AndroidSettings
+        pushed={android}
+        message={message}
+        send={(command) => {
+          setMessage(null);
+          const view = window as AppWindow;
+          view.soundscapeAppCommands ??= [];
+          view.soundscapeAppCommands.push(command);
+        }}
+        change={(name, value) =>
+          setAndroid((before) => before && { ...before, settings: { ...before.settings, [name]: value } })
+        }
+      />
+    );
+  }
   if (!pushed) return null;
   const settings = pushed.settings;
 

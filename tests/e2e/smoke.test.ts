@@ -289,6 +289,44 @@ describe("smoke test", () => {
     await page.getByRole("heading", { name: "Connect the desktop app" }).waitFor();
   });
 
+  it("shows the Android app's settings when the Android app sends them", async () => {
+    await open("/settings");
+    await page.getByRole("heading", { name: "Player" }).waitFor();
+    await page.evaluate(
+      (detail) => {
+        (window as Window & { soundscapeAppSettings?: unknown }).soundscapeAppSettings = detail;
+        window.dispatchEvent(new CustomEvent("soundscape-app-settings", { detail }));
+      },
+      {
+        settings: {
+          app: "android",
+          version: "0.4.0",
+          connected: true,
+          user: USERNAME,
+          background_playback: true,
+          notifications: true,
+          notifications_allowed: false,
+        },
+        error: null,
+      },
+    );
+    await page.getByText("Soundscape for Android 0.4.0 on this phone.").waitFor();
+    assert.equal(await page.getByText("Scrobbling", { exact: true }).count(), 0);
+    await page.getByRole("button", { name: "Open Android settings" }).click();
+    await page.getByLabel(/keep the music playing with Android's own player/).uncheck();
+    await page.getByRole("button", { name: "Change server…" }).click();
+    await page.getByRole("button", { name: "Disconnect" }).click();
+    const sent = await page.evaluate(
+      () => (window as Window & { soundscapeAppCommands?: unknown[] }).soundscapeAppCommands,
+    );
+    assert.deepEqual(sent, [
+      { do: "notification-settings" },
+      { do: "option", name: "background_playback", value: false },
+      { do: "change-server" },
+      { do: "disconnect" },
+    ]);
+  });
+
   it("opens the admin page", async () => {
     await open("/admin");
   });

@@ -2451,3 +2451,7 @@ tr.selected {
   border: 1px solid color-mix(in srgb, var(--muted) 40%, transparent);
   border-radius: 4px;
 }
+
+.app-buttons {
+  justify-content: flex-start;
+}
