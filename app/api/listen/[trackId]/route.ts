@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { checkFullSong, findFullSong } from "@/lib/navidrome";
 import { redirectTo } from "@/lib/relative-redirect";
 import { sessionOrTokenUser } from "@/lib/token-auth";
+import { knownAlbum, libraryAlbum } from "@/lib/track-album";
 
 export const dynamic = "force-dynamic";
 
@@ -15,8 +16,9 @@ export async function GET(request: Request, { params }: Context) {
   const { trackId } = await params;
   const noStore = { "cache-control": "private, no-store" };
   if (new URL(request.url).searchParams.has("info")) {
-    const { songId: _, ...check } = await checkFullSong(userId, trackId);
-    return NextResponse.json(check, { headers: noStore });
+    const [found, known] = await Promise.all([checkFullSong(userId, trackId), knownAlbum(trackId)]);
+    const { songId: _, album, albumId, ...check } = found;
+    return NextResponse.json({ ...check, ...(known ?? libraryAlbum({ album, albumId }) ?? {}) }, { headers: noStore });
   }
   const songId = await findFullSong(userId, trackId);
   const target = songId

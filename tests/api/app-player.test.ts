@@ -16,6 +16,7 @@ before(async () => {
   await createTestUser(user.userId);
   await importListens(user.userId, [
     { artist: user.artist, title: "Known Song", playedAt: new Date(Date.now() - 86_400_000) },
+    { artist: user.artist, title: "Album Song", album: "Some Album", playedAt: new Date(Date.now() - 90_000_000) },
   ]);
   token = await createToken(user.userId, "App player test");
 });
@@ -42,7 +43,7 @@ describe("the desktop app's own player", () => {
     assert.equal(listen.status, 307);
   });
 
-  it("tells the app where a cover can be seen without logging in", async () => {
+  it("tells the app the album and where a cover can be seen without logging in", async () => {
     const anonymous = await fetch(`${BASE_URL}/api/cover-link?artist=a&title=b`);
     assert.equal(anonymous.status, 401);
     const answer = await fetch(
@@ -50,7 +51,12 @@ describe("the desktop app's own player", () => {
       { headers: withToken(token) },
     );
     assert.equal(answer.status, 200);
-    assert.deepEqual(await answer.json(), { url: null });
+    assert.deepEqual(await answer.json(), { url: null, album: null });
+    const withAlbum = await fetch(
+      `${BASE_URL}/api/cover-link?${new URLSearchParams({ artist: user.artist, title: "Album Song" })}`,
+      { headers: withToken(token) },
+    );
+    assert.equal((await withAlbum.json()).album, "Some Album");
   });
 
   it("counts plays and shares what is playing with the app's token", async () => {

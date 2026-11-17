@@ -250,7 +250,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     navigator.mediaSession.metadata = new MediaMetadata({
       title: track.title,
       artist: track.artist,
-      album: isFull ? (track.album ?? "Soundscape") : "30-second preview",
+      album: isFull ? (track.album ?? "") : "30-second preview",
       artwork: track.cover ? [{ src: track.cover }] : [],
     });
   }
@@ -753,10 +753,22 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     if (track.songId) return;
     fetch(`${sourceFor(track)}?info`)
       .then((response) => (response.ok ? response.json() : { full: false }))
-      .then((info: { full?: boolean }) => {
-        if (id === playing.current && !fellBack.current) describe(track, info.full === true);
+      .then((info: { full?: boolean; album?: string; albumHref?: string }) => {
+        const known = info.album ? withAlbum(track, info.album, info.albumHref) : track;
+        if (id === playing.current && !fellBack.current) describe(known, info.full === true);
       })
       .catch(() => {});
+  }
+
+  function withAlbum(track: PlayerTrack, album: string, albumHref?: string) {
+    if (track.album) return track;
+    const found = { album, ...(albumHref ? { albumHref } : {}) };
+    const nextTracks = tracksRef.current.map((each) =>
+      each.trackId === track.trackId && !each.album ? { ...each, ...found } : each,
+    );
+    tracksRef.current = nextTracks;
+    setTracks(nextTracks);
+    return { ...track, ...found };
   }
 
   function watchLoading(id: number) {

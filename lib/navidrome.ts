@@ -19,7 +19,14 @@ export type LibrarySong = {
   artist: string;
 };
 
-export type SubsonicSong = { id: string; title?: string; artist?: string; coverArt?: string };
+export type SubsonicSong = {
+  id: string;
+  title?: string;
+  artist?: string;
+  album?: string;
+  albumId?: string;
+  coverArt?: string;
+};
 
 export class NavidromeError extends Error {}
 
@@ -165,6 +172,8 @@ export type FullSongCheck = {
   searched?: string[];
   navidromeAnswered?: { title?: string; artist?: string }[];
   songId?: string;
+  album?: string;
+  albumId?: string;
 };
 
 function remember(userId: string, trackId: string, songId: string | null, now: number) {
@@ -205,7 +214,17 @@ export async function checkFullSong(userId: string, trackId: string, now = Date.
   }
   const songId = search.match && isSongId(search.match.id) ? search.match.id : null;
   remember(userId, trackId, songId, now);
-  if (songId) return { full: true, reason: "found", lookedFor, songId };
+  if (songId) {
+    const { album, albumId } = search.match ?? {};
+    return {
+      full: true,
+      reason: "found",
+      lookedFor,
+      songId,
+      ...(typeof album === "string" ? { album } : {}),
+      ...(typeof albumId === "string" ? { albumId } : {}),
+    };
+  }
   return {
     full: false,
     reason: "not-found-in-navidrome",

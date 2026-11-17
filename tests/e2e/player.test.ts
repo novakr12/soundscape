@@ -421,6 +421,22 @@ describe("player", () => {
     await panel.waitFor({ state: "detached" });
   });
 
+  it("shows the album of a song played from the home page", async () => {
+    await page.goto(`${BASE_URL}/`, { waitUntil: "load" });
+    const recent = page.locator("section", { hasText: "Recently played" }).locator(".play-controls > button").first();
+    await page.waitForFunction(() =>
+      [...document.querySelectorAll("section .play-controls > button")].some((button) =>
+        Object.keys(button).some((key) => key.startsWith("__reactProps")),
+      ),
+    );
+    await recent.click();
+    const album = page.locator(".player .now-playing a", { hasText: "Player Test Album" });
+    await album.waitFor({ timeout: 20_000 });
+    assert.match((await album.getAttribute("href")) ?? "", /^\/(album\/|music\?album=e2e-album$)/);
+    const song = page.locator(".player .now-playing strong a");
+    assert.match((await song.getAttribute("href")) ?? "", /^\/track\//);
+  });
+
   it("pauses with the play button", async () => {
     await page.locator('[data-player="play"]').click();
     await page.waitForFunction(() => document.querySelector<HTMLAudioElement>(".player audio")?.paused === true);
