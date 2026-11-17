@@ -2251,3 +2251,7 @@ tr.selected {
     padding: 1rem 1.25rem 0.5rem;
   }
 }
+
+.app-settings-note p {
+  margin: 0 0 0.6rem;
+}

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { deviceName } from "../app/desktop/connect/device";
-import { desktopVersion } from "../components/app-version";
+import { atLeast, desktopVersion } from "../components/app-version";
 import { safeNext } from "../lib/safe-next";
 
 describe("safeNext", () => {
@@ -52,5 +52,15 @@ describe("desktopVersion", () => {
     assert.equal(desktopVersion(true), null);
     assert.equal(desktopVersion("0.9"), null);
     assert.equal(desktopVersion("<b>1.0.0</b>"), null);
+  });
+});
+
+describe("atLeast", () => {
+  it("compares versions number by number", () => {
+    assert.equal(atLeast("0.9.8", "0.9.8"), true);
+    assert.equal(atLeast("0.9.10", "0.9.8"), true);
+    assert.equal(atLeast("1.0.0", "0.9.8"), true);
+    assert.equal(atLeast("0.9.7", "0.9.8"), false);
+    assert.equal(atLeast(null, "0.9.8"), false);
   });
 });

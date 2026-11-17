@@ -4,6 +4,7 @@ import { isPrivate, setPrivate } from "@/lib/privacy";
 import { pushDeviceCount, vapidKeys } from "@/lib/push";
 import { requireUserId } from "@/lib/session";
 import { INVITE_DAYS, signupMode } from "@/lib/signups";
+import AppSettingsNote from "./app-settings-note";
 import ChangePasswordForm from "./change-password-form";
 import DeleteAccountForm from "./delete-account-form";
 import DeleteHistoryForm from "./delete-history-form";
@@ -27,6 +28,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
   return (
     <>
       <h1>Settings</h1>
+      <AppSettingsNote />
 
       <section>
         <h2>Privacy</h2>

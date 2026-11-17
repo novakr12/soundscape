@@ -141,6 +141,27 @@ describe("smoke test", () => {
     await context.close();
   });
 
+  it("points to the app's own settings only from an app that can open them", async () => {
+    await open("/settings");
+    assert.equal(await page.getByRole("button", { name: "Open app settings" }).count(), 0);
+    for (const [version, shown] of [
+      ["0.9.7", false],
+      ["0.9.8", true],
+    ] as const) {
+      const context = await browser.newContext({ storageState: await page.context().storageState() });
+      const inApp = await context.newPage();
+      await inApp.addInitScript((value) => {
+        Object.defineProperty(window, "soundscapeDesktop", { value: true });
+        Object.defineProperty(window, "soundscapeDesktopVersion", { value });
+      }, version);
+      await inApp.goto(`${BASE_URL}/settings`, { waitUntil: "load" });
+      await inApp.getByRole("heading", { name: "Player" }).waitFor();
+      await inApp.waitForTimeout(500);
+      assert.equal(await inApp.getByRole("button", { name: "Open app settings" }).count(), shown ? 1 : 0, version);
+      await context.close();
+    }
+  });
+
   it("opens the admin page", async () => {
     await open("/admin");
   });
