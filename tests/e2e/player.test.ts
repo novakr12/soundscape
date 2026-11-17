@@ -444,6 +444,59 @@ describe("player", () => {
     assert.match((await song.getAttribute("href")) ?? "", /^\/track\//);
   });
 
+  it("finds a song with a typo in the quick finder and opens it", async () => {
+    await page.goto(`${BASE_URL}/music`, { waitUntil: "load" });
+    await page.waitForFunction(() =>
+      [...document.querySelectorAll("header input[type=search]")].some((input) =>
+        Object.keys(input).some((key) => key.startsWith("__reactProps")),
+      ),
+    );
+    await page.keyboard.press("Control+k");
+    const finder = page.getByRole("dialog", { name: "Find" });
+    await finder.waitFor();
+    await finder.getByRole("combobox").fill("First Ligt");
+    const song = finder.getByRole("option", { name: /First Light.*Song$/ });
+    await song.waitFor({ timeout: 15_000 });
+    while ((await song.getAttribute("aria-selected")) !== "true") await page.keyboard.press("ArrowDown");
+    await page.keyboard.press("Enter");
+    await page.waitForURL(/\/track\//);
+    assert.equal(await finder.isVisible(), false);
+  });
+
+  it("plays a song from the quick finder with Shift", async () => {
+    await page.locator("header input[type=search]").click();
+    const finder = page.getByRole("dialog", { name: "Find" });
+    await finder.waitFor();
+    await finder.getByRole("combobox").fill("First Light");
+    const song = finder.getByRole("option", { name: /First Light.*Song$/ });
+    await song.waitFor({ timeout: 15_000 });
+    await song.click({ modifiers: ["Shift"] });
+    await page.waitForFunction(() => {
+      const audio = document.querySelector<HTMLAudioElement>(".player audio");
+      const shown = document.querySelector(".player .now-playing strong")?.textContent ?? "";
+      return (
+        shown.includes("First Light") &&
+        /\/api\/(listen|preview)\/player-test-band-first-light$/.test(audio?.currentSrc ?? "")
+      );
+    });
+    assert.equal(await finder.isVisible(), false);
+  });
+
+  it("jumps to a page from the quick finder", async () => {
+    await page.locator("h1").first().click();
+    await page.keyboard.press("/");
+    const finder = page.getByRole("dialog", { name: "Find" });
+    await finder.waitFor();
+    await page.keyboard.type("sett");
+    await finder.getByRole("option", { name: /Settings.*Page$/, selected: true }).waitFor();
+    await page.keyboard.press("Enter");
+    await page.waitForURL(/\/settings$/);
+    await page.keyboard.press("Control+k");
+    await finder.waitFor();
+    await page.keyboard.press("Escape");
+    await finder.waitFor({ state: "hidden" });
+  });
+
   it("pauses with the play button", async () => {
     await page.locator('[data-player="play"]').click();
     await page.waitForFunction(() => document.querySelector<HTMLAudioElement>(".player audio")?.paused === true);

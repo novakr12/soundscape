@@ -2286,3 +2286,107 @@ tr.selected {
 .app-more {
   margin-top: 1.25rem;
 }
+
+.finder {
+  width: min(38rem, calc(100vw - 2rem));
+  max-height: min(34rem, calc(100vh - 6rem));
+  margin: 12vh auto auto;
+  padding: 0;
+  border: 1px solid color-mix(in srgb, var(--muted) 30%, transparent);
+  border-radius: 12px;
+  background: var(--bg);
+  color: var(--fg);
+  box-shadow: 0 20px 50px rgb(0 0 0 / 0.35);
+  overflow: hidden;
+}
+
+.finder[open] {
+  display: flex;
+  flex-direction: column;
+  animation: dialog-in 0.16s ease-out;
+}
+
+.finder::backdrop {
+  background: rgb(0 0 0 / 0.45);
+}
+
+.finder-input {
+  width: 100%;
+  padding: 0.9rem 1rem;
+  border: 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--muted) 25%, transparent);
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  font-size: 1.05rem;
+  outline: none;
+}
+
+.finder-results {
+  margin: 0;
+  padding: 0.35rem;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.finder-results [role="option"] {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.4rem 0.6rem;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.finder-results .active {
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+}
+
+.finder-empty {
+  margin: 0.4rem 0.6rem;
+}
+
+.finder-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--muted) 15%, transparent);
+  color: var(--accent);
+  font-size: 1.1rem;
+}
+
+.finder-text {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+
+.finder-text > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.finder-kind {
+  flex-shrink: 0;
+  font-size: 0.8rem;
+}
+
+.finder-help {
+  margin: 0;
+  padding: 0.5rem 1rem;
+  border-top: 1px solid color-mix(in srgb, var(--muted) 25%, transparent);
+  font-size: 0.8rem;
+}
+
+.finder-help kbd {
+  font-family: inherit;
+  padding: 0 0.3rem;
+  border: 1px solid color-mix(in srgb, var(--muted) 40%, transparent);
+  border-radius: 4px;
+}

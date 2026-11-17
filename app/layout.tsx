@@ -1,12 +1,13 @@
 import type { Metadata } from "next";
 import { Space_Grotesk } from "next/font/google";
-import Form from "next/form";
 import { redirect } from "next/navigation";
 import AppNav from "@/components/app-nav";
 import BrandLink from "@/components/brand-link";
 import Credit from "@/components/credit";
+import Finder from "@/components/finder";
 import NavLink from "@/components/nav-link";
 import { PlayerProvider } from "@/components/player";
+import SearchBox from "@/components/search-box";
 import { isAdmin } from "@/lib/admin";
 import { unreadCount } from "@/lib/notifications";
 import { currentUserId, logOut } from "@/lib/session";
@@ -35,9 +36,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       <body>
         <header>
           <BrandLink />
-          <Form action="/search" role="search" className="search">
-            <input type="search" name="q" placeholder="Search" aria-label="Search songs, artists, albums and users" />
-          </Form>
+          <SearchBox />
           <nav>
             <NavLink href="/feed">Feed</NavLink>
             <NavLink href="/music">Music</NavLink>
@@ -79,6 +78,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         </header>
         <AppNav />
         <PlayerProvider>
+          <Finder username={username ?? null} admin={Boolean(username && isAdmin(username))} />
           <main>
             {children}
             <Credit />

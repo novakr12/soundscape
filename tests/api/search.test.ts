@@ -6,6 +6,7 @@ import { setPrivate } from "../../lib/privacy";
 import { searchArtists, searchSongs, searchUsers } from "../../lib/search";
 import { closeConnections, createTestUser, removeTestUser, testUser } from "./helpers";
 
+const BASE_URL = process.env.BASE_URL ?? "http://localhost:3000";
 const fan = testUser();
 const hidden = testUser();
 const artist = fan.artist;
@@ -21,6 +22,7 @@ before(async () => {
     { artist, title: `Zebra Crossing ${fan.run}`, playedAt: minutesAgo(25) },
     { artist: other, title: `Zebra Crossing ${fan.run}`, playedAt: minutesAgo(20) },
     { artist, title: `Café Ünique ${fan.run}`, playedAt: minutesAgo(10) },
+    { artist, title: `Marmalade Skyline ${fan.run}`, playedAt: minutesAgo(5) },
   ]);
 });
 
@@ -59,8 +61,40 @@ describe("search", () => {
     const artists = await searchArtists(fan.run);
     const found = artists.find((a) => a.artistId === slug(artist));
     assert.equal(found?.name, artist);
-    assert.equal(found?.plays, 3);
+    assert.equal(found?.plays, 4);
     assert.equal(found?.listeners, 1);
+  });
+
+  it("finds songs and artists despite a typo", async () => {
+    const songs = await searchSongs(`marmlade skylne ${fan.run}`);
+    assert.equal(songs[0]?.title, `Marmalade Skyline ${fan.run}`);
+    const typo = artist.slice(0, 2) + artist.slice(3);
+    const artists = await searchArtists(typo);
+    assert.ok(
+      artists.some((a) => a.name === artist),
+      `${typo} found ${artists.map((a) => a.name)}`,
+    );
+  });
+
+  it("keeps exact matches above near ones", async () => {
+    const songs = await searchSongs(`zebra crossing ${fan.run}`);
+    assert.equal(songs[0]?.title, `Zebra Crossing ${fan.run}`);
+  });
+
+  it("leaves very short words to exact matching", async () => {
+    const songs = await searchSongs("zbr");
+    assert.ok(!songs.some((s) => s.title === `Zebra Crossing ${fan.run}`));
+  });
+
+  it("answers the quick finder", async () => {
+    const empty = await fetch(`${BASE_URL}/api/finder?q=a`);
+    assert.equal(empty.status, 200);
+    assert.deepEqual(await empty.json(), { songs: [], artists: [], albums: [], library: [] });
+    const found = await fetch(`${BASE_URL}/api/finder?${new URLSearchParams({ q: `marmlade ${fan.run}` })}`);
+    assert.equal(found.status, 200);
+    const body = await found.json();
+    assert.equal(body.songs[0]?.title, `Marmalade Skyline ${fan.run}`);
+    assert.deepEqual(body.library, []);
   });
 
   it("copes with special characters", async () => {
