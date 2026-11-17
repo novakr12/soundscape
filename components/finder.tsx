@@ -270,6 +270,22 @@ export default function Finder({ username, admin }: { username: string | null; a
               {item.detail && <span className="muted">{item.detail}</span>}
             </span>
             <span className="finder-kind muted">{item.kind}</span>
+            {item.track && (
+              <button
+                type="button"
+                className="icon-button finder-play"
+                aria-label={`Play ${item.title}`}
+                tabIndex={-1}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  choose(item, true);
+                }}
+              >
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true">
+                  <path d="M8 5v14l11-7z" />
+                </svg>
+              </button>
+            )}
           </div>
         ))}
         {wanted.length >= MIN_QUERY_LENGTH && answered === wanted && items.length <= 1 && (

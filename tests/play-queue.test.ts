@@ -6,6 +6,7 @@ import {
   inOrder,
   insertAfter,
   LONGEST_QUEUE,
+  lockScreenPosition,
   nextPosition,
   nextRepeat,
   queueWindow,
@@ -224,5 +225,28 @@ describe("song length", () => {
       saved?.tracks.map((track) => track.duration),
       [245, undefined, undefined],
     );
+  });
+});
+
+describe("lockScreenPosition", () => {
+  it("tells the lock screen where the song is", () => {
+    assert.deepEqual(lockScreenPosition(200, 30, 1), { duration: 200, position: 30, playbackRate: 1 });
+  });
+
+  it("keeps the position inside the song", () => {
+    assert.equal(lockScreenPosition(200, 250, 1)?.position, 200);
+    assert.equal(lockScreenPosition(200, -3, 1)?.position, 0);
+    assert.equal(lockScreenPosition(200, Number.NaN, 1)?.position, 0);
+  });
+
+  it("says nothing while the length is unknown", () => {
+    assert.equal(lockScreenPosition(Number.NaN, 10, 1), null);
+    assert.equal(lockScreenPosition(Number.POSITIVE_INFINITY, 10, 1), null);
+    assert.equal(lockScreenPosition(0, 0, 1), null);
+  });
+
+  it("never reports a stopped or odd speed", () => {
+    assert.equal(lockScreenPosition(100, 1, 0)?.playbackRate, 1);
+    assert.equal(lockScreenPosition(100, 1, 1.5)?.playbackRate, 1.5);
   });
 });

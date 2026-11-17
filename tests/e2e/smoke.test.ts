@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { after, before, describe, it } from "node:test";
-import { type Browser, chromium, type Page } from "playwright";
+import { type Browser, chromium, devices, type Page } from "playwright";
 
 const BASE_URL = process.env.BASE_URL ?? "http://localhost:3000";
 const USERNAME = process.env.E2E_USER ?? "e2eadmin";
@@ -172,6 +172,7 @@ describe("smoke test", () => {
     );
     await page.evaluate(
       (detail) => {
+        (window as Window & { soundscapeAppSettings?: unknown }).soundscapeAppSettings = detail;
         window.dispatchEvent(new CustomEvent("soundscape-app-settings", { detail }));
       },
       { settings, error: null },
@@ -200,6 +201,49 @@ describe("smoke test", () => {
       );
     });
     await page.getByRole("alert").filter({ hasText: "Couldn't reach the server." }).waitFor();
+  });
+
+  it("folds the links into a menu on a phone", async () => {
+    const context = await browser.newContext({
+      ...devices["Pixel 7"],
+      storageState: await page.context().storageState(),
+    });
+    const phone = await context.newPage();
+    await phone.goto(`${BASE_URL}/`, { waitUntil: "load" });
+    const history = phone.locator("header nav").getByRole("link", { name: "History" });
+    assert.equal(await history.isVisible(), false);
+    const menu = phone.getByRole("button", { name: "Menu" });
+    await phone.waitForFunction(() =>
+      [...document.querySelectorAll("header button")].some((button) =>
+        Object.keys(button).some((key) => key.startsWith("__reactProps")),
+      ),
+    );
+    await menu.click();
+    await history.click();
+    await phone.waitForURL(/\/history$/);
+    await phone.getByRole("button", { name: "Menu" }).waitFor();
+    assert.equal(await history.isVisible(), false);
+    await phone.getByRole("button", { name: "Search" }).click();
+    await phone.getByRole("dialog", { name: "Find" }).waitFor();
+    await context.close();
+  });
+
+  it("can be installed and shows a page when the server can't be reached", async () => {
+    const context = await browser.newContext();
+    const visitor = await context.newPage();
+    await visitor.goto(`${BASE_URL}/`, { waitUntil: "load" });
+    await visitor.evaluate(() => navigator.serviceWorker.ready.then(() => undefined));
+    const manifest = await (await visitor.request.get(`${BASE_URL}/manifest.webmanifest`)).json();
+    assert.equal(manifest.display, "standalone");
+    for (const icon of manifest.icons.filter((each: { type: string }) => each.type === "image/png")) {
+      const image = await visitor.request.get(new URL(icon.src, BASE_URL).href);
+      assert.equal(image.headers()["content-type"], "image/png", icon.src);
+    }
+    await visitor.reload({ waitUntil: "load" });
+    await context.setOffline(true);
+    await visitor.goto(`${BASE_URL}/charts`).catch(() => {});
+    await visitor.getByRole("heading", { name: "You're offline" }).waitFor();
+    await context.close();
   });
 
   it("opens the admin page", async () => {

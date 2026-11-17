@@ -7,13 +7,16 @@ import {
   heardStep,
   inOrder,
   insertAfter,
+  LOCK_SCREEN_SKIP_SECONDS,
   LONGEST_QUEUE,
+  lockScreenPosition,
   nextPosition,
   nextRepeat,
   queueWindow,
   type Repeat,
   removeAt,
   restoreQueue,
+  seekTarget,
   shuffleAfter,
   shuffleAll,
   songLength,
@@ -208,6 +211,30 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
           if (audio && details.seekTime !== undefined) audio.currentTime = details.seekTime;
         },
       ],
+      [
+        "seekbackward",
+        (details) => {
+          const audio = audioRef.current;
+          if (!audio) return;
+          audio.currentTime = seekTarget(
+            audio.currentTime,
+            -(details.seekOffset ?? LOCK_SCREEN_SKIP_SECONDS),
+            songLength(audio.duration, tracksRef.current[orderRef.current[positionRef.current]]?.duration),
+          );
+        },
+      ],
+      [
+        "seekforward",
+        (details) => {
+          const audio = audioRef.current;
+          if (!audio) return;
+          audio.currentTime = seekTarget(
+            audio.currentTime,
+            details.seekOffset ?? LOCK_SCREEN_SKIP_SECONDS,
+            songLength(audio.duration, tracksRef.current[orderRef.current[positionRef.current]]?.duration),
+          );
+        },
+      ],
       ["nexttrack", () => skip.current.next()],
       ["previoustrack", () => skip.current.previous()],
     ];
@@ -224,6 +251,28 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       }
     };
   }, []);
+
+  useEffect(() => {
+    const audio = active;
+    if (!audio || !("mediaSession" in navigator) || !navigator.mediaSession.setPositionState) return;
+    let last = 0;
+    const tell = (event?: Event) => {
+      const now = performance.now();
+      if (event?.type === "timeupdate" && now - last < 1000) return;
+      last = now;
+      const known = tracksRef.current[orderRef.current[positionRef.current]]?.duration;
+      const state = lockScreenPosition(songLength(audio.duration, known), audio.currentTime, audio.playbackRate);
+      try {
+        navigator.mediaSession.setPositionState(state ?? undefined);
+      } catch {}
+    };
+    const events = ["timeupdate", "durationchange", "loadedmetadata", "seeked", "ratechange", "play", "pause"];
+    for (const name of events) audio.addEventListener(name, tell);
+    tell();
+    return () => {
+      for (const name of events) audio.removeEventListener(name, tell);
+    };
+  }, [active]);
 
   function announce() {
     const audio = audioRef.current;

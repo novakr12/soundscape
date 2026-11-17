@@ -177,3 +177,11 @@ export function seekTarget(now: number, step: number, duration: number) {
   const end = Number.isFinite(duration) ? duration : now + Math.max(step, 0);
   return Math.min(Math.max(now + step, 0), end);
 }
+
+export const LOCK_SCREEN_SKIP_SECONDS = 10;
+
+export function lockScreenPosition(duration: number, position: number, rate: number) {
+  if (!Number.isFinite(duration) || duration <= 0) return null;
+  const at = Number.isFinite(position) ? Math.min(Math.max(position, 0), duration) : 0;
+  return { duration, position: at, playbackRate: Number.isFinite(rate) && rate > 0 ? rate : 1 };
+}

@@ -263,7 +263,8 @@ main {
   grid-template-columns: minmax(0, 1fr) minmax(16rem, 26rem) minmax(0, 1fr);
   align-items: center;
   gap: 1rem;
-  padding: 0.75rem 1rem;
+  padding: 0.75rem calc(1rem + env(safe-area-inset-right)) calc(0.75rem + env(safe-area-inset-bottom))
+    calc(1rem + env(safe-area-inset-left));
   background: var(--bg);
   border-top: 1px solid color-mix(in srgb, var(--muted) 30%, transparent);
 }
@@ -2139,7 +2140,52 @@ tr.selected {
   color: var(--accent);
 }
 
+@media (max-width: 759px) {
+  .header-buttons {
+    display: flex;
+    gap: 0.25rem;
+    margin-left: auto;
+  }
+
+  header {
+    padding-top: calc(0.75rem + env(safe-area-inset-top));
+    padding-bottom: 0.5rem;
+  }
+
+  header .search {
+    display: none;
+  }
+
+  header:not([data-open]) nav,
+  header:not([data-open]) .account {
+    display: none;
+  }
+
+  header[data-open] nav {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0 1rem;
+  }
+
+  header[data-open] nav a,
+  header[data-open] .account a {
+    padding: 0.55rem 0;
+  }
+
+  header[data-open] .account {
+    order: 3;
+    flex-basis: 100%;
+    margin-left: 0;
+    padding-top: 0.5rem;
+    border-top: 1px solid color-mix(in srgb, var(--muted) 25%, transparent);
+  }
+}
+
 @media (min-width: 760px) {
+  .header-buttons {
+    display: none;
+  }
+
   body {
     padding-left: var(--sidebar-width);
   }
@@ -2382,6 +2428,21 @@ tr.selected {
   padding: 0.5rem 1rem;
   border-top: 1px solid color-mix(in srgb, var(--muted) 25%, transparent);
   font-size: 0.8rem;
+}
+
+.finder-play {
+  flex-shrink: 0;
+  color: var(--accent);
+}
+
+@media (hover: none) {
+  .finder-help {
+    display: none;
+  }
+
+  .finder {
+    margin-top: calc(1rem + env(safe-area-inset-top));
+  }
 }
 
 .finder-help kbd {

@@ -217,6 +217,26 @@ describe("player", () => {
     );
   });
 
+  it("tells the lock screen how far into the song it is", async () => {
+    await page.evaluate(() => {
+      const view = window as Window & { lockScreen?: MediaPositionState };
+      navigator.mediaSession.setPositionState = (state) => {
+        view.lockScreen = state;
+      };
+    });
+    const state = await page.waitForFunction(
+      () => {
+        const shown = (window as Window & { lockScreen?: MediaPositionState }).lockScreen;
+        return shown && (shown.position ?? 0) > 0 ? shown : null;
+      },
+      null,
+      { timeout: 10_000 },
+    );
+    const told = (await state.jsonValue()) as MediaPositionState;
+    assert.equal(Math.round(told.duration ?? 0), SONG_SECONDS);
+    assert.equal(told.playbackRate, 1);
+  });
+
   it("shows the song as listening now on the profile", async () => {
     const profile = await page.request.get(`${BASE_URL}/u/${USERNAME}`);
     assert.match(await profile.text(), /First Light/);
@@ -455,7 +475,7 @@ describe("player", () => {
     const finder = page.getByRole("dialog", { name: "Find" });
     await finder.waitFor();
     await finder.getByRole("combobox").fill("First Ligt");
-    const song = finder.getByRole("option", { name: /First Light.*Song$/ });
+    const song = finder.getByRole("option", { name: /^First Light.*Song/ });
     await song.waitFor({ timeout: 15_000 });
     while ((await song.getAttribute("aria-selected")) !== "true") await page.keyboard.press("ArrowDown");
     await page.keyboard.press("Enter");
@@ -468,7 +488,7 @@ describe("player", () => {
     const finder = page.getByRole("dialog", { name: "Find" });
     await finder.waitFor();
     await finder.getByRole("combobox").fill("First Light");
-    const song = finder.getByRole("option", { name: /First Light.*Song$/ });
+    const song = finder.getByRole("option", { name: /^First Light.*Song/ });
     await song.waitFor({ timeout: 15_000 });
     await song.click({ modifiers: ["Shift"] });
     await page.waitForFunction(() => {

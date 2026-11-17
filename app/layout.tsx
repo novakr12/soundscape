@@ -1,13 +1,15 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Space_Grotesk } from "next/font/google";
 import { redirect } from "next/navigation";
 import AppNav from "@/components/app-nav";
 import BrandLink from "@/components/brand-link";
 import Credit from "@/components/credit";
 import Finder from "@/components/finder";
+import HeaderMenu from "@/components/header-menu";
 import NavLink from "@/components/nav-link";
 import { PlayerProvider } from "@/components/player";
 import SearchBox from "@/components/search-box";
+import ServiceWorker from "@/components/service-worker";
 import { isAdmin } from "@/lib/admin";
 import { unreadCount } from "@/lib/notifications";
 import { currentUserId, logOut } from "@/lib/session";
@@ -15,6 +17,14 @@ import { signupMode } from "@/lib/signups";
 import "./globals.css";
 
 const brandFont = Space_Grotesk({ subsets: ["latin"], weight: "700", variable: "--font-brand" });
+
+export const viewport: Viewport = {
+  viewportFit: "cover",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
+    { media: "(prefers-color-scheme: dark)", color: "#111111" },
+  ],
+};
 
 export const metadata: Metadata = {
   title: "Soundscape",
@@ -36,6 +46,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       <body>
         <header>
           <BrandLink />
+          <HeaderMenu />
           <SearchBox />
           <nav>
             <NavLink href="/feed">Feed</NavLink>
@@ -77,6 +88,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           </div>
         </header>
         <AppNav />
+        <ServiceWorker />
         <PlayerProvider>
           <Finder username={username ?? null} admin={Boolean(username && isAdmin(username))} />
           <main>
