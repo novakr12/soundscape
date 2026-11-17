@@ -218,11 +218,20 @@ describe("smoke test", () => {
         Object.keys(button).some((key) => key.startsWith("__reactProps")),
       ),
     );
-    await menu.click();
+    await phone.waitForFunction(
+      () => {
+        if (document.querySelector("header[data-open]")) return true;
+        document.querySelector<HTMLButtonElement>('header button[aria-label="Menu"]')?.click();
+        return false;
+      },
+      null,
+      { polling: 500 },
+    );
     await history.click();
     await phone.waitForURL(/\/history$/);
-    await phone.getByRole("button", { name: "Menu" }).waitFor();
+    await phone.waitForFunction(() => !document.querySelector("header[data-open]"));
     assert.equal(await history.isVisible(), false);
+    assert.equal(await menu.getAttribute("aria-expanded"), "false");
     await phone.getByRole("button", { name: "Search" }).click();
     await phone.getByRole("dialog", { name: "Find" }).waitFor();
     await context.close();
@@ -244,6 +253,31 @@ describe("smoke test", () => {
     await visitor.goto(`${BASE_URL}/charts`).catch(() => {});
     await visitor.getByRole("heading", { name: "You're offline" }).waitFor();
     await context.close();
+  });
+
+  it("tries a cover that failed to load once more", async () => {
+    await open("/");
+    await page.waitForFunction(() =>
+      [...document.querySelectorAll("h1, h2")].some((heading) =>
+        Object.keys(heading).some((key) => key.startsWith("__reactFiber")),
+      ),
+    );
+    await page.waitForTimeout(300);
+    const broken = page.waitForResponse((response) => response.url().endsWith("/api/navidrome/cover/not-a-cover"));
+    await page.evaluate(() => {
+      const image = document.createElement("img");
+      image.id = "cover-under-test";
+      image.src = "/api/navidrome/cover/not-a-cover";
+      document.body.append(image);
+    });
+    assert.equal((await broken).status(), 404);
+    const again = await page.waitForResponse((response) =>
+      response.url().includes("/api/navidrome/cover/not-a-cover?again="),
+    );
+    assert.equal(again.status(), 404);
+    await page.waitForTimeout(2500);
+    assert.match((await page.getAttribute("#cover-under-test", "src")) ?? "", /\?again=\d+$/);
+    await page.evaluate(() => document.getElementById("cover-under-test")?.remove());
   });
 
   it("opens the admin page", async () => {

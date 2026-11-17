@@ -268,7 +268,36 @@ export async function streamSong(server: Navidrome, songId: string, range: strin
   return new Response(upstream.body, { status: upstream.status, headers });
 }
 
-export async function fetchCoverArt(server: Navidrome, coverArtId: string, size = 300) {
+export class NavidromeBusy extends NavidromeError {}
+
+export type CoverImage = { type: string; data: Buffer };
+
+const COVERS_AT_ONCE = 6;
+const COVER_RETRY_MS = 500;
+const globalForCovers = globalThis as unknown as {
+  soundscapeCoverGate?: { active: number; waiting: (() => void)[] };
+  soundscapeCoverRequests?: Map<string, Promise<CoverImage | null>>;
+};
+globalForCovers.soundscapeCoverGate ??= { active: 0, waiting: [] };
+globalForCovers.soundscapeCoverRequests ??= new Map();
+const coverGate = globalForCovers.soundscapeCoverGate;
+const coverRequests = globalForCovers.soundscapeCoverRequests;
+
+async function takeCoverTurn() {
+  if (coverGate.active < COVERS_AT_ONCE) {
+    coverGate.active++;
+    return;
+  }
+  await new Promise<void>((resolve) => coverGate.waiting.push(resolve));
+}
+
+function endCoverTurn() {
+  const next = coverGate.waiting.shift();
+  if (next) next();
+  else coverGate.active--;
+}
+
+async function askForCover(server: Navidrome, coverArtId: string, size: number): Promise<CoverImage | null> {
   let response: Response;
   try {
     response = await request(
@@ -276,16 +305,47 @@ export async function fetchCoverArt(server: Navidrome, coverArtId: string, size 
         ["id", coverArtId],
         ["size", String(size)],
       ]),
-      {
-        timeoutMs: 10_000,
-      },
+      { timeoutMs: 10_000 },
     );
   } catch {
-    throw new NavidromeError("Navidrome is unreachable at that address.");
+    throw new NavidromeBusy("Navidrome didn't answer in time.");
+  }
+  if (response.status >= 500 || response.status === 429) {
+    await response.body?.cancel().catch(() => {});
+    throw new NavidromeBusy("Navidrome is busy.");
   }
   const type = response.headers.get("content-type") ?? "";
-  if (!response.ok || !type.startsWith("image/")) throw new NavidromeError("Navidrome has no cover for that song.");
+  if (!response.ok || !type.startsWith("image/")) {
+    await response.body?.cancel().catch(() => {});
+    return null;
+  }
   return { type, data: Buffer.from(await response.arrayBuffer()) };
+}
+
+export function fetchCoverArt(server: Navidrome, coverArtId: string, size = 300): Promise<CoverImage | null> {
+  const key = `${server.url}\n${server.username}\n${coverArtId}\n${size}`;
+  const pending = coverRequests.get(key);
+  if (pending) return pending;
+  const work = (async () => {
+    await takeCoverTurn();
+    try {
+      try {
+        return await askForCover(server, coverArtId, size);
+      } catch (error) {
+        if (!(error instanceof NavidromeBusy)) throw error;
+        await new Promise((resolve) => setTimeout(resolve, COVER_RETRY_MS));
+        return await askForCover(server, coverArtId, size);
+      }
+    } finally {
+      endCoverTurn();
+    }
+  })();
+  coverRequests.set(key, work);
+  const forget = () => {
+    if (coverRequests.get(key) === work) coverRequests.delete(key);
+  };
+  work.then(forget, forget);
+  return work;
 }
 
 export async function findAllInLibrary(server: Navidrome, songs: LibrarySong[], concurrency = 5) {

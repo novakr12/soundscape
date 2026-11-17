@@ -3,6 +3,7 @@ import { Space_Grotesk } from "next/font/google";
 import { redirect } from "next/navigation";
 import AppNav from "@/components/app-nav";
 import BrandLink from "@/components/brand-link";
+import CoverRetry from "@/components/cover-retry";
 import Credit from "@/components/credit";
 import Finder from "@/components/finder";
 import HeaderMenu from "@/components/header-menu";
@@ -89,6 +90,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         </header>
         <AppNav />
         <ServiceWorker />
+        <CoverRetry />
         <PlayerProvider>
           <Finder username={username ?? null} admin={Boolean(username && isAdmin(username))} />
           <main>

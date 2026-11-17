@@ -16,6 +16,16 @@ export default function HeaderMenu() {
   }, [open]);
 
   useEffect(() => {
+    const header = holder.current?.closest("header");
+    if (!header) return;
+    const tapped = (event: MouseEvent) => {
+      if (event.target instanceof Element && event.target.closest("a")) setOpen(false);
+    };
+    header.addEventListener("click", tapped);
+    return () => header.removeEventListener("click", tapped);
+  }, []);
+
+  useEffect(() => {
     if (pathname) setOpen(false);
   }, [pathname]);
 

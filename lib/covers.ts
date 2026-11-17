@@ -2,7 +2,14 @@ import { fillArtistPhotos } from "./artist-photos";
 import { fillCoversFromCoverArtArchive } from "./coverartarchive";
 import { matchMissingTracks, needsDeezer } from "./deezer";
 import { getValue, keys, setValue } from "./kv";
-import { fetchCoverArt, findLibrarySong, getNavidrome, NavidromeError, type SubsonicSong } from "./navidrome";
+import {
+  fetchCoverArt,
+  findLibrarySong,
+  getNavidrome,
+  NavidromeBusy,
+  NavidromeError,
+  type SubsonicSong,
+} from "./navidrome";
 import { sql } from "./postgres";
 
 const CACHE_SECONDS = 7 * 24 * 60 * 60;
@@ -125,6 +132,11 @@ export async function findMissingCovers(userId: string, newTracks: boolean) {
 }
 
 export async function getCover(trackId: string): Promise<Cover | null> {
+  const cover = await findCover(trackId);
+  return cover === "busy" ? null : cover;
+}
+
+export async function findCover(trackId: string): Promise<Cover | null | "busy"> {
   const [cached] = await sql`SELECT type, data FROM cover_cache WHERE track_id = ${trackId} AND expires_at > now()`;
   if (cached) return { type: cached.type, data: cached.data };
 
@@ -135,13 +147,14 @@ export async function getCover(trackId: string): Promise<Cover | null> {
 
   const server = await getNavidrome(userId);
   if (!server) return null;
-  let cover: Cover;
+  let cover: Cover | null;
   try {
     cover = await fetchCoverArt(server, coverArt);
   } catch (error) {
-    if (error instanceof NavidromeError) return null;
+    if (error instanceof NavidromeBusy) return "busy";
     throw error;
   }
+  if (!cover) return null;
   await sql`
     INSERT INTO cover_cache (track_id, type, data, expires_at)
     VALUES (${trackId}, ${cover.type}, ${cover.data}, ${new Date(Date.now() + CACHE_SECONDS * 1000)})

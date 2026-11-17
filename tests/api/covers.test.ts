@@ -6,7 +6,7 @@ import { after, before, describe, it } from "node:test";
 import { trackIdFor } from "../../lib/catalog";
 import { coverUrl, fillCoversFromNavidrome, forgetNavidromeCovers, getCover } from "../../lib/covers";
 import { importListens } from "../../lib/imports";
-import { saveNavidrome } from "../../lib/navidrome";
+import { fetchCoverArt, getNavidrome, NavidromeBusy, saveNavidrome } from "../../lib/navidrome";
 import { sql } from "../../lib/postgres";
 import { closeConnections, createTestUser, removeTestUser, testUser } from "./helpers";
 
@@ -19,6 +19,7 @@ const rare = trackIdFor(user.artist, "Rare Song");
 const missing = trackIdFor(user.artist, "Not In Library");
 const deezer = trackIdFor(user.artist, "On Deezer");
 const requests: string[] = [];
+const trouble = { failNext: 0, delayMs: 0, now: 0, most: 0 };
 let server: Server;
 let url: string;
 
@@ -44,9 +45,20 @@ function fakeNavidrome() {
         : [];
       return ok({ searchResult3: { song } });
     }
-    if (method === "getCoverArt" && params.get("id") === "mf-1") {
-      response.setHeader("content-type", "image/png");
-      return response.end(IMAGE);
+    if (method === "getCoverArt" && params.get("id")?.startsWith("mf-")) {
+      if (trouble.failNext > 0) {
+        trouble.failNext--;
+        response.statusCode = 503;
+        return response.end();
+      }
+      trouble.now++;
+      trouble.most = Math.max(trouble.most, trouble.now);
+      setTimeout(() => {
+        trouble.now--;
+        response.setHeader("content-type", "image/png");
+        response.end(IMAGE);
+      }, trouble.delayMs);
+      return;
     }
     response.statusCode = 404;
     response.end();
@@ -118,6 +130,52 @@ describe("covers from Navidrome", () => {
     assert.equal(response.status, 200);
     assert.equal(response.headers.get("content-type"), "image/svg+xml");
     assert.match(await response.text(), /<svg/);
+  });
+
+  it("tries Navidrome once more when it stumbles", async () => {
+    await sql`DELETE FROM cover_cache WHERE track_id = ${rare}`;
+    trouble.failNext = 1;
+    requests.length = 0;
+    const found = await getCover(rare);
+    assert.deepEqual(found?.data, IMAGE);
+    assert.deepEqual(requests, ["getCoverArt", "getCoverArt"]);
+  });
+
+  it("doesn't let the browser keep the placeholder while Navidrome is down", async () => {
+    await sql`DELETE FROM cover_cache WHERE track_id = ${rare}`;
+    trouble.failNext = 2;
+    const response = await fetch(`${BASE_URL}${coverUrl(rare)}`);
+    assert.equal(response.headers.get("content-type"), "image/svg+xml");
+    assert.equal(response.headers.get("cache-control"), "no-store");
+    const missingOne = await fetch(`${BASE_URL}${coverUrl(missing)}`);
+    assert.equal(missingOne.headers.get("cache-control"), "public, max-age=300");
+    trouble.failNext = 0;
+  });
+
+  it("asks Navidrome for a few covers at a time and shares identical requests", async () => {
+    const navidrome = await getNavidrome(user.userId);
+    assert.ok(navidrome);
+    trouble.delayMs = 100;
+    trouble.most = 0;
+    requests.length = 0;
+    const ids = Array.from({ length: 12 }, (_, i) => `mf-${i + 10}`);
+    const covers = await Promise.all([...ids, "mf-10", "mf-10", "mf-11"].map((id) => fetchCoverArt(navidrome, id)));
+    trouble.delayMs = 0;
+    assert.ok(covers.every((each) => each?.type === "image/png"));
+    assert.equal(requests.filter((method) => method === "getCoverArt").length, 12);
+    assert.ok(trouble.most <= 6, `Navidrome had ${trouble.most} at once`);
+    assert.ok(trouble.most >= 2);
+  });
+
+  it("tells a missing cover apart from a busy Navidrome", async () => {
+    const navidrome = await getNavidrome(user.userId);
+    assert.ok(navidrome);
+    requests.length = 0;
+    assert.equal(await fetchCoverArt(navidrome, "no-such-cover"), null);
+    assert.deepEqual(requests, ["getCoverArt"]);
+    trouble.failNext = 2;
+    await assert.rejects(fetchCoverArt(navidrome, "mf-99"), NavidromeBusy);
+    trouble.failNext = 0;
   });
 
   it("forgets the covers when Navidrome is disconnected", async () => {
