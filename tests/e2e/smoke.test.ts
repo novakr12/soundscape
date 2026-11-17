@@ -280,6 +280,15 @@ describe("smoke test", () => {
     await page.evaluate(() => document.getElementById("cover-under-test")?.remove());
   });
 
+  it("asks to connect the Android app in its own words", async () => {
+    await open(`/desktop/connect?${new URLSearchParams({ device: "Android (Pixel 7)", app: "android" })}`);
+    await page.getByRole("heading", { name: "Connect the Android app" }).waitFor();
+    await page.getByText("Android (Pixel 7)").waitFor();
+    await page.getByText(/keep playing your music when the app is in the background/).waitFor();
+    await open("/desktop/connect?device=Laptop");
+    await page.getByRole("heading", { name: "Connect the desktop app" }).waitFor();
+  });
+
   it("opens the admin page", async () => {
     await open("/admin");
   });

@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { BRIDGE_VERSION, bridgeTracks, type HandBack, readCommand, readHandBack, savedVolume } from "@/lib/app-bridge";
 import { type Gain, gainLevel, playingAnAlbum } from "@/lib/levelling";
 import {
   countsAsPlay,
@@ -120,6 +121,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const positionRef = useRef(0);
   const shuffleRef = useRef(false);
   const repeatRef = useRef<Repeat>("off");
+  const bridge = useRef<(back: HandBack) => boolean>(() => false);
   const skip = useRef({
     next: () => {},
     previous: () => {},
@@ -319,6 +321,54 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   usePlayerKeys(audioRef, tracksRef, skip);
+
+  useEffect(() => {
+    const view = window as Window & { soundscapePlayer?: unknown };
+    view.soundscapePlayer = {
+      version: BRIDGE_VERSION,
+      state: () => {
+        const audio = audioRef.current;
+        const order = orderRef.current;
+        const inPlayOrder = order.map((index) => tracksRef.current[index]).filter(Boolean);
+        if (!audio || inPlayOrder.length === 0) return null;
+        const known = inPlayOrder[positionRef.current]?.duration;
+        const length = songLength(audio.duration, known);
+        return {
+          tracks: bridgeTracks(inPlayOrder, optionsRef.current.levelling),
+          position: positionRef.current,
+          time: Number.isFinite(audio.currentTime) ? audio.currentTime : 0,
+          duration: Number.isFinite(length) ? length : null,
+          playing: Boolean(audio.currentSrc) && !audio.paused && !audio.ended,
+          volume: savedVolume(localStorage.getItem("soundscape-volume")),
+          repeat: repeatRef.current,
+        };
+      },
+      command: (name: unknown, value?: unknown) => {
+        const command = readCommand(name);
+        const audio = audioRef.current;
+        if (!command || !audio) return false;
+        if (command === "play") audio.play().catch(() => {});
+        else if (command === "pause") audio.pause();
+        else if (command === "toggle") {
+          if (audio.paused) audio.play().catch(() => {});
+          else audio.pause();
+        } else if (command === "next") skip.current.next();
+        else if (command === "previous") skip.current.previous();
+        else if (typeof value === "number" && Number.isFinite(value)) {
+          const known = tracksRef.current[orderRef.current[positionRef.current]]?.duration;
+          audio.currentTime = seekTarget(0, value, songLength(audio.duration, known));
+        } else return false;
+        return true;
+      },
+      handBack: (value: unknown) => {
+        const back = readHandBack(value, orderRef.current.length);
+        return back ? bridge.current(back) : false;
+      },
+    };
+    return () => {
+      delete view.soundscapePlayer;
+    };
+  }, []);
 
   useEffect(
     () =>
@@ -753,6 +803,15 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     setRepeat(repeatRef.current);
     remember();
   }
+
+  bridge.current = (back) => {
+    const order = orderRef.current;
+    const track = tracksRef.current[order[back.position]];
+    if (!track) return false;
+    arrange(tracksRef.current, order, back.position);
+    start(track, back.playing, back.time);
+    return true;
+  };
 
   skip.current = {
     next,

@@ -1,4 +1,4 @@
-export function deviceName(value: unknown) {
+export function deviceName(value: unknown, fallback = "Desktop app") {
   const name =
     typeof value === "string"
       ? value
@@ -6,5 +6,5 @@ export function deviceName(value: unknown) {
           .replace(/\s+/g, " ")
           .trim()
       : "";
-  return (name || "Desktop app").slice(0, 60);
+  return (name || fallback).slice(0, 60);
 }

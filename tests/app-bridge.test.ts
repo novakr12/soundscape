@@ -1,0 +1,71 @@
+import assert from "node:assert/strict";
+import { describe, it } from "node:test";
+import { bridgeTracks, readCommand, readHandBack, savedVolume } from "../lib/app-bridge";
+
+const album = [
+  {
+    trackId: "a-1",
+    songId: "nd-1",
+    title: "One",
+    artist: "A",
+    album: "X",
+    duration: 200,
+    gain: { track: -6, album: -4 },
+  },
+  { trackId: "a-2", title: "Two", artist: "A", album: "X", gain: { track: -8, album: -4 } },
+  { trackId: "b-1", title: "Three", artist: "B", cover: "/api/cover/b-1" },
+];
+
+describe("bridgeTracks", () => {
+  it("hands the app each song with its volume level", () => {
+    const tracks = bridgeTracks(album, true);
+    assert.equal(tracks[0].songId, "nd-1");
+    assert.equal(tracks[1].songId, null);
+    assert.equal(tracks[0].duration, 200);
+    assert.equal(tracks[1].duration, null);
+    assert.equal(tracks[0].level, tracks[1].level);
+    assert.ok(tracks[0].level < 1);
+    assert.equal(tracks[2].level, 1);
+    assert.equal(tracks[2].cover, "/api/cover/b-1");
+  });
+
+  it("plays everything at full level when levelling is off", () => {
+    assert.ok(bridgeTracks(album, false).every((track) => track.level === 1));
+  });
+});
+
+describe("readHandBack", () => {
+  it("accepts a position inside the queue", () => {
+    assert.deepEqual(readHandBack({ position: 1, time: 12.5, playing: true }, 3), {
+      position: 1,
+      time: 12.5,
+      playing: true,
+    });
+    assert.deepEqual(readHandBack({ position: 0, time: -4 }, 3), { position: 0, time: 0, playing: false });
+  });
+
+  it("refuses anything else", () => {
+    assert.equal(readHandBack({ position: 3, time: 0, playing: true }, 3), null);
+    assert.equal(readHandBack({ position: 1.5 }, 3), null);
+    assert.equal(readHandBack("1", 3), null);
+    assert.equal(readHandBack(null, 3), null);
+  });
+});
+
+describe("readCommand", () => {
+  it("knows the player's commands and nothing else", () => {
+    for (const name of ["play", "pause", "toggle", "next", "previous", "seek"]) assert.equal(readCommand(name), name);
+    assert.equal(readCommand("delete"), null);
+    assert.equal(readCommand(1), null);
+  });
+});
+
+describe("savedVolume", () => {
+  it("reads the page's volume and treats muted as silent", () => {
+    assert.equal(savedVolume(JSON.stringify({ volume: 0.5, muted: false })), 0.5);
+    assert.equal(savedVolume(JSON.stringify({ volume: 0.5, muted: true })), 0);
+    assert.equal(savedVolume(null), 0.8);
+    assert.equal(savedVolume("{broken"), 0.8);
+    assert.equal(savedVolume(JSON.stringify({ volume: 4 })), 0.8);
+  });
+});

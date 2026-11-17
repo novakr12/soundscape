@@ -237,6 +237,57 @@ describe("player", () => {
     assert.equal(told.playbackRate, 1);
   });
 
+  it("lets the Android app read and steer the player", async () => {
+    type Bridge = {
+      version: number;
+      state: () => {
+        tracks: { title: string; level: number }[];
+        position: number;
+        time: number;
+        playing: boolean;
+      } | null;
+      command: (name: string, value?: number) => boolean;
+      handBack: (state: unknown) => boolean;
+    };
+    const state = await page.evaluate(() =>
+      (window as unknown as { soundscapePlayer: Bridge }).soundscapePlayer.state(),
+    );
+    assert.ok(state);
+    assert.deepEqual(
+      state.tracks.map((track) => track.title),
+      SONGS.map((song) => song.title),
+    );
+    assert.equal(state.tracks[state.position].title, "First Light");
+    assert.ok(state.playing);
+    assert.ok(state.tracks.every((track) => track.level > 0 && track.level <= 1));
+    assert.equal(
+      await page.evaluate(() => (window as unknown as { soundscapePlayer: Bridge }).soundscapePlayer.command("pause")),
+      true,
+    );
+    await page.waitForFunction(() => document.querySelector<HTMLAudioElement>(".player audio")?.paused === true);
+    assert.equal(
+      await page.evaluate(() =>
+        (window as unknown as { soundscapePlayer: Bridge }).soundscapePlayer.handBack({ position: 99, time: 0 }),
+      ),
+      false,
+    );
+    assert.equal(
+      await page.evaluate(() =>
+        (window as unknown as { soundscapePlayer: Bridge }).soundscapePlayer.handBack({
+          position: 0,
+          time: 6,
+          playing: true,
+        }),
+      ),
+      true,
+    );
+    await waitForSong("First Light");
+    const after = await page.evaluate(() =>
+      (window as unknown as { soundscapePlayer: Bridge }).soundscapePlayer.state(),
+    );
+    assert.ok(after && after.time >= 5, `time ${after?.time}`);
+  });
+
   it("shows the song as listening now on the profile", async () => {
     const profile = await page.request.get(`${BASE_URL}/u/${USERNAME}`);
     assert.match(await profile.text(), /First Light/);
