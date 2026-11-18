@@ -1,3 +1,4 @@
+import { type HandedTrack, MOST_HANDED_TRACKS, readHandedTrack } from "./devices";
 import { type Gain, gainLevel, playingAnAlbum } from "./levelling";
 
 export type BridgeTrackInput = {
@@ -24,7 +25,7 @@ export type BridgeTrack = {
 
 export type BridgeCommand = "play" | "pause" | "toggle" | "next" | "previous" | "seek";
 
-export type HandBack = { position: number; time: number; playing: boolean };
+export type HandBack = { position: number; time: number; playing: boolean; tracks: HandedTrack[] | null };
 
 export const BRIDGE_VERSION = 1;
 
@@ -46,11 +47,20 @@ export function readHandBack(value: unknown, length: number): HandBack | null {
   const raw = value as Record<string, unknown>;
   const position = raw.position;
   const time = raw.time;
-  if (typeof position !== "number" || !Number.isInteger(position) || position < 0 || position >= length) return null;
+  const tracks = Array.isArray(raw.tracks)
+    ? raw.tracks
+        .slice(0, MOST_HANDED_TRACKS)
+        .map(readHandedTrack)
+        .filter((track): track is HandedTrack => track !== null)
+    : null;
+  if (tracks !== null && tracks.length === 0) return null;
+  const size = tracks?.length ?? length;
+  if (typeof position !== "number" || !Number.isInteger(position) || position < 0 || position >= size) return null;
   return {
     position,
     time: typeof time === "number" && Number.isFinite(time) && time > 0 ? time : 0,
     playing: raw.playing === true,
+    tracks,
   };
 }
 

@@ -679,6 +679,61 @@ describe("player", () => {
     }
   });
 
+  it("lets the Android app's own player speak for the phone while it plays", async () => {
+    const context = await browser.newContext();
+    await context.addInitScript(() => {
+      Object.assign(window, { soundscapeDeviceId: "e2ephone00001", soundscapeDeviceName: "Soundscape on Test Phone" });
+    });
+    const phone = await context.newPage();
+    phone.on("pageerror", (error) => problems.push(`phone ${phone.url()}: ${error.message}`));
+    try {
+      await phone.goto(`${BASE_URL}/login`, { waitUntil: "domcontentloaded" });
+      await phone.fill('input[name="username"]', USERNAME);
+      await phone.fill('input[name="password"]', PASSWORD);
+      await phone.click('button[type="submit"]');
+      await phone.waitForURL((url) => !url.pathname.startsWith("/login"), { timeout: 30_000 });
+      await page.locator('[data-player="devices"]').click();
+      const panel = page.getByRole("region", { name: "Devices" });
+      const entry = panel.locator('[data-device="e2ephone00001"]');
+      await entry.getByText("Soundscape on Test Phone").waitFor({ timeout: 15_000 });
+      await phone.evaluate(() => {
+        Object.assign(window, { soundscapeDeviceHeld: true });
+      });
+      await entry.getByRole("button", { name: "Play my music there" }).click();
+      await page.waitForTimeout(2000);
+      assert.equal(
+        await phone.evaluate(() => {
+          const audio = document.querySelector<HTMLAudioElement>(".player audio");
+          return Boolean(audio && !audio.paused);
+        }),
+        false,
+      );
+      await phone.evaluate(() => {
+        Object.assign(window, { soundscapeDeviceHeld: false });
+        window.dispatchEvent(new Event("soundscape-device-report"));
+      });
+      await phone.waitForFunction(
+        () => {
+          const audio = document.querySelector<HTMLAudioElement>(".player audio");
+          return audio && !audio.paused && audio.currentTime > 0;
+        },
+        null,
+        { timeout: 30_000 },
+      );
+      await entry.getByRole("button", { name: "Pause on Soundscape on Test Phone" }).click();
+      await phone.waitForFunction(
+        () => document.querySelector<HTMLAudioElement>(".player audio")?.paused === true,
+        null,
+        {
+          timeout: 10_000,
+        },
+      );
+      await panel.getByRole("button", { name: "Close" }).click();
+    } finally {
+      await context.close();
+    }
+  });
+
   it("saw no errors in the browser", () => {
     assert.deepEqual(problems, []);
   });

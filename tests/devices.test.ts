@@ -3,7 +3,9 @@ import { describe, it } from "node:test";
 import {
   deviceKind,
   deviceName,
+  givenDevice,
   isDeviceId,
+  isHeld,
   isOnline,
   newDeviceId,
   nowPlayingLine,
@@ -117,6 +119,21 @@ describe("device helpers", () => {
     assert.equal(deviceName("browser", chromeAndroid), "Chrome on Android");
     assert.equal(deviceName("desktop", firefox), "Soundscape desktop");
     assert.equal(deviceName("android", chromeAndroid), "Soundscape on Android");
+  });
+
+  it("uses the id and name the Android app gives the page", () => {
+    assert.deepEqual(
+      givenDevice({ soundscapeDeviceId: "phone0000abcd", soundscapeDeviceName: "Soundscape on Pixel 8" }),
+      {
+        id: "phone0000abcd",
+        name: "Soundscape on Pixel 8",
+      },
+    );
+    assert.deepEqual(givenDevice({ soundscapeDeviceId: "no", soundscapeDeviceName: 5 }), { id: null, name: null });
+    assert.deepEqual(givenDevice({}), { id: null, name: null });
+    assert.equal(isHeld({ soundscapeDeviceHeld: true }), true);
+    assert.equal(isHeld({ soundscapeDeviceHeld: "yes" }), false);
+    assert.equal(isHeld({}), false);
   });
 
   it("describes what plays", () => {

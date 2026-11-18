@@ -2,6 +2,7 @@
 
 import { type RefObject, useEffect, useRef, useState } from "react";
 import {
+  type AppView,
   DEVICE_HEARTBEAT_MS,
   type Device,
   type DeviceCommand,
@@ -9,6 +10,8 @@ import {
   type DeviceState,
   deviceKind,
   deviceName,
+  givenDevice,
+  isHeld,
   isOnline,
   newDeviceId,
   nowPlayingLine,
@@ -29,11 +32,17 @@ export type DeviceLink = {
   report: () => void;
 };
 
+function appView() {
+  return window as Window & AppView;
+}
+
 const ID_KEY = "soundscape:device-id";
 const REPORT_AFTER_MS = 400;
 const MEDIA_EVENTS = ["play", "pause", "seeked", "loadedmetadata", "volumechange", "emptied", "ended"];
 
 function deviceId() {
+  const given = givenDevice(appView()).id;
+  if (given) return given;
   try {
     const saved = sessionStorage.getItem(ID_KEY);
     if (saved) return saved;
@@ -56,7 +65,7 @@ export function useDeviceLink(local: RefObject<LocalPlayer>, username: string | 
     setMe(null);
     if (!username) return;
     const kind = deviceKind(window as Window & { soundscapeDesktop?: unknown }, navigator.userAgent);
-    const self = { id: deviceId(), name: deviceName(kind, navigator.userAgent), kind };
+    const self = { id: deviceId(), name: givenDevice(appView()).name ?? deviceName(kind, navigator.userAgent), kind };
     let stopped = false;
     let source: EventSource | null = null;
     let timer: ReturnType<typeof setTimeout> | undefined;
@@ -70,7 +79,7 @@ export function useDeviceLink(local: RefObject<LocalPlayer>, username: string | 
       setDevices((before) => new Map(before).set(device.id, device));
     };
     const report = async () => {
-      if (stopped) return;
+      if (stopped || isHeld(appView())) return;
       const response = await fetch("/api/devices", {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -83,6 +92,7 @@ export function useDeviceLink(local: RefObject<LocalPlayer>, username: string | 
       timer = setTimeout(report, REPORT_AFTER_MS);
     };
     const take = async () => {
+      if (isHeld(appView())) return;
       const response = await fetch("/api/devices/take", {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -101,10 +111,15 @@ export function useDeviceLink(local: RefObject<LocalPlayer>, username: string | 
       return "ok";
     };
     const leave = () => {
+      if (isHeld(appView())) return;
       navigator.sendBeacon?.(
         "/api/devices/leave",
         new Blob([JSON.stringify({ id: self.id })], { type: "application/json" }),
       );
+    };
+    const wake = () => {
+      reportSoon();
+      take();
     };
     const back = (event: PageTransitionEvent) => {
       if (event.persisted) report();
@@ -117,7 +132,7 @@ export function useDeviceLink(local: RefObject<LocalPlayer>, username: string | 
       for (const name of MEDIA_EVENTS) document.removeEventListener(name, reportSoon, true);
       window.removeEventListener("pagehide", leave);
       window.removeEventListener("pageshow", back);
-      window.removeEventListener("soundscape-device-report", reportSoon);
+      window.removeEventListener("soundscape-device-report", wake);
     };
 
     reportRef.current = reportSoon;
@@ -155,7 +170,7 @@ export function useDeviceLink(local: RefObject<LocalPlayer>, username: string | 
       for (const name of MEDIA_EVENTS) document.addEventListener(name, reportSoon, true);
       window.addEventListener("pagehide", leave);
       window.addEventListener("pageshow", back);
-      window.addEventListener("soundscape-device-report", reportSoon);
+      window.addEventListener("soundscape-device-report", wake);
     });
     return () => {
       stop();

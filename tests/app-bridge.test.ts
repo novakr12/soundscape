@@ -40,8 +40,29 @@ describe("readHandBack", () => {
       position: 1,
       time: 12.5,
       playing: true,
+      tracks: null,
     });
-    assert.deepEqual(readHandBack({ position: 0, time: -4 }, 3), { position: 0, time: 0, playing: false });
+    assert.deepEqual(readHandBack({ position: 0, time: -4 }, 3), {
+      position: 0,
+      time: 0,
+      playing: false,
+      tracks: null,
+    });
+  });
+
+  it("takes a new queue the app was given while it played", () => {
+    const tracks = [
+      { trackId: "a", title: "One", artist: "Band" },
+      { trackId: "b", title: "Two", artist: "Band", songId: "nav-2", duration: 200 },
+      { trackId: "c", title: "Three", artist: "Band" },
+      { trackId: "d", title: "Four", artist: "Band" },
+    ];
+    const back = readHandBack({ position: 3, time: 5, playing: true, tracks }, 1);
+    assert.equal(back?.position, 3);
+    assert.equal(back?.tracks?.length, 4);
+    assert.deepEqual(back?.tracks?.[1], { trackId: "b", title: "Two", artist: "Band", songId: "nav-2", duration: 200 });
+    assert.equal(readHandBack({ position: 4, tracks }, 9), null);
+    assert.equal(readHandBack({ position: 0, tracks: [] }, 9), null);
   });
 
   it("refuses anything else", () => {

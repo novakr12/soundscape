@@ -112,7 +112,7 @@ export function readDeviceReport(
   return { id: value.id, name, kind, state: readDeviceState(value.state) };
 }
 
-function readHandedTrack(value: unknown): HandedTrack | null {
+export function readHandedTrack(value: unknown): HandedTrack | null {
   const track = readDeviceTrack(value);
   if (!track || !isRecord(value)) return null;
   const duration = finite(value.duration);
@@ -207,6 +207,19 @@ export function deviceName(kind: DeviceKind, userAgent: string) {
   if (kind === "android") return "Soundscape on Android";
   const system = systemName(userAgent);
   return system ? `${browserName(userAgent)} on ${system}` : browserName(userAgent);
+}
+
+export type AppView = { soundscapeDeviceId?: unknown; soundscapeDeviceName?: unknown; soundscapeDeviceHeld?: unknown };
+
+export function givenDevice(view: AppView) {
+  return {
+    id: isDeviceId(view.soundscapeDeviceId) ? view.soundscapeDeviceId : null,
+    name: text(view.soundscapeDeviceName, 60),
+  };
+}
+
+export function isHeld(view: AppView) {
+  return view.soundscapeDeviceHeld === true;
 }
 
 export function newDeviceId(random: () => number = Math.random) {

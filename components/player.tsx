@@ -818,6 +818,16 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
   }
 
   bridge.current = (back) => {
+    if (back.tracks) {
+      setRadio(null);
+      arrange(
+        back.tracks,
+        back.tracks.map((_, index) => index),
+        back.position,
+      );
+      start(back.tracks[back.position], back.playing, back.time);
+      return true;
+    }
     const order = orderRef.current;
     const track = tracksRef.current[order[back.position]];
     if (!track) return false;
