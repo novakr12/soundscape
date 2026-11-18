@@ -218,17 +218,32 @@ describe("smoke test", () => {
       (window as Window & { soundscapeAppCommands?: unknown[] }).soundscapeAppCommands = [];
       window.dispatchEvent(
         new CustomEvent("soundscape-app-settings", {
-          detail: { settings: { app: "servo", version: "0.1.0", smooth_scrolling: true }, error: null },
+          detail: {
+            settings: {
+              app: "servo",
+              version: "0.1.0",
+              smooth_scrolling: true,
+              cpu_rendering: false,
+              cpu_rendering_now: false,
+            },
+            error: null,
+          },
         }),
       );
     });
     await page.getByText("Soundscape on Servo 0.1.0, a test build, on this computer.").waitFor();
-    assert.equal(await page.getByLabel("Enable CPU rendering").count(), 0);
     assert.equal(await page.getByRole("button", { name: "Send now" }).count(), 0);
     await page.getByLabel("Smooth scrolling").uncheck();
+    await page.getByText("Takes effect after a restart.").waitFor({ state: "hidden" });
+    await page.getByLabel("Enable CPU rendering").check();
+    await page.getByRole("button", { name: "Restart now" }).click();
     assert.deepEqual(
       await page.evaluate(() => (window as Window & { soundscapeAppCommands?: unknown[] }).soundscapeAppCommands),
-      [{ do: "option", name: "smooth_scrolling", value: false }],
+      [
+        { do: "option", name: "smooth_scrolling", value: false },
+        { do: "option", name: "cpu_rendering", value: true },
+        { do: "restart" },
+      ],
     );
   });
 

@@ -60,6 +60,18 @@ describe("readAppPush", () => {
     assert.equal(servo?.settings.smooth_scrolling, false);
     assert.equal(servo?.settings.smooth_scrolling_known, true);
     assert.equal(servo?.settings.cpu_rendering_now, null);
+    const servoCpu = readAppPush({
+      settings: {
+        app: "servo",
+        version: "0.1.0",
+        smooth_scrolling: true,
+        cpu_rendering: true,
+        cpu_rendering_now: false,
+      },
+      error: null,
+    });
+    assert.equal(servoCpu?.settings.cpu_rendering, true);
+    assert.equal(servoCpu?.settings.cpu_rendering_now, false);
     assert.equal(readAppPush({ settings: { ...settings, app: "other" }, error: null })?.settings.app, "desktop");
   });
 

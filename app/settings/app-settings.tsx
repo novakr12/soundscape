@@ -110,6 +110,23 @@ export default function AppSettings() {
         <h3>Display</h3>
         <Toggle label="Smooth scrolling" checked={settings.smooth_scrolling} onChange={option("smooth_scrolling")} />
         <p className="muted">Glides with each turn of the mouse wheel instead of jumping.</p>
+        {settings.cpu_rendering_now !== null && (
+          <>
+            <Toggle label="Enable CPU rendering" checked={settings.cpu_rendering} onChange={option("cpu_rendering")} />
+            <p className="muted">
+              Draws pages with the processor instead of the graphics card. Try it if pages draw wrongly or the app
+              won&apos;t start.
+            </p>
+            {settings.cpu_rendering !== settings.cpu_rendering_now && (
+              <div className="app-row">
+                <span className="muted">Takes effect after a restart.</span>
+                <button type="button" className="secondary" onClick={() => send({ do: "restart" })}>
+                  Restart now
+                </button>
+              </div>
+            )}
+          </>
+        )}
         {message && (
           <p className="error" role="alert">
             {message}
