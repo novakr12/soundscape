@@ -19,7 +19,10 @@ export type AppOption = (typeof APP_OPTIONS)[number];
 
 export type AppPlayer = { id: string; name: string; enabled: boolean; open: boolean };
 
+export type AppKind = "desktop" | "servo";
+
 export type AppSettings = Record<AppOption, boolean> & {
+  app: AppKind;
   connected: boolean;
   discord_app_id: string | null;
   waiting: number;
@@ -75,6 +78,7 @@ export function readAppPush(value: unknown): AppPush | null {
   return {
     settings: {
       ...options,
+      app: raw.app === "servo" ? "servo" : "desktop",
       connected: raw.connected === true,
       discord_app_id: text(raw.discord_app_id),
       waiting: count(raw.waiting) ?? 0,

@@ -50,6 +50,19 @@ describe("readAppPush", () => {
     assert.equal(smoother?.settings.smooth_scrolling, false);
   });
 
+  it("tells the Servo test build apart from the desktop app", () => {
+    assert.equal(readAppPush({ settings, error: null })?.settings.app, "desktop");
+    const servo = readAppPush({
+      settings: { app: "servo", version: "0.1.0", smooth_scrolling: false },
+      error: null,
+    });
+    assert.equal(servo?.settings.app, "servo");
+    assert.equal(servo?.settings.smooth_scrolling, false);
+    assert.equal(servo?.settings.smooth_scrolling_known, true);
+    assert.equal(servo?.settings.cpu_rendering_now, null);
+    assert.equal(readAppPush({ settings: { ...settings, app: "other" }, error: null })?.settings.app, "desktop");
+  });
+
   it("keeps an error to show", () => {
     assert.equal(readAppPush({ settings, error: "Couldn't reach the server." })?.error, "Couldn't reach the server.");
   });

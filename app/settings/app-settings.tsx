@@ -102,6 +102,23 @@ export default function AppSettings() {
     };
   }
 
+  if (settings.app === "servo") {
+    return (
+      <section id={SECTION} className="app-settings">
+        <h2>This app</h2>
+        <p className="muted">Soundscape on Servo {settings.version}, a test build, on this computer.</p>
+        <h3>Display</h3>
+        <Toggle label="Smooth scrolling" checked={settings.smooth_scrolling} onChange={option("smooth_scrolling")} />
+        <p className="muted">Glides with each turn of the mouse wheel instead of jumping.</p>
+        {message && (
+          <p className="error" role="alert">
+            {message}
+          </p>
+        )}
+      </section>
+    );
+  }
+
   return (
     <section id={SECTION} className="app-settings">
       <h2>This app</h2>

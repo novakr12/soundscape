@@ -214,6 +214,22 @@ describe("smoke test", () => {
       );
     });
     await page.getByRole("alert").filter({ hasText: "Couldn't reach the server." }).waitFor();
+    await page.evaluate(() => {
+      (window as Window & { soundscapeAppCommands?: unknown[] }).soundscapeAppCommands = [];
+      window.dispatchEvent(
+        new CustomEvent("soundscape-app-settings", {
+          detail: { settings: { app: "servo", version: "0.1.0", smooth_scrolling: true }, error: null },
+        }),
+      );
+    });
+    await page.getByText("Soundscape on Servo 0.1.0, a test build, on this computer.").waitFor();
+    assert.equal(await page.getByLabel("Enable CPU rendering").count(), 0);
+    assert.equal(await page.getByRole("button", { name: "Send now" }).count(), 0);
+    await page.getByLabel("Smooth scrolling").uncheck();
+    assert.deepEqual(
+      await page.evaluate(() => (window as Window & { soundscapeAppCommands?: unknown[] }).soundscapeAppCommands),
+      [{ do: "option", name: "smooth_scrolling", value: false }],
+    );
   });
 
   it("folds the links into a menu on a phone", async () => {
