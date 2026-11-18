@@ -157,6 +157,8 @@ describe("smoke test", () => {
       autostart: false,
       keep_running: true,
       native_player: true,
+      cpu_rendering: true,
+      cpu_rendering_now: false,
       discord_app_id: null,
       waiting: 3,
       listening: null,
@@ -184,6 +186,12 @@ describe("smoke test", () => {
     await weekly.check();
     await page.getByLabel("Spotify").uncheck();
     await page.getByRole("button", { name: "Send now" }).click();
+    const cpu = page.getByLabel("Enable CPU rendering");
+    assert.equal(await cpu.isChecked(), true);
+    await page.getByText("Takes effect after a restart.").waitFor();
+    await page.getByRole("button", { name: "Restart now" }).click();
+    await cpu.uncheck();
+    await page.getByText("Takes effect after a restart.").waitFor({ state: "hidden" });
     const sent = await page.evaluate(
       () => (window as Window & { soundscapeAppCommands?: unknown[] }).soundscapeAppCommands,
     );
@@ -191,6 +199,8 @@ describe("smoke test", () => {
       { do: "option", name: "weekly_recap", value: true },
       { do: "player", id: "spotify", value: false },
       { do: "send-now" },
+      { do: "restart" },
+      { do: "option", name: "cpu_rendering", value: false },
     ]);
     await page.evaluate(() => {
       (window as Window & { soundscapeAppCommands?: unknown[] }).soundscapeAppCommands = [];

@@ -252,6 +252,25 @@ export default function AppSettings() {
         onChange={option("native_player")}
       />
 
+      {settings.cpu_rendering_now !== null && (
+        <>
+          <h3>Display</h3>
+          <Toggle label="Enable CPU rendering" checked={settings.cpu_rendering} onChange={option("cpu_rendering")} />
+          <p className="muted">
+            Draws pages with the processor instead of the graphics card. Scrolling is usually smoother, especially with
+            NVIDIA graphics.
+          </p>
+          {settings.cpu_rendering !== settings.cpu_rendering_now && (
+            <div className="app-row">
+              <span className="muted">Takes effect after a restart.</span>
+              <button type="button" className="secondary" onClick={() => send({ do: "restart" })}>
+                Restart now
+              </button>
+            </div>
+          )}
+        </>
+      )}
+
       {message && (
         <p className="error" role="alert">
           {message}

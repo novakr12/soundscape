@@ -11,6 +11,7 @@ export const APP_OPTIONS = [
   "autostart",
   "keep_running",
   "native_player",
+  "cpu_rendering",
 ] as const;
 
 export type AppOption = (typeof APP_OPTIONS)[number];
@@ -26,6 +27,7 @@ export type AppSettings = Record<AppOption, boolean> & {
   paused_minutes: number | null;
   version: string;
   update: string | null;
+  cpu_rendering_now: boolean | null;
 };
 
 export type AppPush = { settings: AppSettings; error: string | null };
@@ -38,7 +40,8 @@ export type AppCommand =
   | { do: "send-now" }
   | { do: "test-notification" }
   | { do: "download" }
-  | { do: "window" };
+  | { do: "window" }
+  | { do: "restart" };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -78,6 +81,7 @@ export function readAppPush(value: unknown): AppPush | null {
       paused_minutes: count(raw.paused_minutes),
       version,
       update: text(raw.update),
+      cpu_rendering_now: typeof raw.cpu_rendering_now === "boolean" ? raw.cpu_rendering_now : null,
     },
     error: text(value.error),
   };

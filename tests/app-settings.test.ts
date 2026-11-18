@@ -36,6 +36,16 @@ describe("readAppPush", () => {
     assert.equal(pushed.error, null);
   });
 
+  it("reads the CPU rendering switch only from apps that have it", () => {
+    assert.equal(readAppPush({ settings, error: null })?.settings.cpu_rendering_now, null);
+    const newer = readAppPush({
+      settings: { ...settings, cpu_rendering: true, cpu_rendering_now: false },
+      error: null,
+    });
+    assert.equal(newer?.settings.cpu_rendering, true);
+    assert.equal(newer?.settings.cpu_rendering_now, false);
+  });
+
   it("keeps an error to show", () => {
     assert.equal(readAppPush({ settings, error: "Couldn't reach the server." })?.error, "Couldn't reach the server.");
   });
