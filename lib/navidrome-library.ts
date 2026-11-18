@@ -166,6 +166,27 @@ export async function getLibraryAlbums(
 
 export type AlbumSummary = { id: string; name: string; artist: string };
 
+export type AlbumCard = AlbumSummary & { coverArt?: string };
+
+export async function getAlbumCards(server: Navidrome, order: AlbumOrder, size: number): Promise<AlbumCard[]> {
+  const result = await call<{
+    albumList2?: { album?: { id?: unknown; name?: unknown; artist?: unknown; coverArt?: unknown }[] };
+  }>(server, "getAlbumList2", [...ALBUM_LISTS[order], ["size", String(size)], ["offset", "0"]]);
+  return (result.albumList2?.album ?? []).flatMap((album) => {
+    const name = text(album.name);
+    if (typeof album.id !== "string" || !isSongId(album.id) || !name) return [];
+    const coverArt = text(album.coverArt);
+    return [
+      {
+        id: album.id,
+        name,
+        artist: text(album.artist) ?? "Unknown artist",
+        ...(coverArt && isSongId(coverArt) ? { coverArt } : {}),
+      },
+    ];
+  });
+}
+
 export async function getAlbumSummaries(server: Navidrome, offset: number, size: number): Promise<AlbumSummary[]> {
   const result = await call<{ albumList2?: { album?: { id?: unknown; name?: unknown; artist?: unknown }[] } }>(
     server,
