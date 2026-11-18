@@ -15,6 +15,33 @@ function clock(seconds: number) {
 }
 
 const REFRESH_MS = 250;
+const RUN_EVENTS = ["play", "playing", "pause", "ended", "emptied"];
+
+function whilePlaying(audio: RefObject<HTMLAudioElement | null>, follow: () => void, events: string[]) {
+  let timer: ReturnType<typeof setInterval> | undefined;
+  const arm = () => {
+    const element = audio.current;
+    const wanted = Boolean(element && !element.paused && !element.ended && !document.hidden);
+    if (wanted && timer === undefined) timer = setInterval(follow, REFRESH_MS);
+    if (!wanted && timer !== undefined) {
+      clearInterval(timer);
+      timer = undefined;
+    }
+  };
+  const heard = () => {
+    follow();
+    arm();
+  };
+  heard();
+  const all = [...new Set([...events, ...RUN_EVENTS])];
+  for (const event of all) document.addEventListener(event, heard, true);
+  document.addEventListener("visibilitychange", heard);
+  return () => {
+    clearInterval(timer);
+    for (const event of all) document.removeEventListener(event, heard, true);
+    document.removeEventListener("visibilitychange", heard);
+  };
+}
 
 function useAudio(
   audio: RefObject<HTMLAudioElement | null>,
@@ -27,13 +54,7 @@ function useAudio(
       const element = audio.current;
       setValue(element ? read(element) : 0);
     };
-    follow();
-    const timer = setInterval(follow, REFRESH_MS);
-    for (const event of events) document.addEventListener(event, follow, true);
-    return () => {
-      clearInterval(timer);
-      for (const event of events) document.removeEventListener(event, follow, true);
-    };
+    return whilePlaying(audio, follow, events);
   }, [audio, events, read]);
   return value;
 }
@@ -76,13 +97,7 @@ function useLoading(audio: RefObject<HTMLAudioElement | null>) {
       const moving = now - last.movedAt < STILL_AFTER_MS;
       setLoading(!moving && element.readyState < HTMLMediaElement.HAVE_FUTURE_DATA);
     };
-    follow();
-    const timer = setInterval(follow, REFRESH_MS);
-    for (const event of LOAD_EVENTS) document.addEventListener(event, follow, true);
-    return () => {
-      clearInterval(timer);
-      for (const event of LOAD_EVENTS) document.removeEventListener(event, follow, true);
-    };
+    return whilePlaying(audio, follow, LOAD_EVENTS);
   }, [audio]);
   return loading;
 }

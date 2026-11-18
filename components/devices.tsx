@@ -18,6 +18,7 @@ import {
   timeNow,
 } from "@/lib/devices";
 import { NextIcon, PauseIcon, PlayIcon, PreviousIcon } from "./player-icons";
+import { useNow } from "./use-now";
 
 export type LocalPlayer = {
   state: () => DeviceState;
@@ -181,11 +182,7 @@ export function useDeviceLink(local: RefObject<LocalPlayer>, username: string | 
     };
   }, [local, username]);
 
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    const timer = setInterval(() => setNow(Date.now()), 15_000);
-    return () => clearInterval(timer);
-  }, []);
+  const now = useNow(15_000);
 
   const online = [...devices.values()].filter((device) => isOnline(device, now + offset));
 
@@ -427,11 +424,7 @@ export function DevicesPanel({
   onFollow: (id: string) => void;
 }) {
   const [message, setMessage] = useState<string | null>(null);
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    const timer = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(timer);
-  }, []);
+  const now = useNow(1000);
 
   async function run(work: Promise<string | null>) {
     setMessage(await work);

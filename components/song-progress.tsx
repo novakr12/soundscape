@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useNow } from "./use-now";
 
 type Props = {
   startedAt: number;
@@ -16,15 +17,10 @@ function clock(ms: number) {
 
 export default function SongProgress({ startedAt, durationMs, pausedAt, serverNow }: Props) {
   const [clockOffset] = useState(() => Date.now() - serverNow);
-  const [now, setNow] = useState(serverNow);
-
-  useEffect(() => {
-    if (pausedAt) return;
-    const tick = () => setNow(Date.now() - clockOffset);
-    tick();
-    const timer = setInterval(tick, 1000);
-    return () => clearInterval(timer);
-  }, [clockOffset, pausedAt]);
+  const ticked = useNow(1000, !pausedAt);
+  const [started, setStarted] = useState(false);
+  useEffect(() => setStarted(true), []);
+  const now = started ? ticked - clockOffset : serverNow;
 
   const elapsed = Math.max(0, (pausedAt ?? now) - startedAt);
   const equalizer = (
@@ -52,7 +48,7 @@ export default function SongProgress({ startedAt, durationMs, pausedAt, serverNo
         {pausedAt && " · paused"}
       </span>
       <span className="progress-bar" aria-hidden="true">
-        <span style={{ width: `${(shown / durationMs) * 100}%` }} />
+        <span style={{ transform: `scaleX(${shown / durationMs})` }} />
       </span>
     </small>
   );

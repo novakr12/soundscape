@@ -100,6 +100,8 @@ const CLOSE_TO_END_SECONDS = 0.25;
 const HAND_BACK_BEFORE = 50;
 const MOST_HANDED = 500;
 
+type Actions = Omit<PlayerContextValue, "current" | "queue" | "position" | "shuffle" | "repeat" | "radio">;
+
 const PlayerContext = createContext<PlayerContextValue | null>(null);
 
 export function usePlayer() {
@@ -172,7 +174,7 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
   const [position, setPosition] = useState(0);
   const [shuffle, setShuffle] = useState(false);
   const [repeat, setRepeat] = useState<Repeat>("off");
-  const queue = order.map((index) => tracks[index]);
+  const queue = useMemo(() => order.map((index) => tracks[index]), [order, tracks]);
   const current = queue[position] ?? null;
   const [options, setOptions] = useState<PlayerOptions>(DEFAULT_OPTIONS);
   const [radio, setRadio] = useState<RadioSeed | null>(null);
@@ -212,6 +214,24 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
   const [showQueue, setShowQueue] = useState(false);
   const [showLyrics, setShowLyrics] = useState(false);
   const [showDevices, setShowDevices] = useState(false);
+  const actions = useRef<Actions>(null as unknown as Actions);
+  const steady = useMemo<Actions>(
+    () => ({
+      play: (track) => actions.current.play(track),
+      playAll: (list, first) => actions.current.playAll(list, first),
+      playFrom: (list, chosen) => actions.current.playFrom(list, chosen),
+      next: () => actions.current.next(),
+      previous: () => actions.current.previous(),
+      toggleShuffle: () => actions.current.toggleShuffle(),
+      cycleRepeat: () => actions.current.cycleRepeat(),
+      playNext: (track) => actions.current.playNext(track),
+      addToQueue: (track) => actions.current.addToQueue(track),
+      remove: (at) => actions.current.remove(at),
+      jumpTo: (at) => actions.current.jumpTo(at),
+      startRadio: (seed) => actions.current.startRadio(seed),
+    }),
+    [],
+  );
   const blocked = useRef(false);
   const local = useRef<LocalPlayer>({ state: () => idleState(), obey: () => {} });
   const link = useDeviceLink(local, username);
@@ -1093,6 +1113,25 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
     refill,
     sleep: fallAsleep,
   };
+  actions.current = {
+    play,
+    playAll,
+    playFrom,
+    next,
+    previous,
+    toggleShuffle,
+    cycleRepeat,
+    playNext,
+    addToQueue,
+    remove,
+    jumpTo,
+    startRadio,
+  };
+  const radioOn = radio !== null;
+  const value = useMemo(
+    () => ({ current, queue, position, shuffle, repeat, radio: radioOn, ...steady }),
+    [current, queue, position, shuffle, repeat, radioOn, steady],
+  );
   const elsewhere = link.devices.find((device) => device.state.playing) ?? null;
   const hasNext = position + 1 < queue.length || (repeat === "all" && queue.length > 1);
 
@@ -1178,28 +1217,7 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
   }
 
   return (
-    <PlayerContext.Provider
-      value={{
-        current,
-        queue,
-        position,
-        play,
-        playAll,
-        playFrom,
-        next,
-        previous,
-        shuffle,
-        repeat,
-        toggleShuffle,
-        cycleRepeat,
-        playNext,
-        addToQueue,
-        remove,
-        jumpTo,
-        startRadio,
-        radio: radio !== null,
-      }}
-    >
+    <PlayerContext.Provider value={value}>
       {children}
       {showDevices && (
         <DevicesPanel

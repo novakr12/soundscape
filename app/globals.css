@@ -1347,11 +1347,13 @@ header .search {
 
 @keyframes pulse {
   0% {
-    box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 60%, transparent);
+    opacity: 0.6;
+    transform: scale(1);
   }
   70%,
   100% {
-    box-shadow: 0 0 0 0.4rem transparent;
+    opacity: 0;
+    transform: scale(2.4);
   }
 }
 
@@ -1424,6 +1426,15 @@ img.cover {
 }
 
 .live .dot.on {
+  position: relative;
+  background: var(--accent);
+}
+
+.live .dot.on::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
   background: var(--accent);
   animation: pulse 2s ease-out infinite;
 }
@@ -1689,6 +1700,12 @@ tr.selected {
 
 .cover-status p {
   margin: 0.4rem 0;
+}
+
+.progress .progress-bar span {
+  width: 100%;
+  transform-origin: left;
+  transition: transform 1s linear;
 }
 
 .cover-status .progress-bar {

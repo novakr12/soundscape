@@ -24,6 +24,7 @@ import {
   RepeatIcon,
   ShuffleIcon,
 } from "./player-icons";
+import { useNow } from "./use-now";
 
 const REPEAT_LABELS: Record<RepeatMode, string> = {
   off: "Repeat is off",
@@ -57,15 +58,10 @@ export default function RemoteBar({
   onLyrics: () => void;
 }) {
   const [asked, setAsked] = useState<{ shuffle?: boolean; repeat?: RepeatMode; since: number } | null>(null);
-  const [now, setNow] = useState(() => Date.now());
+  const now = useNow(500);
   const [guess, setGuess] = useState<Guess | null>(null);
   const [seeking, setSeeking] = useState<number | null>(null);
   const [volume, setVolume] = useState<number | null>(null);
-
-  useEffect(() => {
-    const timer = setInterval(() => setNow(Date.now()), 500);
-    return () => clearInterval(timer);
-  }, []);
 
   useEffect(() => {
     if (device.at > 0) {

@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useRef } from "react";
 import { MoonIcon } from "./player-icons";
+import { useNow } from "./use-now";
 
 export type Sleep = { kind: "song" } | { kind: "time"; until: number } | null;
 
@@ -20,14 +21,7 @@ function describe(sleep: Sleep, now: number) {
 
 export default function SleepTimer({ sleep, onChoose }: { sleep: Sleep; onChoose: (sleep: Sleep) => void }) {
   const menu = useRef<HTMLDetailsElement>(null);
-  const [now, setNow] = useState(() => Date.now());
-
-  useEffect(() => {
-    if (sleep?.kind !== "time") return;
-    setNow(Date.now());
-    const timer = setInterval(() => setNow(Date.now()), 15_000);
-    return () => clearInterval(timer);
-  }, [sleep]);
+  const now = useNow(15_000, sleep?.kind === "time");
 
   function choose(next: Sleep) {
     onChoose(next);
