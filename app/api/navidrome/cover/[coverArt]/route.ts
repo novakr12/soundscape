@@ -1,5 +1,5 @@
 import { fetchCoverArt, getNavidrome, isSongId, NavidromeBusy } from "@/lib/navidrome";
-import { currentUserId } from "@/lib/session";
+import { sessionOrTokenUser } from "@/lib/token-auth";
 
 export const dynamic = "force-dynamic";
 
@@ -9,8 +9,8 @@ type Context = {
 
 const TRY_AGAIN_SECONDS = 5;
 
-export async function GET(_request: Request, { params }: Context) {
-  const userId = await currentUserId();
+export async function GET(request: Request, { params }: Context) {
+  const userId = await sessionOrTokenUser(request);
   if (!userId) return Response.json({ error: "Log in to see covers" }, { status: 401 });
   const { coverArt } = await params;
   if (!isSongId(coverArt)) return Response.json({ error: "Unknown cover." }, { status: 404 });

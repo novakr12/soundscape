@@ -84,6 +84,10 @@ function fakeNavidrome() {
         subsonic({ searchResult3: { song: songs.filter((song) => song.title.toLowerCase().includes(words)) } }),
       );
     }
+    if (method === "getCoverArt" && params.get("id") === "road") {
+      response.setHeader("content-type", "image/png");
+      return response.end(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]));
+    }
     if (method === "getAlbum" || method === "getPlaylist") {
       return response.end(
         JSON.stringify({ "subsonic-response": { status: "failed", error: { code: 70, message: "Not found" } } }),
@@ -177,6 +181,15 @@ describe("the app's library for Android Auto", () => {
       ["First Gear"],
     );
     assert.equal((await library("search=%20")).status, 400);
+  });
+
+  it("serves album covers to the app's token", async () => {
+    const cover = await fetch(`${BASE_URL}/api/navidrome/cover/road`, {
+      headers: { authorization: `Token ${token}`, "user-agent": "SoundscapeAndroid/test" },
+    });
+    assert.equal(cover.status, 200);
+    assert.equal(cover.headers.get("content-type"), "image/png");
+    assert.equal((await fetch(`${BASE_URL}/api/navidrome/cover/road`)).status, 401);
   });
 
   it("refuses places that don't exist", async () => {
