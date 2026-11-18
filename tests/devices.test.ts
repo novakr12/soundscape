@@ -15,6 +15,7 @@ import {
   shownPlayback,
   timeNow,
 } from "../lib/devices";
+import { fitMessage } from "../lib/player-devices";
 
 const song = { trackId: "t1", title: "Song", artist: "Band", album: "Record", cover: "/api/cover/t1" };
 
@@ -31,12 +32,15 @@ describe("device reports", () => {
       name: "Firefox on Linux",
       kind: "browser",
       state: {
-        track: { ...song, songId: null },
+        track: { ...song, songId: null, albumHref: null, artistHref: null },
         playing: true,
         time: 12.5,
         duration: 200,
         volume: 1,
         blocked: false,
+        shuffle: null,
+        repeat: null,
+        upNext: [],
       },
     });
   });
@@ -47,6 +51,28 @@ describe("device reports", () => {
     assert.equal(readDeviceReport({ id: "abcdefgh12", name: " ", kind: "browser" }), null);
     assert.equal(isDeviceId("../../etc/passwd"), false);
     assert.equal(isDeviceId(newDeviceId()), true);
+  });
+
+  it("reads shuffle, repeat and what plays next", () => {
+    const state = readDeviceState({
+      track: { ...song, albumHref: "/album/band-record" },
+      shuffle: true,
+      repeat: "one",
+      upNext: [
+        { trackId: "t2", title: "Two", artist: "Band", cover: "/x" },
+        { trackId: "t3" },
+        ...Array.from({ length: 20 }, (_, i) => ({ trackId: `n${i}`, title: "N", artist: "Band" })),
+      ],
+    });
+    assert.equal(state.track?.albumHref, "/album/band-record");
+    assert.equal(state.shuffle, true);
+    assert.equal(state.repeat, "one");
+    assert.deepEqual(state.upNext[0], { trackId: "t2", title: "Two", artist: "Band" });
+    assert.equal(state.upNext.length, 10);
+    const odd = readDeviceState({ track: { ...song, albumHref: "//evil.example" }, shuffle: "yes", repeat: "twice" });
+    assert.equal(odd.track?.albumHref, null);
+    assert.equal(odd.shuffle, null);
+    assert.equal(odd.repeat, null);
   });
 
   it("is not playing without a song and drops outside covers", () => {
@@ -73,6 +99,28 @@ describe("device commands", () => {
     assert.equal(readDeviceCommand({ do: "explode" }), null);
     assert.deepEqual(readDeviceCommand({ do: "send", to: "abcdefgh12" }), { do: "send", to: "abcdefgh12" });
     assert.equal(readDeviceCommand({ do: "send", to: "x" }), null);
+  });
+
+  it("reads shuffle, repeat and jumps", () => {
+    assert.deepEqual(readDeviceCommand({ do: "shuffle", on: false }), { do: "shuffle", on: false });
+    assert.equal(readDeviceCommand({ do: "shuffle" }), null);
+    assert.deepEqual(readDeviceCommand({ do: "repeat", mode: "all" }), { do: "repeat", mode: "all" });
+    assert.equal(readDeviceCommand({ do: "repeat", mode: "forever" }), null);
+    assert.deepEqual(readDeviceCommand({ do: "jump", ahead: 3 }), { do: "jump", ahead: 3 });
+    assert.equal(readDeviceCommand({ do: "jump", ahead: 0 }), null);
+    assert.equal(readDeviceCommand({ do: "jump", ahead: 11 }), null);
+    assert.equal(readDeviceCommand({ do: "jump", ahead: 1.5 }), null);
+  });
+
+  it("reads a song to queue up", () => {
+    assert.deepEqual(readDeviceCommand({ do: "enqueue", track: song, next: true }), {
+      do: "enqueue",
+      track: { trackId: "t1", title: "Song", artist: "Band", album: "Record", cover: "/api/cover/t1" },
+      next: true,
+    });
+    assert.equal((readDeviceCommand({ do: "enqueue", track: song }) as { next: boolean }).next, false);
+    assert.equal(readDeviceCommand({ do: "enqueue", track: { trackId: "x" } }), null);
+    assert.equal(readDeviceCommand({ do: "enqueue" }), null);
   });
 
   it("reads a handed-over queue", () => {
@@ -151,6 +199,22 @@ describe("device helpers", () => {
     assert.equal(isHeld({ soundscapeDeviceHeld: true }), true);
     assert.equal(isHeld({ soundscapeDeviceHeld: "yes" }), false);
     assert.equal(isHeld({}), false);
+  });
+
+  it("keeps live messages small enough for the database", () => {
+    const long = "x".repeat(290);
+    const state = readDeviceState({
+      track: song,
+      upNext: Array.from({ length: 10 }, (_, i) => ({ trackId: `${i}${long}`, title: long, artist: long })),
+    });
+    const device = { id: "abcdefgh12", name: "x", kind: "browser" as const, at: 0, state };
+    const sent = JSON.parse(fitMessage({ user: "u", type: "device", device }));
+    assert.deepEqual(sent.device.state.upNext, []);
+    assert.equal(sent.device.state.track.title, "Song");
+    const short = JSON.parse(
+      fitMessage({ user: "u", type: "device", device: { ...device, state: readDeviceState({ track: song }) } }),
+    );
+    assert.equal(short.device.state.track.trackId, "t1");
   });
 
   it("describes what plays", () => {

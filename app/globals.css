@@ -695,6 +695,12 @@ main {
   color: var(--accent);
 }
 
+.remote-where span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .remote-where svg {
   flex: none;
   width: 14px;
@@ -2182,6 +2188,15 @@ tr.selected {
 
   .player .volume {
     display: none;
+  }
+
+  .remote-here {
+    padding: 0.3rem 0.55rem;
+    font-size: 0.8rem;
+  }
+
+  .remote-player .player-side {
+    gap: 0;
   }
 
   .queue-panel {

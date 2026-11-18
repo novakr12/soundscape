@@ -1,6 +1,6 @@
 "use client";
 
-import { type RefObject, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { currentLine, type Lyrics } from "@/lib/lyrics-text";
 import type { PlayerTrack } from "./player";
 
@@ -14,13 +14,17 @@ function keyOf(track: PlayerTrack) {
 
 export default function LyricsPanel({
   track,
-  audio,
+  time,
+  onSeek,
   onClose,
 }: {
   track: PlayerTrack;
-  audio: RefObject<HTMLAudioElement | null>;
+  time: () => number;
+  onSeek: (seconds: number) => void;
   onClose: () => void;
 }) {
+  const clock = useRef(time);
+  clock.current = time;
   const [state, setState] = useState<State>({ key: keyOf(track), loading: true });
   const [at, setAt] = useState(-1);
   const list = useRef<HTMLOListElement>(null);
@@ -46,7 +50,7 @@ export default function LyricsPanel({
 
   useEffect(() => {
     const body = document.body;
-    const bar = document.querySelector<HTMLElement>(".player");
+    const bar = document.querySelector<HTMLElement>(".player:not([hidden])");
     const measure = () => body.style.setProperty("--player-height", `${bar?.offsetHeight ?? 0}px`);
     measure();
     const watcher = bar ? new ResizeObserver(measure) : null;
@@ -61,11 +65,11 @@ export default function LyricsPanel({
 
   useEffect(() => {
     if (!lyrics?.synced) return;
-    const tick = () => setAt(currentLine(lyrics.lines, audio.current?.currentTime ?? 0));
+    const tick = () => setAt(currentLine(lyrics.lines, clock.current()));
     tick();
     const timer = setInterval(tick, REFRESH_MS);
     return () => clearInterval(timer);
-  }, [lyrics, audio]);
+  }, [lyrics]);
 
   useEffect(() => {
     const box = list.current?.parentElement;
@@ -75,7 +79,7 @@ export default function LyricsPanel({
   }, [at]);
 
   function seek(seconds: number | undefined) {
-    if (seconds !== undefined && audio.current) audio.current.currentTime = seconds;
+    if (seconds !== undefined) onSeek(seconds);
   }
 
   return (

@@ -17,8 +17,17 @@ export type DeviceMessage =
   | { user: string; type: "gone"; id: string }
   | { user: string; type: "command"; to: string };
 
+const LONGEST_MESSAGE = 7500;
+
+export function fitMessage(message: DeviceMessage) {
+  const text = JSON.stringify(message);
+  if (Buffer.byteLength(text) <= LONGEST_MESSAGE || message.type !== "device") return text;
+  const device = message.device;
+  return JSON.stringify({ ...message, device: { ...device, state: { ...device.state, upNext: [] } } });
+}
+
 async function tell(message: DeviceMessage) {
-  await sql.notify(DEVICES_CHANNEL, JSON.stringify(message));
+  await sql.notify(DEVICES_CHANNEL, fitMessage(message));
 }
 
 function toDevice(row: Record<string, unknown>): Device {

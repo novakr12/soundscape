@@ -9,7 +9,15 @@ export type DeviceTrack = {
   album: string | null;
   cover: string | null;
   songId: string | null;
+  albumHref: string | null;
+  artistHref: string | null;
 };
+
+export type UpNext = { trackId: string; title: string; artist: string };
+
+export const REPEAT_MODES = ["off", "all", "one"] as const;
+
+export type RepeatMode = (typeof REPEAT_MODES)[number];
 
 export type DeviceState = {
   track: DeviceTrack | null;
@@ -18,7 +26,12 @@ export type DeviceState = {
   duration: number | null;
   volume: number;
   blocked: boolean;
+  shuffle: boolean | null;
+  repeat: RepeatMode | null;
+  upNext: UpNext[];
 };
+
+export const MOST_UP_NEXT = 10;
 
 export type Device = {
   id: string;
@@ -44,7 +57,11 @@ export type DeviceCommand =
   | { do: "seek"; time: number }
   | { do: "volume"; volume: number }
   | { do: "take"; tracks: HandedTrack[]; position: number; time: number; playing: boolean }
-  | { do: "send"; to: string };
+  | { do: "send"; to: string }
+  | { do: "enqueue"; track: HandedTrack; next: boolean }
+  | { do: "shuffle"; on: boolean }
+  | { do: "repeat"; mode: RepeatMode }
+  | { do: "jump"; ahead: number };
 
 export const DEVICE_ONLINE_MS = 150_000;
 export const DEVICE_HEARTBEAT_MS = 30_000;
@@ -76,14 +93,40 @@ export function readDeviceTrack(value: unknown): DeviceTrack | null {
   const artist = text(value.artist);
   if (!trackId || !title || !artist) return null;
   const cover = text(value.cover, 1000);
+  const albumHref = text(value.albumHref, 1000);
+  const artistHref = text(value.artistHref, 1000);
   return {
     trackId,
     title,
     artist,
     album: text(value.album),
-    cover: cover?.startsWith("/") || cover?.startsWith("https://") ? cover : null,
+    cover: cover && (isOwnPath(cover) || cover.startsWith("https://")) ? cover : null,
     songId: text(value.songId, 100),
+    albumHref: albumHref && isOwnPath(albumHref) ? albumHref : null,
+    artistHref: artistHref && isOwnPath(artistHref) ? artistHref : null,
   };
+}
+
+function isOwnPath(path: string) {
+  return path.startsWith("/") && !path.startsWith("//");
+}
+
+function readUpNext(value: unknown): UpNext[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .slice(0, MOST_UP_NEXT * 5)
+    .flatMap((item) => {
+      if (!isRecord(item)) return [];
+      const trackId = text(item.trackId);
+      const title = text(item.title);
+      const artist = text(item.artist);
+      return trackId && title && artist ? [{ trackId, title, artist }] : [];
+    })
+    .slice(0, MOST_UP_NEXT);
+}
+
+export function readRepeat(value: unknown): RepeatMode | null {
+  return REPEAT_MODES.find((mode) => mode === value) ?? null;
 }
 
 export function readDeviceState(value: unknown): DeviceState {
@@ -99,6 +142,9 @@ export function readDeviceState(value: unknown): DeviceState {
     duration: duration !== null && duration > 0 ? duration : null,
     volume: volume !== null ? Math.min(Math.max(volume, 0), 1) : 0.8,
     blocked: raw.blocked === true,
+    shuffle: typeof raw.shuffle === "boolean" ? raw.shuffle : null,
+    repeat: readRepeat(raw.repeat),
+    upNext: readUpNext(raw.upNext),
   };
 }
 
@@ -122,7 +168,7 @@ export function readHandedTrack(value: unknown): HandedTrack | null {
     title: track.title,
     artist: track.artist,
     ...(track.album ? { album: track.album } : {}),
-    ...(albumHref?.startsWith("/") ? { albumHref } : {}),
+    ...(albumHref && isOwnPath(albumHref) ? { albumHref } : {}),
     ...(track.cover ? { cover: track.cover } : {}),
     ...(track.songId ? { songId: track.songId } : {}),
     ...(duration !== null && duration > 0 ? { duration } : {}),
@@ -143,8 +189,25 @@ export function readDeviceCommand(value: unknown): DeviceCommand | null {
     const volume = finite(value.volume);
     return volume !== null && volume >= 0 && volume <= 1 ? { do: "volume", volume } : null;
   }
+  if (name === "enqueue") {
+    const track = readHandedTrack(value.track);
+    return track ? { do: "enqueue", track, next: value.next === true } : null;
+  }
   if (name === "send") {
     return isDeviceId(value.to) ? { do: "send", to: value.to } : null;
+  }
+  if (name === "shuffle") {
+    return typeof value.on === "boolean" ? { do: "shuffle", on: value.on } : null;
+  }
+  if (name === "repeat") {
+    const mode = readRepeat(value.mode);
+    return mode ? { do: "repeat", mode } : null;
+  }
+  if (name === "jump") {
+    const ahead = finite(value.ahead);
+    return ahead !== null && Number.isInteger(ahead) && ahead >= 1 && ahead <= MOST_UP_NEXT
+      ? { do: "jump", ahead }
+      : null;
   }
   if (name === "take") {
     if (!Array.isArray(value.tracks)) return null;

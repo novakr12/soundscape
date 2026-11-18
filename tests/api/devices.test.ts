@@ -83,12 +83,15 @@ describe("devices", () => {
     const mine = new Map(answer.devices.map((device: { id: string }) => [device.id, device]));
     assert.equal(mine.size, 2);
     assert.deepEqual((mine.get(laptop) as { state: unknown }).state, {
-      track: { ...song, album: null, cover: null, songId: null },
+      track: { ...song, album: null, cover: null, songId: null, albumHref: null, artistHref: null },
       playing: true,
       time: 20,
       duration: 180,
       volume: 0.8,
       blocked: false,
+      shuffle: null,
+      repeat: null,
+      upNext: [],
     });
     const theirs = await (await call("/api/devices", otherToken)).json();
     assert.deepEqual(theirs.devices, []);

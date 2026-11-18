@@ -1,11 +1,35 @@
 "use client";
 
+import Link from "next/link";
 import { type RefObject, useEffect, useState } from "react";
-import { type Device, type DeviceCommand, type Guess, shownPlayback } from "@/lib/devices";
-import { SEEK_STEP_SECONDS } from "@/lib/play-queue";
+import {
+  type Device,
+  type DeviceCommand,
+  GUESS_KEEP_MS,
+  type Guess,
+  type RepeatMode,
+  shownPlayback,
+} from "@/lib/devices";
+import { nextRepeat, SEEK_STEP_SECONDS } from "@/lib/play-queue";
 import { clock, KindIcon, useLater } from "./devices";
-import { SongLink } from "./music-links";
-import { DevicesIcon, NextIcon, PauseIcon, PlayIcon, PreviousIcon } from "./player-icons";
+import { ArtistLink, SongLink } from "./music-links";
+import {
+  DevicesIcon,
+  LyricsIcon,
+  NextIcon,
+  PauseIcon,
+  PlayIcon,
+  PreviousIcon,
+  QueueIcon,
+  RepeatIcon,
+  ShuffleIcon,
+} from "./player-icons";
+
+const REPEAT_LABELS: Record<RepeatMode, string> = {
+  off: "Repeat is off",
+  all: "Repeating the queue",
+  one: "Repeating this song",
+};
 
 export default function RemoteBar({
   device,
@@ -15,6 +39,10 @@ export default function RemoteBar({
   onDevices,
   showDevices,
   keys,
+  showQueue,
+  showLyrics,
+  onQueue,
+  onLyrics,
 }: {
   device: Device;
   offset: number;
@@ -23,7 +51,12 @@ export default function RemoteBar({
   onDevices: () => void;
   showDevices: boolean;
   keys: RefObject<(shortcut: string) => boolean>;
+  showQueue: boolean;
+  showLyrics: boolean;
+  onQueue: () => void;
+  onLyrics: () => void;
 }) {
+  const [asked, setAsked] = useState<{ shuffle?: boolean; repeat?: RepeatMode; since: number } | null>(null);
   const [now, setNow] = useState(() => Date.now());
   const [guess, setGuess] = useState<Guess | null>(null);
   const [seeking, setSeeking] = useState<number | null>(null);
@@ -35,7 +68,10 @@ export default function RemoteBar({
   }, []);
 
   useEffect(() => {
-    if (device.at > 0) setGuess(null);
+    if (device.at > 0) {
+      setGuess(null);
+      setAsked(null);
+    }
   }, [device.at]);
 
   const state = device.state;
@@ -44,6 +80,9 @@ export default function RemoteBar({
   const length = state.duration ?? 0;
   const at = seeking ?? (length > 0 ? Math.min(shown.time, length) : shown.time);
   const shownVolume = volume ?? state.volume;
+  const fresh = asked && now - asked.since < GUESS_KEEP_MS ? asked : null;
+  const shuffle = fresh?.shuffle ?? state.shuffle;
+  const repeat = fresh?.repeat ?? state.repeat;
 
   const seekLater = useLater((value) => {
     send({ do: "seek", time: value });
@@ -98,8 +137,22 @@ export default function RemoteBar({
                 <SongLink trackId={track.trackId}>{track.title}</SongLink>
               </strong>
               <span className="muted" title={[track.artist, track.album].filter(Boolean).join(" · ")}>
-                {track.artist}
-                {track.album && ` · ${track.album}`}
+                {track.artistHref ? (
+                  <Link className="music-link" href={track.artistHref}>
+                    {track.artist}
+                  </Link>
+                ) : (
+                  <ArtistLink name={track.artist} />
+                )}
+                {track.album && " · "}
+                {track.album &&
+                  (track.albumHref ? (
+                    <Link className="music-link" href={track.albumHref}>
+                      {track.album}
+                    </Link>
+                  ) : (
+                    track.album
+                  ))}
               </span>
             </>
           ) : (
@@ -107,12 +160,28 @@ export default function RemoteBar({
           )}
           <span className="remote-where">
             <KindIcon kind={device.kind} />
-            Playing on {device.name}
+            <span>Playing on {device.name}</span>
           </span>
         </div>
       </div>
       <div className="player-center">
         <div className="player-skip">
+          {shuffle !== null && (
+            <button
+              type="button"
+              className="icon-button player-toggle"
+              data-player="shuffle"
+              aria-label={`Shuffle on ${device.name}`}
+              aria-pressed={shuffle}
+              title={shuffle ? "Shuffle is on" : "Shuffle is off"}
+              onClick={() => {
+                send({ do: "shuffle", on: !shuffle });
+                setAsked({ ...fresh, shuffle: !shuffle, since: now });
+              }}
+            >
+              <ShuffleIcon size={18} />
+            </button>
+          )}
           <button
             type="button"
             className="icon-button"
@@ -143,6 +212,24 @@ export default function RemoteBar({
           >
             <NextIcon />
           </button>
+          {repeat !== null && (
+            <button
+              type="button"
+              className="icon-button player-toggle"
+              data-player="repeat"
+              data-repeat={repeat}
+              aria-label={`Repeat on ${device.name}: ${repeat}`}
+              aria-pressed={repeat !== "off"}
+              title={REPEAT_LABELS[repeat]}
+              onClick={() => {
+                const mode = nextRepeat(repeat);
+                send({ do: "repeat", mode });
+                setAsked({ ...fresh, repeat: mode, since: now });
+              }}
+            >
+              <RepeatIcon size={18} one={repeat === "one"} />
+            </button>
+          )}
         </div>
         <div className="player-seek">
           <span className="player-time">{clock(at)}</span>
@@ -169,6 +256,34 @@ export default function RemoteBar({
         <button type="button" className="secondary remote-here" onClick={onPlayHere} disabled={!track}>
           Play here
         </button>
+        {state.upNext.length > 0 && (
+          <button
+            type="button"
+            className="icon-button player-toggle"
+            data-player="queue"
+            aria-label={`Queue on ${device.name}`}
+            aria-expanded={showQueue}
+            aria-pressed={showQueue}
+            title="Queue"
+            onClick={onQueue}
+          >
+            <QueueIcon size={18} />
+          </button>
+        )}
+        {track && (
+          <button
+            type="button"
+            className="icon-button player-toggle"
+            data-player="lyrics"
+            aria-label="Lyrics"
+            aria-expanded={showLyrics}
+            aria-pressed={showLyrics}
+            title="Lyrics"
+            onClick={onLyrics}
+          >
+            <LyricsIcon size={18} />
+          </button>
+        )}
         <button
           type="button"
           className="icon-button player-toggle active"

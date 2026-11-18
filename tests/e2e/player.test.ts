@@ -624,6 +624,12 @@ describe("player", () => {
       await page.locator(".music-songs li").first().getByRole("button", { name: "▶ Play" }).click();
       await waitForSong("First Light");
       const playing = (await title()) ?? "";
+      const artistLink = page.locator(".player .now-playing").getByRole("link", { name: "Player Test Band" });
+      assert.match((await artistLink.getAttribute("href")) ?? "", /^\/(artist\/|music\?q=)/);
+      assert.equal(
+        await page.locator(".player .now-playing").getByRole("link", { name: "Player Test Album" }).count(),
+        1,
+      );
       assert.ok(playing);
       await other.goto(`${BASE_URL}/login`, { waitUntil: "domcontentloaded" });
       await other.fill('input[name="username"]', USERNAME);
@@ -661,6 +667,36 @@ describe("player", () => {
       );
       assert.equal(await other.evaluate(() => (window as unknown as Bridge).soundscapePlayer.command("pause")), true);
       await pageAudio('document.querySelector(".player audio")?.paused === true');
+      assert.equal(
+        await bar.getByRole("link", { name: "Player Test Band" }).getAttribute("href"),
+        "/artist/player-test-band",
+      );
+      const saved = 'JSON.parse(localStorage.getItem("soundscape:player") ?? "{}")';
+      await bar.getByRole("button", { name: "Shuffle on Chrome on Linux" }).click();
+      await pageAudio(`${saved}.shuffle === true`);
+      await bar.getByRole("button", { name: "Shuffle on Chrome on Linux", pressed: true }).waitFor({ timeout: 5000 });
+      await bar.getByRole("button", { name: "Shuffle on Chrome on Linux" }).click();
+      await pageAudio(`${saved}.shuffle === false`);
+      await bar.getByRole("button", { name: "Repeat on Chrome on Linux: off" }).click();
+      await pageAudio(`${saved}.repeat === "all"`);
+      await bar.getByRole("button", { name: "Repeat on Chrome on Linux: all" }).click();
+      await pageAudio(`${saved}.repeat === "one"`);
+      await bar.getByRole("button", { name: "Repeat on Chrome on Linux: one" }).click();
+      await pageAudio(`${saved}.repeat === "off"`);
+      await bar.getByRole("button", { name: "Lyrics" }).click();
+      await other.getByRole("region", { name: "Lyrics" }).getByText("First Light line 1").waitFor({ timeout: 10_000 });
+      await other.getByRole("region", { name: "Lyrics" }).getByRole("button", { name: "Close" }).click();
+      await bar.getByRole("button", { name: "Queue on Chrome on Linux" }).click();
+      const remoteQueue = other.getByRole("region", { name: "Queue" });
+      await remoteQueue.getByText("Queue on Chrome on Linux").waitFor();
+      await remoteQueue.getByRole("button", { name: /Second Wind/ }).click();
+      await page.waitForFunction(
+        () => document.querySelector(".player .now-playing strong")?.textContent === "Second Wind",
+        null,
+        { timeout: 10_000 },
+      );
+      await bar.locator(".now-playing strong", { hasText: "Second Wind" }).waitFor({ timeout: 10_000 });
+      await remoteQueue.getByRole("button", { name: "Close" }).click();
       await other.evaluate(() => {
         (window as unknown as { next: { router: { push: (href: string) => void } } }).next.router.push(
           "/music?album=e2e-album",
@@ -679,6 +715,19 @@ describe("player", () => {
         { timeout: 30_000 },
       );
       await bar.locator(".now-playing strong", { hasText: "Second Wind" }).waitFor({ timeout: 10_000 });
+      type Queue = { soundscapePlayer: { state: () => { tracks: { title: string }[]; position: number } } };
+      const before = await page.evaluate(() => (window as unknown as Queue).soundscapePlayer.state().tracks.length);
+      await other.getByLabel("More for First Light").first().click();
+      await other.locator("details[open]").getByRole("button", { name: "Add to queue" }).click();
+      await page.waitForFunction(
+        (count) => {
+          const tracks = (window as unknown as Queue).soundscapePlayer.state().tracks;
+          return tracks.length === count + 1 && tracks[tracks.length - 1].title === "First Light";
+        },
+        before,
+        { timeout: 10_000 },
+      );
+      assert.equal(await page.evaluate(() => document.querySelector<HTMLAudioElement>(".player audio")?.paused), false);
       assert.equal(
         await other.evaluate(() => Boolean(document.querySelector<HTMLAudioElement>(".player audio")?.paused ?? true)),
         true,

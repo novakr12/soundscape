@@ -12,7 +12,8 @@ import {
   savedVolume,
   wantsRemote,
 } from "@/lib/app-bridge";
-import type { Device, DeviceCommand, DeviceState } from "@/lib/devices";
+import { artistIdFor } from "@/lib/catalog";
+import { type Device, type DeviceCommand, type DeviceState, MOST_UP_NEXT, timeNow } from "@/lib/devices";
 import { type Gain, gainLevel, playingAnAlbum } from "@/lib/levelling";
 import {
   countsAsPlay,
@@ -53,6 +54,7 @@ export type PlayerTrack = {
   newSong?: boolean;
   album?: string;
   albumHref?: string;
+  artistHref?: string;
   gain?: Gain;
   duration?: number;
 };
@@ -106,6 +108,29 @@ export function usePlayer() {
   return player;
 }
 
+function artistPage(track: PlayerTrack) {
+  if (track.artistHref) return track.artistHref;
+  return track.newSong
+    ? `/music?q=${encodeURIComponent(track.artist)}`
+    : `/artist/${encodeURIComponent(artistIdFor(track.artist))}`;
+}
+
+function remoteTrack(track: {
+  trackId: string;
+  title: string;
+  artist: string;
+  album?: string | null;
+  songId?: string | null;
+}): PlayerTrack {
+  return {
+    trackId: track.trackId,
+    title: track.title,
+    artist: track.artist,
+    ...(track.album ? { album: track.album } : {}),
+    ...(track.songId ? { songId: track.songId } : {}),
+  };
+}
+
 function handed(track: PlayerTrack) {
   return {
     trackId: track.trackId,
@@ -120,7 +145,17 @@ function handed(track: PlayerTrack) {
 }
 
 function idleState(): DeviceState {
-  return { track: null, playing: false, time: 0, duration: null, volume: 0.8, blocked: false };
+  return {
+    track: null,
+    playing: false,
+    time: 0,
+    duration: null,
+    volume: 0.8,
+    blocked: false,
+    shuffle: null,
+    repeat: null,
+    upNext: [],
+  };
 }
 
 export function PlayerProvider({ children, username }: { children: React.ReactNode; username: string | null }) {
@@ -448,6 +483,13 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
   useEffect(() => {
     skip.current.restore();
   }, []);
+
+  const reportLater = useRef(link.report);
+  reportLater.current = link.report;
+  const queueShape = `${tracks.length}|${order.join(",")}|${position}|${shuffle}|${repeat}`;
+  useEffect(() => {
+    if (queueShape) reportLater.current();
+  }, [queueShape]);
 
   function restoreSaved() {
     if (playing.current > 0) return;
@@ -803,8 +845,21 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
   }
 
   function enqueue(track: PlayerTrack, next: boolean) {
+    const target = away.current.device;
+    if (target) {
+      link.send(target.id, { do: "enqueue", track: handed(track), next }).then((failure) => {
+        if (failure) queueHere(track, next);
+      });
+      return;
+    }
+    queueHere(track, next);
+  }
+
+  function queueHere(track: PlayerTrack, next: boolean) {
     if (orderRef.current.length === 0) {
-      play(track);
+      setRadio(null);
+      arrange([track], [0], 0);
+      start(track);
       return;
     }
     const index = tracksRef.current.length;
@@ -924,12 +979,21 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
         album: track.album ?? null,
         cover: track.cover ?? null,
         songId: track.songId ?? null,
+        albumHref: track.albumHref ?? null,
+        artistHref: artistPage(track),
       },
       playing: Boolean(audio.currentSrc) && !audio.paused && !audio.ended,
       time: pendingTime.current || (Number.isFinite(audio.currentTime) ? audio.currentTime : 0),
       duration: Number.isFinite(length) && length > 0 ? length : null,
       volume: savedVolume(localStorage.getItem("soundscape-volume")),
       blocked: blocked.current,
+      shuffle: shuffleRef.current,
+      repeat: repeatRef.current,
+      upNext: orderRef.current
+        .slice(positionRef.current + 1, positionRef.current + 1 + MOST_UP_NEXT)
+        .map((index) => tracksRef.current[index])
+        .filter(Boolean)
+        .map((next) => ({ trackId: next.trackId, title: next.title, artist: next.artist })),
     };
   }
 
@@ -968,6 +1032,24 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
     }
     if (command.do === "send") {
       moveMusicTo(command.to);
+      return;
+    }
+    if (command.do === "enqueue") {
+      queueHere(command.track, command.next);
+      return;
+    }
+    if (command.do === "shuffle") {
+      if (shuffleRef.current !== command.on) toggleShuffle();
+      return;
+    }
+    if (command.do === "repeat") {
+      repeatRef.current = command.mode;
+      setRepeat(command.mode);
+      remember();
+      return;
+    }
+    if (command.do === "jump") {
+      jumpTo(positionRef.current + command.ahead);
       return;
     }
     if (command.do === "volume") {
@@ -1145,6 +1227,18 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
           }}
           onPlayHere={() => pullHere(followed.id)}
           keys={remoteKeys}
+          showQueue={showQueue}
+          showLyrics={showLyrics}
+          onQueue={() => {
+            setShowLyrics(false);
+            setShowDevices(false);
+            setShowQueue(!showQueue);
+          }}
+          onLyrics={() => {
+            setShowQueue(false);
+            setShowDevices(false);
+            setShowLyrics(!showLyrics);
+          }}
           showDevices={showDevices}
           onDevices={() => {
             setShowQueue(false);
@@ -1153,8 +1247,40 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
           }}
         />
       )}
-      {current && showLyrics && <LyricsPanel track={current} audio={audioRef} onClose={() => setShowLyrics(false)} />}
-      {current && showQueue && (
+      {!followed && current && showLyrics && (
+        <LyricsPanel
+          track={current}
+          time={() => audioRef.current?.currentTime ?? 0}
+          onSeek={(seconds) => {
+            if (audioRef.current) audioRef.current.currentTime = seconds;
+          }}
+          onClose={() => setShowLyrics(false)}
+        />
+      )}
+      {followed?.state.track && showLyrics && (
+        <LyricsPanel
+          track={remoteTrack(followed.state.track)}
+          time={() => {
+            const device = away.current.device;
+            return device ? timeNow(device.state, device.at, Date.now() + away.current.offset) : 0;
+          }}
+          onSeek={(seconds) => away.current.send({ do: "seek", time: seconds })}
+          onClose={() => setShowLyrics(false)}
+        />
+      )}
+      {followed?.state.track && showQueue && (
+        <QueuePanel
+          title={`Queue on ${followed.name}`}
+          queue={[remoteTrack(followed.state.track), ...followed.state.upNext]}
+          keys={[followed.state.track, ...followed.state.upNext].map((each, at) => `${at}:${each.trackId}`)}
+          position={0}
+          onClose={() => setShowQueue(false)}
+          onJump={(at) => {
+            if (at > 0) away.current.send({ do: "jump", ahead: at });
+          }}
+        />
+      )}
+      {!followed && current && showQueue && (
         <QueuePanel
           queue={queue}
           keys={order}

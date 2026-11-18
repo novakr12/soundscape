@@ -18,18 +18,19 @@ const REPEAT_LABELS: Record<Repeat, string> = {
 
 type QueuePanelProps = {
   queue: PlayerTrack[];
-  keys: number[];
+  keys: (number | string)[];
   position: number;
   onClose: () => void;
   onJump: (at: number) => void;
-  onRemove: (at: number) => void;
+  onRemove?: (at: number) => void;
+  title?: string;
 };
 
-export function QueuePanel({ queue, keys, position, onClose, onJump, onRemove }: QueuePanelProps) {
+export function QueuePanel({ queue, keys, position, onClose, onJump, onRemove, title = "Queue" }: QueuePanelProps) {
   return (
     <section className="queue-panel" aria-label="Queue">
       <div className="section-head">
-        <h2>Queue</h2>
+        <h2>{title}</h2>
         <button type="button" className="secondary" onClick={onClose}>
           Close
         </button>
@@ -40,7 +41,7 @@ export function QueuePanel({ queue, keys, position, onClose, onJump, onRemove }:
             <button type="button" className="queue-song" onClick={() => onJump(at)}>
               <span>{track.title}</span> <span className="muted">· {track.artist}</span>
             </button>
-            {at !== position && (
+            {onRemove && at !== position && (
               <button
                 type="button"
                 className="queue-remove"
@@ -125,7 +126,17 @@ export function PlayerBar({
                 {current.newSong ? current.title : <SongLink trackId={current.trackId}>{current.title}</SongLink>}
               </strong>
               <span className="muted" title={[current.artist, current.album].filter(Boolean).join(" · ")}>
-                {current.newSong ? current.artist : <ArtistLink name={current.artist} />}
+                {current.artistHref ? (
+                  <Link className="music-link" href={current.artistHref}>
+                    {current.artist}
+                  </Link>
+                ) : current.newSong ? (
+                  <Link className="music-link" href={`/music?q=${encodeURIComponent(current.artist)}`}>
+                    {current.artist}
+                  </Link>
+                ) : (
+                  <ArtistLink name={current.artist} />
+                )}
                 {current.album && " · "}
                 {current.album &&
                   (current.albumHref ? (
