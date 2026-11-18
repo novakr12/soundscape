@@ -159,6 +159,7 @@ describe("smoke test", () => {
       native_player: true,
       cpu_rendering: true,
       cpu_rendering_now: false,
+      smooth_scrolling: true,
       discord_app_id: null,
       waiting: 3,
       listening: null,
@@ -192,6 +193,7 @@ describe("smoke test", () => {
     await page.getByRole("button", { name: "Restart now" }).click();
     await cpu.uncheck();
     await page.getByText("Takes effect after a restart.").waitFor({ state: "hidden" });
+    await page.getByLabel("Smooth scrolling").uncheck();
     const sent = await page.evaluate(
       () => (window as Window & { soundscapeAppCommands?: unknown[] }).soundscapeAppCommands,
     );
@@ -201,6 +203,7 @@ describe("smoke test", () => {
       { do: "send-now" },
       { do: "restart" },
       { do: "option", name: "cpu_rendering", value: false },
+      { do: "option", name: "smooth_scrolling", value: false },
     ]);
     await page.evaluate(() => {
       (window as Window & { soundscapeAppCommands?: unknown[] }).soundscapeAppCommands = [];

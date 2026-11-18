@@ -44,6 +44,10 @@ describe("readAppPush", () => {
     });
     assert.equal(newer?.settings.cpu_rendering, true);
     assert.equal(newer?.settings.cpu_rendering_now, false);
+    assert.equal(newer?.settings.smooth_scrolling_known, false);
+    const smoother = readAppPush({ settings: { ...settings, smooth_scrolling: false }, error: null });
+    assert.equal(smoother?.settings.smooth_scrolling_known, true);
+    assert.equal(smoother?.settings.smooth_scrolling, false);
   });
 
   it("keeps an error to show", () => {

@@ -268,6 +268,16 @@ export default function AppSettings() {
               </button>
             </div>
           )}
+          {settings.smooth_scrolling_known && (
+            <>
+              <Toggle
+                label="Smooth scrolling"
+                checked={settings.smooth_scrolling}
+                onChange={option("smooth_scrolling")}
+              />
+              <p className="muted">Glides with each turn of the mouse wheel instead of jumping.</p>
+            </>
+          )}
         </>
       )}
 
