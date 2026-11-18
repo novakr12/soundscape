@@ -14,17 +14,23 @@ export function usePlayerKeys(
   audioRef: RefObject<HTMLAudioElement | null>,
   tracksRef: RefObject<unknown[]>,
   skip: RefObject<{ next: () => void; previous: () => void }>,
+  remote: RefObject<(shortcut: string) => boolean>,
 ) {
   useEffect(() => {
     const pressed = (event: KeyboardEvent) => {
       if (event.defaultPrevented || keepsItsKeys(event.target)) return;
-      const audio = audioRef.current;
-      if (!audio?.currentSrc || tracksRef.current.length === 0) return;
-      const shortcut = shortcutFor(event.key, {
+      const wanted = shortcutFor(event.key, {
         shift: event.shiftKey,
         other: event.ctrlKey || event.metaKey || event.altKey,
         repeat: event.repeat,
       });
+      if (wanted && remote.current(wanted)) {
+        event.preventDefault();
+        return;
+      }
+      const audio = audioRef.current;
+      if (!audio?.currentSrc || tracksRef.current.length === 0) return;
+      const shortcut = wanted;
       if (!shortcut) return;
       event.preventDefault();
       if (shortcut === "toggle") {
@@ -41,5 +47,5 @@ export function usePlayerKeys(
     };
     window.addEventListener("keydown", pressed);
     return () => window.removeEventListener("keydown", pressed);
-  }, [audioRef, tracksRef, skip]);
+  }, [audioRef, tracksRef, skip, remote]);
 }

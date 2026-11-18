@@ -58,6 +58,7 @@ export function QueuePanel({ queue, keys, position, onClose, onJump, onRemove }:
 }
 
 type PlayerBarProps = {
+  away: boolean;
   current: PlayerTrack | null;
   position: number;
   length: number;
@@ -86,6 +87,7 @@ type PlayerBarProps = {
 };
 
 export function PlayerBar({
+  away,
   current,
   position,
   length,
@@ -113,7 +115,7 @@ export function PlayerBar({
   onDevices,
 }: PlayerBarProps) {
   return (
-    <div className="player" hidden={!current}>
+    <div className="player" hidden={!current || away}>
       <div className="player-song">
         {current?.cover && <img src={current.cover} alt="" width={48} height={48} />}
         <div className="now-playing">

@@ -209,6 +209,22 @@ export function deviceName(kind: DeviceKind, userAgent: string) {
   return system ? `${browserName(userAgent)} on ${system}` : browserName(userAgent);
 }
 
+export type Guess = { playing?: boolean; time?: number; since: number };
+
+export const GUESS_KEEP_MS = 4000;
+
+export function shownPlayback(device: Device, serverNow: number, guess: Guess | null, now: number) {
+  const fresh = guess && now - guess.since < GUESS_KEEP_MS ? guess : null;
+  const playing = fresh?.playing ?? device.state.playing;
+  if (fresh?.time === undefined) {
+    const time = timeNow({ ...device.state, playing }, device.at, serverNow);
+    return { playing, time };
+  }
+  const moved = playing ? Math.max(0, now - fresh.since) / 1000 : 0;
+  const time = fresh.time + moved;
+  return { playing, time: device.state.duration ? Math.min(time, device.state.duration) : time };
+}
+
 export type AppView = { soundscapeDeviceId?: unknown; soundscapeDeviceName?: unknown; soundscapeDeviceHeld?: unknown };
 
 export function givenDevice(view: AppView) {

@@ -12,6 +12,7 @@ import {
   readDeviceCommand,
   readDeviceReport,
   readDeviceState,
+  shownPlayback,
   timeNow,
 } from "../lib/devices";
 
@@ -107,6 +108,22 @@ describe("device helpers", () => {
     assert.equal(timeNow(state, 0, 5000), 15);
     assert.equal(timeNow(state, 0, 60_000), 30);
     assert.equal(timeNow({ ...state, playing: false }, 0, 5000), 10);
+  });
+
+  it("shows what a button press did before the device confirms it", () => {
+    const state = readDeviceState({ track: song, playing: true, time: 10, duration: 30 });
+    const device = { id: "abcdefgh12", name: "x", kind: "browser" as const, at: 0, state };
+    assert.deepEqual(shownPlayback(device, 2000, null, 2000), { playing: true, time: 12 });
+    assert.deepEqual(shownPlayback(device, 2000, { playing: false, since: 1000 }, 2000), { playing: false, time: 10 });
+    assert.deepEqual(shownPlayback(device, 2000, { playing: true, time: 25, since: 1000 }, 2000), {
+      playing: true,
+      time: 26,
+    });
+    assert.deepEqual(shownPlayback(device, 2000, { playing: true, time: 29.5, since: 1000 }, 3000), {
+      playing: true,
+      time: 30,
+    });
+    assert.deepEqual(shownPlayback(device, 9000, { playing: false, since: 1000 }, 9000), { playing: true, time: 19 });
   });
 
   it("names the device", () => {

@@ -31,6 +31,7 @@ import { DevicesPanel, type LocalPlayer, PlayingElsewhere, useDeviceLink } from 
 import LyricsPanel from "./lyrics-panel";
 import { PlayerBar, QueuePanel } from "./player-bar";
 import { usePlayerKeys } from "./player-keys";
+import RemoteBar from "./remote-bar";
 import type { Sleep } from "./sleep-timer";
 
 export type PlayerTrack = {
@@ -156,6 +157,9 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
   const blocked = useRef(false);
   const local = useRef<LocalPlayer>({ state: () => idleState(), obey: () => {} });
   const link = useDeviceLink(local, username);
+  const [following, setFollowing] = useState<string | null>(null);
+  const followed = following ? (link.devices.find((device) => device.id === following) ?? null) : null;
+  const remoteKeys = useRef<(shortcut: string) => boolean>(() => false);
 
   function bind(element: HTMLAudioElement) {
     const mine = () => element === audioRef.current;
@@ -333,7 +337,7 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
     } catch {}
   }, []);
 
-  usePlayerKeys(audioRef, tracksRef, skip);
+  usePlayerKeys(audioRef, tracksRef, skip, remoteKeys);
 
   useEffect(() => {
     const view = window as Window & { soundscapePlayer?: unknown };
@@ -890,7 +894,10 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
     const handed = handOff();
     if (!handed) return "Nothing is playing here to send.";
     const failure = await link.send(to, { do: "take", ...handed });
-    if (!failure) audioRef.current?.pause();
+    if (!failure) {
+      audioRef.current?.pause();
+      setFollowing(to);
+    }
     return failure;
   }
 
@@ -931,6 +938,10 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
 
   local.current = { state: deviceState, obey };
 
+  function pullHere(from: string) {
+    if (link.me) link.send(from, { do: "send", to: link.me.id });
+  }
+
   skip.current = {
     next,
     previous,
@@ -951,6 +962,7 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
     const audio = audioElement();
     if (!audio) return;
     const id = ++playing.current;
+    if (play) setFollowing(null);
     fellBack.current = false;
     autoplay.current = play;
     listen.current = { full: false, heard: 0, last: null, counted: false };
@@ -1055,13 +1067,35 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
         <DevicesPanel
           link={link}
           hasQueue={queue.length > 0}
-          alone={!current}
+          alone={!current && !followed}
+          following={followed?.id ?? null}
           onClose={() => setShowDevices(false)}
           onMoveTo={moveMusicTo}
+          onFollow={(id) => {
+            setFollowing(id);
+            setShowDevices(false);
+          }}
         />
       )}
-      {!current && !showDevices && elsewhere && (
-        <PlayingElsewhere device={elsewhere} onOpen={() => setShowDevices(true)} />
+      {!current && !followed && !showDevices && elsewhere && (
+        <PlayingElsewhere device={elsewhere} onOpen={() => setFollowing(elsewhere.id)} />
+      )}
+      {followed && (
+        <RemoteBar
+          device={followed}
+          offset={link.offset}
+          send={(command) => {
+            link.send(followed.id, command);
+          }}
+          onPlayHere={() => pullHere(followed.id)}
+          keys={remoteKeys}
+          showDevices={showDevices}
+          onDevices={() => {
+            setShowQueue(false);
+            setShowLyrics(false);
+            setShowDevices(!showDevices);
+          }}
+        />
       )}
       {current && showLyrics && <LyricsPanel track={current} audio={audioRef} onClose={() => setShowLyrics(false)} />}
       {current && showQueue && (
@@ -1075,6 +1109,7 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
         />
       )}
       <PlayerBar
+        away={followed !== null}
         current={current}
         position={position}
         length={queue.length}

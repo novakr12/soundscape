@@ -634,25 +634,22 @@ describe("player", () => {
       await elsewhere.waitFor({ timeout: 15_000 });
       assert.ok(((await elsewhere.textContent()) ?? "").startsWith(`Playing on Chrome on Linux · ${playing} · `));
       await elsewhere.click();
-      const panel = other.getByRole("region", { name: "Devices" });
-      await panel.getByRole("button", { name: "Pause on Chrome on Linux" }).click();
-      await page.waitForFunction(
-        () => document.querySelector<HTMLAudioElement>(".player audio")?.paused === true,
-        null,
-        {
-          timeout: 10_000,
-        },
-      );
-      await panel.getByRole("button", { name: "Play on Chrome on Linux" }).waitFor({ timeout: 10_000 });
-      await panel.getByRole("slider", { name: "Volume on Chrome on Linux" }).fill("0.3");
-      await page.waitForFunction(
-        () => localStorage.getItem("soundscape-volume")?.includes('"volume":0.3') === true,
-        null,
-        {
-          timeout: 10_000,
-        },
-      );
-      await panel.getByRole("button", { name: "Play here" }).click();
+      const bar = other.locator(".remote-player");
+      await bar.waitFor({ timeout: 10_000 });
+      assert.equal(await bar.locator(".now-playing strong").textContent(), playing);
+      assert.match((await bar.locator(".remote-where").textContent()) ?? "", /Playing on Chrome on Linux/);
+      const pageAudio = (check: string) => page.waitForFunction(check, null, { timeout: 10_000 });
+      await bar.getByRole("button", { name: "Pause on Chrome on Linux" }).click();
+      await bar.getByRole("button", { name: "Play on Chrome on Linux" }).waitFor({ timeout: 2000 });
+      await pageAudio('document.querySelector(".player audio")?.paused === true');
+      await bar.getByRole("slider", { name: "Seek on Chrome on Linux" }).fill("20");
+      await pageAudio('Math.abs((document.querySelector(".player audio")?.currentTime ?? 0) - 20) < 1.5');
+      await bar.getByRole("slider", { name: "Volume on Chrome on Linux" }).fill("0.3");
+      await pageAudio('localStorage.getItem("soundscape-volume")?.includes(\'"volume":0.3\') === true');
+      await other.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+      await other.keyboard.press("Space");
+      await pageAudio('document.querySelector(".player audio")?.paused === false');
+      await bar.getByRole("button", { name: "Play here" }).click();
       await other.waitForFunction(
         (expected) => {
           const audio = document.querySelector<HTMLAudioElement>(".player audio");
@@ -662,10 +659,12 @@ describe("player", () => {
         playing,
         { timeout: 30_000 },
       );
-      assert.equal(await page.evaluate(() => document.querySelector<HTMLAudioElement>(".player audio")?.paused), true);
-      await page.locator('[data-player="devices"]').click();
-      const mine = page.getByRole("region", { name: "Devices" });
-      await mine.getByRole("button", { name: "Pause on Chrome on Linux" }).click();
+      await page.waitForFunction(() => document.querySelector<HTMLAudioElement>(".player audio")?.paused === true);
+      await bar.waitFor({ state: "hidden", timeout: 5000 });
+      const back = page.locator(".remote-player");
+      await back.waitFor({ timeout: 10_000 });
+      await back.locator(".now-playing strong", { hasText: playing }).waitFor({ timeout: 10_000 });
+      await back.getByRole("button", { name: "Pause on Chrome on Linux" }).click();
       await other.waitForFunction(
         () => document.querySelector<HTMLAudioElement>(".player audio")?.paused === true,
         null,
@@ -673,7 +672,6 @@ describe("player", () => {
           timeout: 10_000,
         },
       );
-      await mine.getByRole("button", { name: "Close" }).click();
     } finally {
       await context.close();
     }
@@ -692,7 +690,7 @@ describe("player", () => {
       await phone.fill('input[name="password"]', PASSWORD);
       await phone.click('button[type="submit"]');
       await phone.waitForURL((url) => !url.pathname.startsWith("/login"), { timeout: 30_000 });
-      await page.locator('[data-player="devices"]').click();
+      await page.locator('.player:not([hidden]) [data-player="devices"]').click();
       const panel = page.getByRole("region", { name: "Devices" });
       const entry = panel.locator('[data-device="e2ephone00001"]');
       await entry.getByText("Soundscape on Test Phone").waitFor({ timeout: 15_000 });

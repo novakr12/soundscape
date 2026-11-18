@@ -88,8 +88,11 @@ export function useDeviceLink(local: RefObject<LocalPlayer>, username: string | 
       if (response?.status === 401) stop();
     };
     const reportSoon = () => {
-      clearTimeout(timer);
-      timer = setTimeout(report, REPORT_AFTER_MS);
+      if (timer !== undefined) return;
+      timer = setTimeout(() => {
+        timer = undefined;
+        report();
+      }, REPORT_AFTER_MS);
     };
     const take = async () => {
       if (isHeld(appView())) return;
@@ -213,12 +216,12 @@ export function useDeviceLink(local: RefObject<LocalPlayer>, username: string | 
   };
 }
 
-function clock(seconds: number) {
+export function clock(seconds: number) {
   const whole = Math.max(0, Math.floor(seconds));
   return `${Math.floor(whole / 60)}:${String(whole % 60).padStart(2, "0")}`;
 }
 
-function KindIcon({ kind }: { kind: DeviceKind }) {
+export function KindIcon({ kind }: { kind: DeviceKind }) {
   return (
     <svg
       viewBox="0 0 24 24"
@@ -244,7 +247,7 @@ function KindIcon({ kind }: { kind: DeviceKind }) {
   );
 }
 
-function useLater(send: (value: number) => void, waitMs = 250) {
+export function useLater(send: (value: number) => void, waitMs = 250) {
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   useEffect(() => () => clearTimeout(timer.current), []);
   return (value: number) => {
@@ -260,6 +263,7 @@ function RemoteDevice({
   onPullHere,
   onSendHere,
   canSendHere,
+  onFollow,
 }: {
   device: Device;
   serverNow: number;
@@ -267,6 +271,7 @@ function RemoteDevice({
   onPullHere: () => void;
   onSendHere: () => void;
   canSendHere: boolean;
+  onFollow: (() => void) | null;
 }) {
   const [seeking, setSeeking] = useState<number | null>(null);
   const [volume, setVolume] = useState<number | null>(null);
@@ -394,6 +399,11 @@ function RemoteDevice({
             Play my music there
           </button>
         )}
+        {onFollow && state.track && (
+          <button type="button" className="secondary" onClick={onFollow}>
+            Control in the player
+          </button>
+        )}
       </div>
     </li>
   );
@@ -403,14 +413,18 @@ export function DevicesPanel({
   link,
   hasQueue,
   alone,
+  following,
   onClose,
   onMoveTo,
+  onFollow,
 }: {
   link: DeviceLink;
   hasQueue: boolean;
   alone: boolean;
+  following: string | null;
   onClose: () => void;
   onMoveTo: (to: string) => Promise<string | null>;
+  onFollow: (id: string) => void;
 }) {
   const [message, setMessage] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
@@ -452,6 +466,7 @@ export function DevicesPanel({
               onPullHere={() => link.me && run(link.send(device.id, { do: "send", to: link.me.id }))}
               onSendHere={() => run(onMoveTo(device.id))}
               canSendHere={hasQueue}
+              onFollow={device.id === following ? null : () => onFollow(device.id)}
             />
           ))}
         </ul>

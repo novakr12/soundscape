@@ -687,6 +687,24 @@ main {
   font-size: 0.85rem;
 }
 
+.remote-where {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.8rem;
+  color: var(--accent);
+}
+
+.remote-where svg {
+  flex: none;
+  width: 14px;
+  height: 14px;
+}
+
+.remote-here {
+  white-space: nowrap;
+}
+
 .playing-elsewhere {
   position: fixed;
   left: 50%;
