@@ -661,6 +661,28 @@ describe("player", () => {
       );
       assert.equal(await other.evaluate(() => (window as unknown as Bridge).soundscapePlayer.command("pause")), true);
       await pageAudio('document.querySelector(".player audio")?.paused === true');
+      await other.evaluate(() => {
+        (window as unknown as { next: { router: { push: (href: string) => void } } }).next.router.push(
+          "/music?album=e2e-album",
+        );
+      });
+      await other.waitForURL((url) => url.searchParams.get("album") === "e2e-album");
+      await bar.waitFor({ timeout: 5000 });
+      await other.locator(".music-songs li").nth(1).getByRole("button", { name: "▶ Play" }).click();
+      await page.waitForFunction(
+        () => {
+          const audio = document.querySelector<HTMLAudioElement>(".player audio");
+          const shown = document.querySelector(".player .now-playing strong")?.textContent ?? "";
+          return shown === "Second Wind" && audio && !audio.paused && audio.currentTime > 0;
+        },
+        null,
+        { timeout: 30_000 },
+      );
+      await bar.locator(".now-playing strong", { hasText: "Second Wind" }).waitFor({ timeout: 10_000 });
+      assert.equal(
+        await other.evaluate(() => Boolean(document.querySelector<HTMLAudioElement>(".player audio")?.paused ?? true)),
+        true,
+      );
       await bar.getByRole("button", { name: "Play here" }).click();
       await other.waitForFunction(
         (expected) => {
@@ -668,14 +690,14 @@ describe("player", () => {
           const shown = document.querySelector(".player .now-playing strong")?.textContent ?? "";
           return shown === expected && audio && !audio.paused && audio.currentTime > 0;
         },
-        playing,
+        "Second Wind",
         { timeout: 30_000 },
       );
       await page.waitForFunction(() => document.querySelector<HTMLAudioElement>(".player audio")?.paused === true);
       await bar.waitFor({ state: "hidden", timeout: 5000 });
       const back = page.locator(".remote-player");
       await back.waitFor({ timeout: 10_000 });
-      await back.locator(".now-playing strong", { hasText: playing }).waitFor({ timeout: 10_000 });
+      await back.locator(".now-playing strong", { hasText: "Second Wind" }).waitFor({ timeout: 10_000 });
       await back.getByRole("button", { name: "Pause on Chrome on Linux" }).click();
       await other.waitForFunction(
         () => document.querySelector<HTMLAudioElement>(".player audio")?.paused === true,

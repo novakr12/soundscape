@@ -106,6 +106,19 @@ export function usePlayer() {
   return player;
 }
 
+function handed(track: PlayerTrack) {
+  return {
+    trackId: track.trackId,
+    title: track.title,
+    artist: track.artist,
+    ...(track.album ? { album: track.album } : {}),
+    ...(track.albumHref ? { albumHref: track.albumHref } : {}),
+    ...(track.cover ? { cover: track.cover } : {}),
+    ...(track.songId ? { songId: track.songId } : {}),
+    ...(track.duration ? { duration: track.duration } : {}),
+  };
+}
+
 function idleState(): DeviceState {
   return { track: null, playing: false, time: 0, duration: null, volume: 0.8, blocked: false };
 }
@@ -604,10 +617,34 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
     handOver(index, seconds);
   }
 
+  function begin(list: PlayerTrack[], order: number[], index: number) {
+    const target = away.current.device;
+    if (!target) {
+      arrange(list, order, index);
+      start(list[order[index]]);
+      return;
+    }
+    const inPlayOrder = order.map((at) => list[at]);
+    const from = Math.max(0, index - HAND_BACK_BEFORE);
+    link
+      .send(target.id, {
+        do: "take",
+        tracks: inPlayOrder.slice(from, from + MOST_HANDED).map(handed),
+        position: index - from,
+        time: 0,
+        playing: true,
+      })
+      .then((failure) => {
+        if (!failure) return;
+        setFollowing(null);
+        arrange(list, order, index);
+        start(list[order[index]]);
+      });
+  }
+
   function play(track: PlayerTrack) {
     setRadio(null);
-    arrange([track], [0], 0);
-    start(track);
+    begin([track], [0], 0);
   }
 
   function playAll(list: PlayerTrack[], first = 0) {
@@ -620,8 +657,7 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
         : startingWith(chosen, shuffleAll(list.length))
       : inOrder(list.length);
     const index = shuffleRef.current ? 0 : chosen;
-    arrange(list, listOrder, index);
-    start(list[listOrder[index]]);
+    begin(list, listOrder, index);
   }
 
   function playFrom(list: PlayerTrack[], chosen: number) {
@@ -633,8 +669,7 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
     const index = at - from;
     const listOrder = shuffleRef.current ? startingWith(index, shuffleAll(part.length)) : inOrder(part.length);
     const position = shuffleRef.current ? 0 : index;
-    arrange(part, listOrder, position);
-    start(part[listOrder[position]]);
+    begin(part, listOrder, position);
   }
 
   function next() {
@@ -904,16 +939,7 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
     if (inPlayOrder.length === 0) return null;
     const from = Math.max(0, positionRef.current - HAND_BACK_BEFORE);
     return {
-      tracks: inPlayOrder.slice(from, from + MOST_HANDED).map((track) => ({
-        trackId: track.trackId,
-        title: track.title,
-        artist: track.artist,
-        ...(track.album ? { album: track.album } : {}),
-        ...(track.albumHref ? { albumHref: track.albumHref } : {}),
-        ...(track.cover ? { cover: track.cover } : {}),
-        ...(track.songId ? { songId: track.songId } : {}),
-        ...(track.duration ? { duration: track.duration } : {}),
-      })),
+      tracks: inPlayOrder.slice(from, from + MOST_HANDED).map(handed),
       position: positionRef.current - from,
       time: pendingTime.current || audio?.currentTime || 0,
       playing: true,
