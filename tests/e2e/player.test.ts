@@ -649,6 +649,18 @@ describe("player", () => {
       await other.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
       await other.keyboard.press("Space");
       await pageAudio('document.querySelector(".player audio")?.paused === false');
+      type Bridge = { soundscapePlayer: { state: () => unknown; command: (name: string) => boolean } };
+      const seen = (await other.evaluate(() => {
+        Object.assign(window, { soundscapeBridgeRemote: true });
+        return (window as unknown as Bridge).soundscapePlayer.state();
+      })) as { remote: { name: string }; tracks: { title: string }[]; playing: boolean };
+      assert.equal(seen.remote.name, "Chrome on Linux");
+      assert.equal(seen.tracks[0].title, playing);
+      await other.waitForFunction(
+        () => ((window as unknown as Bridge).soundscapePlayer.state() as { playing: boolean }).playing,
+      );
+      assert.equal(await other.evaluate(() => (window as unknown as Bridge).soundscapePlayer.command("pause")), true);
+      await pageAudio('document.querySelector(".player audio")?.paused === true');
       await bar.getByRole("button", { name: "Play here" }).click();
       await other.waitForFunction(
         (expected) => {

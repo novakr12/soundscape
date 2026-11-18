@@ -1,8 +1,18 @@
 "use client";
 
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
-import { BRIDGE_VERSION, bridgeTracks, type HandBack, readCommand, readHandBack, savedVolume } from "@/lib/app-bridge";
-import type { DeviceCommand, DeviceState } from "@/lib/devices";
+import {
+  BRIDGE_VERSION,
+  bridgeTracks,
+  type HandBack,
+  readCommand,
+  readHandBack,
+  remoteBridgeState,
+  remoteCommand,
+  savedVolume,
+  wantsRemote,
+} from "@/lib/app-bridge";
+import type { Device, DeviceCommand, DeviceState } from "@/lib/devices";
 import { type Gain, gainLevel, playingAnAlbum } from "@/lib/levelling";
 import {
   countsAsPlay,
@@ -160,6 +170,18 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
   const [following, setFollowing] = useState<string | null>(null);
   const followed = following ? (link.devices.find((device) => device.id === following) ?? null) : null;
   const remoteKeys = useRef<(shortcut: string) => boolean>(() => false);
+  const away = useRef<{ device: Device | null; offset: number; send: (command: DeviceCommand) => void }>({
+    device: null,
+    offset: 0,
+    send: () => {},
+  });
+  away.current = {
+    device: followed,
+    offset: link.offset,
+    send: (command) => {
+      if (followed) link.send(followed.id, command);
+    },
+  };
 
   function bind(element: HTMLAudioElement) {
     const mine = () => element === audioRef.current;
@@ -340,10 +362,12 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
   usePlayerKeys(audioRef, tracksRef, skip, remoteKeys);
 
   useEffect(() => {
-    const view = window as Window & { soundscapePlayer?: unknown };
+    const view = window as Window & { soundscapePlayer?: unknown; soundscapeBridgeRemote?: unknown };
     view.soundscapePlayer = {
       version: BRIDGE_VERSION,
       state: () => {
+        const elsewhere = away.current.device;
+        if (elsewhere && wantsRemote(view)) return remoteBridgeState(elsewhere, Date.now() + away.current.offset);
         const audio = audioRef.current;
         const order = orderRef.current;
         const inPlayOrder = order.map((index) => tracksRef.current[index]).filter(Boolean);
@@ -362,6 +386,12 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
       },
       command: (name: unknown, value?: unknown) => {
         const command = readCommand(name);
+        const elsewhere = away.current.device;
+        if (command && elsewhere && wantsRemote(view)) {
+          const sent = remoteCommand(command, value, elsewhere.state.playing);
+          if (sent) away.current.send(sent);
+          return sent !== null;
+        }
         const audio = audioRef.current;
         if (!command || !audio) return false;
         if (command === "play") audio.play().catch(() => {});

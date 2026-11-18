@@ -1,4 +1,11 @@
-import { type HandedTrack, MOST_HANDED_TRACKS, readHandedTrack } from "./devices";
+import {
+  type Device,
+  type DeviceCommand,
+  type HandedTrack,
+  MOST_HANDED_TRACKS,
+  readHandedTrack,
+  timeNow,
+} from "./devices";
 import { type Gain, gainLevel, playingAnAlbum } from "./levelling";
 
 export type BridgeTrackInput = {
@@ -73,6 +80,44 @@ export function readCommand(name: unknown): BridgeCommand | null {
     name === "seek"
     ? name
     : null;
+}
+
+export function wantsRemote(view: { soundscapeBridgeRemote?: unknown }) {
+  return view.soundscapeBridgeRemote === true;
+}
+
+export function remoteBridgeState(device: Device, serverNow: number) {
+  const track = device.state.track;
+  if (!track) return null;
+  return {
+    tracks: [
+      {
+        trackId: track.trackId,
+        songId: track.songId,
+        title: track.title,
+        artist: track.artist,
+        album: track.album,
+        cover: track.cover,
+        duration: device.state.duration,
+        level: 1,
+      },
+    ],
+    position: 0,
+    time: timeNow(device.state, device.at, serverNow),
+    duration: device.state.duration,
+    playing: device.state.playing,
+    volume: device.state.volume,
+    repeat: "off",
+    remote: { id: device.id, name: device.name },
+  };
+}
+
+export function remoteCommand(command: BridgeCommand, value: unknown, playing: boolean): DeviceCommand | null {
+  if (command === "toggle") return { do: playing ? "pause" : "play" };
+  if (command === "seek") {
+    return typeof value === "number" && Number.isFinite(value) && value >= 0 ? { do: "seek", time: value } : null;
+  }
+  return { do: command };
 }
 
 export function savedVolume(text: string | null) {

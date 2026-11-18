@@ -1,6 +1,15 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { bridgeTracks, readCommand, readHandBack, savedVolume } from "../lib/app-bridge";
+import {
+  bridgeTracks,
+  readCommand,
+  readHandBack,
+  remoteBridgeState,
+  remoteCommand,
+  savedVolume,
+  wantsRemote,
+} from "../lib/app-bridge";
+import { readDeviceState } from "../lib/devices";
 
 const album = [
   {
@@ -88,5 +97,44 @@ describe("savedVolume", () => {
     assert.equal(savedVolume(null), 0.8);
     assert.equal(savedVolume("{broken"), 0.8);
     assert.equal(savedVolume(JSON.stringify({ volume: 4 })), 0.8);
+  });
+});
+
+describe("the lock screen while following another device", () => {
+  const device = {
+    id: "desktop0001",
+    name: "Soundscape desktop",
+    kind: "desktop" as const,
+    at: 1000,
+    state: readDeviceState({
+      track: { trackId: "t1", title: "Teardrop", artist: "Massive Attack", album: "Mezzanine", cover: "/api/cover/t1" },
+      playing: true,
+      time: 30,
+      duration: 330,
+      volume: 0.6,
+    }),
+  };
+
+  it("only talks about other devices to apps that understand it", () => {
+    assert.equal(wantsRemote({ soundscapeBridgeRemote: true }), true);
+    assert.equal(wantsRemote({}), false);
+  });
+
+  it("shows the other device's song, moving on in time", () => {
+    const state = remoteBridgeState(device, 3000);
+    assert.deepEqual(state?.remote, { id: "desktop0001", name: "Soundscape desktop" });
+    assert.equal(state?.tracks[0].title, "Teardrop");
+    assert.equal(state?.position, 0);
+    assert.equal(state?.time, 32);
+    assert.equal(state?.playing, true);
+    assert.equal(remoteBridgeState({ ...device, state: readDeviceState({}) }, 3000), null);
+  });
+
+  it("turns lock screen buttons into commands for that device", () => {
+    assert.deepEqual(remoteCommand("toggle", undefined, true), { do: "pause" });
+    assert.deepEqual(remoteCommand("toggle", undefined, false), { do: "play" });
+    assert.deepEqual(remoteCommand("next", undefined, true), { do: "next" });
+    assert.deepEqual(remoteCommand("seek", 42, true), { do: "seek", time: 42 });
+    assert.equal(remoteCommand("seek", -1, true), null);
   });
 });
