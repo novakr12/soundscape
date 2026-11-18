@@ -34,12 +34,12 @@
     "web-push": "3.6.7"
   },
   "devDependencies": {
-    "@biomejs/biome": "2.6.6",
+    "@biomejs/biome": "2.6.8",
     "@types/node": "^24",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@types/web-push": "3.6.4",
-    "playwright": "1.65.0",
+    "playwright": "1.65.1",
     "tsx": "4.23.15",
     "typescript": "5.9.3"
   }
