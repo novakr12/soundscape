@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import type { Ref, RefObject } from "react";
+import { sizedCover } from "@/lib/cover-size";
 import type { Repeat } from "@/lib/play-queue";
 import { ArtistLink, SongLink } from "./music-links";
 import type { PlayerTrack } from "./player";
@@ -118,7 +119,7 @@ export function PlayerBar({
   return (
     <div className="player" hidden={!current || away}>
       <div className="player-song">
-        {current?.cover && <img src={current.cover} alt="" width={48} height={48} />}
+        {current?.cover && <img src={sizedCover(current.cover, 48)} alt="" width={48} height={48} />}
         <div className="now-playing">
           {current && (
             <>

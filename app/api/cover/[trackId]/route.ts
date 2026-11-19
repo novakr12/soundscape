@@ -1,11 +1,13 @@
+import { readCoverSize } from "@/lib/cover-size";
 import { FALLBACK_COVER, findCover } from "@/lib/covers";
 
 type Context = {
   params: Promise<{ trackId: string }>;
 };
 
-export async function GET(_request: Request, { params }: Context) {
-  const cover = await findCover((await params).trackId);
+export async function GET(request: Request, { params }: Context) {
+  const size = readCoverSize(new URL(request.url).searchParams.get("size"));
+  const cover = await findCover((await params).trackId, size);
   if (cover === "busy" || !cover) {
     return new Response(FALLBACK_COVER, {
       headers: {

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { type RefObject, useEffect, useState } from "react";
+import { sizedCover } from "@/lib/cover-size";
 import {
   type Device,
   type DeviceCommand,
@@ -125,7 +126,7 @@ export default function RemoteBar({
   return (
     <div className="player remote-player" data-remote={device.id}>
       <div className="player-song">
-        {track?.cover && <img src={track.cover} alt="" width={48} height={48} />}
+        {track?.cover && <img src={sizedCover(track.cover, 48)} alt="" width={48} height={48} />}
         <div className="now-playing">
           {track ? (
             <>

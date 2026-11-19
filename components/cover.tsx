@@ -1,3 +1,5 @@
+import { sizedCover } from "@/lib/cover-size";
+
 export default function Cover({
   src,
   large = false,
@@ -9,7 +11,7 @@ export default function Cover({
 }) {
   const className = `cover${large ? " large" : ""}${round && src ? " round" : ""}`;
   const size = large ? 128 : 40;
-  if (src) return <img className={className} src={src} alt="" width={size} height={size} />;
+  if (src) return <img className={className} src={sizedCover(src, size)} alt="" width={size} height={size} />;
 
   return (
     <span className={`${className} cover-fallback`} aria-hidden="true">

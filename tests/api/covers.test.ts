@@ -19,6 +19,7 @@ const rare = trackIdFor(user.artist, "Rare Song");
 const missing = trackIdFor(user.artist, "Not In Library");
 const deezer = trackIdFor(user.artist, "On Deezer");
 const requests: string[] = [];
+const sizes: (string | null)[] = [];
 const trouble = { failNext: 0, delayMs: 0, now: 0, most: 0 };
 let server: Server;
 let url: string;
@@ -46,6 +47,7 @@ function fakeNavidrome() {
       return ok({ searchResult3: { song } });
     }
     if (method === "getCoverArt" && params.get("id")?.startsWith("mf-")) {
+      sizes.push(params.get("size"));
       if (trouble.failNext > 0) {
         trouble.failNext--;
         response.statusCode = 503;
@@ -122,6 +124,21 @@ describe("covers from Navidrome", () => {
     const response = await fetch(`${BASE_URL}${coverUrl(rare)}`);
     assert.equal(response.headers.get("content-type"), "image/png");
     assert.deepEqual(Buffer.from(await response.arrayBuffer()), IMAGE);
+    assert.deepEqual(requests, []);
+  });
+
+  it("asks Navidrome for a smaller picture when the page shows a small one", async () => {
+    requests.length = 0;
+    sizes.length = 0;
+    const small = await fetch(`${BASE_URL}${coverUrl(rare)}?size=96`);
+    assert.equal(small.headers.get("content-type"), "image/png");
+    assert.deepEqual(requests, ["getCoverArt"]);
+    assert.deepEqual(sizes, ["96"]);
+
+    requests.length = 0;
+    sizes.length = 0;
+    const odd = await fetch(`${BASE_URL}${coverUrl(rare)}?size=97`);
+    assert.equal(odd.headers.get("content-type"), "image/png");
     assert.deepEqual(requests, []);
   });
 
