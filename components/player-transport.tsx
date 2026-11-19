@@ -47,15 +47,16 @@ function useAudio(
   audio: RefObject<HTMLAudioElement | null>,
   events: string[],
   read: (element: HTMLAudioElement) => number,
+  missing = 0,
 ) {
-  const [value, setValue] = useState(0);
+  const [value, setValue] = useState(missing);
   useEffect(() => {
     const follow = () => {
       const element = audio.current;
-      setValue(element ? read(element) : 0);
+      setValue(element ? read(element) : missing);
     };
     return whilePlaying(audio, follow, events);
-  }, [audio, events, read]);
+  }, [audio, events, read, missing]);
   return value;
 }
 
@@ -108,7 +109,7 @@ const LENGTH_EVENTS = ["durationchange", "loadedmetadata", "emptied"];
 const readLength = (element: HTMLAudioElement) => (Number.isFinite(element.duration) ? element.duration : 0);
 
 export function PlayPauseButton({ audio }: { audio: RefObject<HTMLAudioElement | null> }) {
-  const paused = useAudio(audio, PLAY_EVENTS, readPaused) === 1;
+  const paused = useAudio(audio, PLAY_EVENTS, readPaused, 1) === 1;
   const loading = useLoading(audio);
   return (
     <button

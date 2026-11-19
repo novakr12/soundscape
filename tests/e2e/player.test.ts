@@ -364,6 +364,16 @@ describe("player", () => {
     assert.match((await title()) ?? "", /Third Rail/);
   });
 
+  it("shows Play, not Pause, when the queue comes back without playing", async () => {
+    await page.locator('[data-player="play"]').click();
+    await page.waitForFunction(() => document.querySelector<HTMLAudioElement>(".player audio")?.paused === true);
+    await page.reload({ waitUntil: "load" });
+    await page.locator(".player .now-playing strong", { hasText: "Third Rail" }).waitFor();
+    assert.equal(await page.locator('[data-player="play"]').getAttribute("aria-label"), "Play");
+    await page.locator('[data-player="play"]').click();
+    await waitForSong("Third Rail");
+  });
+
   it("levels the volume with the album's ReplayGain and stops when turned off", async () => {
     const volume = () => page.evaluate(() => document.querySelector<HTMLAudioElement>(".player audio")?.volume ?? -1);
     const albumLevel = 10 ** (-4 / 20);
