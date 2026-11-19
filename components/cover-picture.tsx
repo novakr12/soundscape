@@ -5,10 +5,33 @@ import { canvasPixels, centreCrop } from "@/lib/cover-canvas";
 import { sizedCover } from "@/lib/cover-size";
 import { useCanvasCovers } from "./canvas-covers";
 
+const SLICE_MS = 6;
+const PAUSE_MS = 16;
+let line: Promise<unknown> = Promise.resolve();
+let sliceStart = 0;
+
+function inTurn<T>(work: () => Promise<T>): Promise<T> {
+  const turn = line.then(async () => {
+    if (performance.now() - sliceStart > SLICE_MS) {
+      await new Promise((resolve) => setTimeout(resolve, PAUSE_MS));
+      sliceStart = performance.now();
+    }
+    return work();
+  });
+  line = turn.catch(() => undefined);
+  return turn;
+}
+
 async function draw(canvas: HTMLCanvasElement, url: string, shown: number, signal: AbortSignal) {
   const response = await fetch(url, { signal });
   if (!response.ok) throw new Error(`cover ${response.status}`);
-  const picture = await createImageBitmap(await response.blob());
+  const blob = await response.blob();
+  await inTurn(() => paint(canvas, blob, shown, signal));
+}
+
+async function paint(canvas: HTMLCanvasElement, blob: Blob, shown: number, signal: AbortSignal) {
+  if (signal.aborted) return;
+  const picture = await createImageBitmap(blob);
   const pixels = canvasPixels(shown, window.devicePixelRatio);
   let scaled: ImageBitmap | null = null;
   try {
