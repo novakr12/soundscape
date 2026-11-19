@@ -286,6 +286,37 @@ describe("player", () => {
       (window as unknown as { soundscapePlayer: Bridge }).soundscapePlayer.state(),
     );
     assert.ok(after && after.time >= 5, `time ${after?.time}`);
+    const phone = { time: 12, at: await page.evaluate(() => Date.now()) };
+    assert.equal(
+      await page.evaluate(
+        (from) =>
+          (window as unknown as { soundscapePlayer: Bridge }).soundscapePlayer.handBack({
+            position: 0,
+            time: from.time,
+            playing: true,
+            at: from.at,
+          }),
+        phone,
+      ),
+      true,
+    );
+    assert.equal(await page.evaluate(() => document.querySelector<HTMLAudioElement>(".player audio")?.muted), true);
+    await page.waitForFunction(
+      () => {
+        const audio = document.querySelector<HTMLAudioElement>(".player audio");
+        const bridge = (window as unknown as { soundscapePlayer: { state: () => { handing?: boolean } | null } })
+          .soundscapePlayer;
+        return audio && !audio.muted && !audio.paused && bridge.state()?.handing === false;
+      },
+      undefined,
+      { timeout: 10_000 },
+    );
+    const lined = await page.evaluate((from) => {
+      const audio = document.querySelector<HTMLAudioElement>(".player audio");
+      return { gap: from.time + (Date.now() - from.at) / 1000 - (audio?.currentTime ?? 0), rate: audio?.playbackRate };
+    }, phone);
+    assert.ok(Math.abs(lined.gap) < 0.15, `the page is ${lined.gap.toFixed(3)} s behind the phone`);
+    assert.equal(lined.rate, 1);
   });
 
   it("shows the song as listening now on the profile", async () => {

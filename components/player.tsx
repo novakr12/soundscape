@@ -14,6 +14,7 @@ import {
 } from "@/lib/app-bridge";
 import { artistIdFor } from "@/lib/catalog";
 import { type Device, type DeviceCommand, type DeviceState, MOST_UP_NEXT, timeNow } from "@/lib/devices";
+import { HAND_BACK_STEP_MS, HAND_BACK_WITHIN_MS, handBackStep, phoneTime } from "@/lib/hand-back";
 import { type Gain, gainLevel, playingAnAlbum } from "@/lib/levelling";
 import {
   countsAsPlay,
@@ -211,6 +212,14 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
   const autoplay = useRef(false);
   const listen = useRef({ full: false, heard: 0, last: null as number | null, counted: false });
   const pendingTime = useRef(0);
+  const handing = useRef<{
+    audio: HTMLAudioElement;
+    time: number;
+    at: number;
+    started: number;
+    settledSince: number | null;
+    timer: ReturnType<typeof setInterval>;
+  } | null>(null);
   const [showQueue, setShowQueue] = useState(false);
   const [showLyrics, setShowLyrics] = useState(false);
   const [showDevices, setShowDevices] = useState(false);
@@ -450,6 +459,7 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
           playing: Boolean(audio.currentSrc) && !audio.paused && !audio.ended,
           volume: savedVolume(localStorage.getItem("soundscape-volume")),
           repeat: repeatRef.current,
+          handing: handing.current !== null,
         };
       },
       command: (name: unknown, value?: unknown) => {
@@ -970,6 +980,7 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
         back.position,
       );
       start(back.tracks[back.position], back.playing, back.time);
+      quietly(back);
       return true;
     }
     const order = orderRef.current;
@@ -977,8 +988,67 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
     if (!track) return false;
     arrange(tracksRef.current, order, back.position);
     start(track, back.playing, back.time);
+    quietly(back);
     return true;
   };
+
+  function quietly(back: HandBack) {
+    const audio = audioRef.current;
+    if (!audio || !back.playing || back.at === null) return;
+    audio.muted = true;
+    handing.current = {
+      audio,
+      time: back.time,
+      at: back.at,
+      started: Date.now(),
+      settledSince: null,
+      timer: setInterval(followHandBack, HAND_BACK_STEP_MS),
+    };
+  }
+
+  function followHandBack() {
+    const held = handing.current;
+    if (!held) return;
+    const audio = held.audio;
+    const now = Date.now();
+    if (audioRef.current !== audio) return endHandBack();
+    if (audio.paused || audio.readyState < 3 || pendingTime.current > 0) {
+      if (now - held.started > HAND_BACK_WITHIN_MS) endHandBack();
+      return;
+    }
+    const step = handBackStep({
+      expected: phoneTime(held.time, held.at, now),
+      current: audio.currentTime,
+      rate: audio.playbackRate,
+      settledFor: held.settledSince === null ? null : now - held.settledSince,
+      waited: now - held.started,
+    });
+    if (step.kind === "jump") {
+      audio.currentTime = step.to;
+      held.settledSince = null;
+    } else if (step.kind === "rate") {
+      audio.playbackRate = step.rate;
+      held.settledSince = null;
+    } else if (step.kind === "settle") {
+      if (audio.playbackRate !== 1) {
+        audio.playbackRate = 1;
+        held.settledSince = now;
+      } else if (held.settledSince === null) {
+        held.settledSince = now;
+      }
+    } else {
+      endHandBack();
+    }
+  }
+
+  function endHandBack() {
+    const held = handing.current;
+    if (!held) return;
+    clearInterval(held.timer);
+    handing.current = null;
+    held.audio.playbackRate = 1;
+    held.audio.muted = false;
+  }
 
   function noteBlocked(error: unknown) {
     if ((error as { name?: unknown } | null)?.name !== "NotAllowedError") return;
@@ -1136,6 +1206,7 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
   const hasNext = position + 1 < queue.length || (repeat === "all" && queue.length > 1);
 
   function start(track: PlayerTrack, play = true, at = 0) {
+    endHandBack();
     const audio = audioElement();
     if (!audio) return;
     const id = ++playing.current;

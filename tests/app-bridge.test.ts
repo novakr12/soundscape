@@ -50,13 +50,20 @@ describe("readHandBack", () => {
       time: 12.5,
       playing: true,
       tracks: null,
+      at: null,
     });
     assert.deepEqual(readHandBack({ position: 0, time: -4 }, 3), {
       position: 0,
       time: 0,
       playing: false,
       tracks: null,
+      at: null,
     });
+    assert.equal(
+      readHandBack({ position: 1, time: 12.5, playing: true, at: 1_700_000_000_000 }, 3)?.at,
+      1_700_000_000_000,
+    );
+    assert.equal(readHandBack({ position: 1, time: 12.5, playing: true, at: "soon" }, 3)?.at, null);
   });
 
   it("takes a new queue the app was given while it played", () => {

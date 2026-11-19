@@ -32,7 +32,13 @@ export type BridgeTrack = {
 
 export type BridgeCommand = "play" | "pause" | "toggle" | "next" | "previous" | "seek";
 
-export type HandBack = { position: number; time: number; playing: boolean; tracks: HandedTrack[] | null };
+export type HandBack = {
+  position: number;
+  time: number;
+  playing: boolean;
+  tracks: HandedTrack[] | null;
+  at: number | null;
+};
 
 export const BRIDGE_VERSION = 1;
 
@@ -68,6 +74,7 @@ export function readHandBack(value: unknown, length: number): HandBack | null {
     time: typeof time === "number" && Number.isFinite(time) && time > 0 ? time : 0,
     playing: raw.playing === true,
     tracks,
+    at: typeof raw.at === "number" && Number.isFinite(raw.at) && raw.at > 0 ? raw.at : null,
   };
 }
 
