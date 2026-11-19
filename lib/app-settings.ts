@@ -20,11 +20,17 @@ export type AppOption = (typeof APP_OPTIONS)[number];
 
 export type AppPlayer = { id: string; name: string; enabled: boolean; open: boolean };
 
-export type AppKind = "desktop" | "servo";
+export type AppSong = { artist: string; title: string };
+
+export type AppFix = { from: string; to: string };
 
 export type AppSettings = Record<AppOption, boolean> & {
-  app: AppKind;
   connected: boolean;
+  server: string | null;
+  user: string | null;
+  playing: AppSong | null;
+  sent_as: AppSong | null;
+  fixes: AppFix[];
   discord_app_id: string | null;
   waiting: number;
   listening: string | null;
@@ -52,7 +58,11 @@ export type AppCommand =
   | { do: "download" }
   | { do: "window" }
   | { do: "restart" }
-  | { do: "memory-limit"; mb: number };
+  | { do: "memory-limit"; mb: number }
+  | { do: "add-fix"; artist: string; title: string; new_artist: string; new_title: string; every_song: boolean }
+  | { do: "remove-fix"; index: number }
+  | { do: "change-server" }
+  | { do: "sign-out" };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -64,6 +74,16 @@ function text(value: unknown) {
 
 function count(value: unknown) {
   return typeof value === "number" && Number.isFinite(value) && value >= 0 ? Math.floor(value) : null;
+}
+
+function song(value: unknown): AppSong | null {
+  if (!isRecord(value) || typeof value.artist !== "string" || typeof value.title !== "string") return null;
+  return { artist: value.artist, title: value.title };
+}
+
+function fix(value: unknown): AppFix | null {
+  if (!isRecord(value) || typeof value.from !== "string" || typeof value.to !== "string") return null;
+  return { from: value.from, to: value.to };
 }
 
 function player(value: unknown): AppPlayer | null {
@@ -84,8 +104,12 @@ export function readAppPush(value: unknown): AppPush | null {
   return {
     settings: {
       ...options,
-      app: raw.app === "servo" ? "servo" : "desktop",
       connected: raw.connected === true,
+      server: text(raw.server),
+      user: text(raw.user),
+      playing: song(raw.playing),
+      sent_as: song(raw.sent_as),
+      fixes: (Array.isArray(raw.fixes) ? raw.fixes : []).flatMap((each) => fix(each) ?? []),
       discord_app_id: text(raw.discord_app_id),
       waiting: count(raw.waiting) ?? 0,
       listening: text(raw.listening),

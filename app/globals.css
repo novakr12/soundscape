@@ -2667,8 +2667,26 @@ tr.selected {
   margin: 0;
 }
 
-.app-more {
-  margin-top: 1.25rem;
+.app-fix {
+  display: grid;
+  gap: 0.5rem;
+  max-width: 28rem;
+  margin: 0.5rem 0 1rem;
+}
+
+.app-fix button {
+  justify-self: start;
+}
+
+.app-field {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.app-fixes {
+  padding: 0;
+  margin: 0.5rem 0;
+  list-style: none;
 }
 
 .finder {

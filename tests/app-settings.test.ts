@@ -50,43 +50,40 @@ describe("readAppPush", () => {
     assert.equal(smoother?.settings.smooth_scrolling, false);
   });
 
-  it("tells the Servo test build apart from the desktop app", () => {
-    assert.equal(readAppPush({ settings, error: null })?.settings.app, "desktop");
-    const servo = readAppPush({
-      settings: { app: "servo", version: "0.1.0", smooth_scrolling: false },
-      error: null,
-    });
-    assert.equal(servo?.settings.app, "servo");
-    assert.equal(servo?.settings.smooth_scrolling, false);
-    assert.equal(servo?.settings.smooth_scrolling_known, true);
-    assert.equal(servo?.settings.cpu_rendering_now, null);
-    const servoCpu = readAppPush({
-      settings: {
-        app: "servo",
-        version: "0.1.0",
-        smooth_scrolling: true,
-        cpu_rendering: true,
-        cpu_rendering_now: false,
-      },
-      error: null,
-    });
-    assert.equal(servoCpu?.settings.cpu_rendering, true);
-    assert.equal(servoCpu?.settings.memory_limit, null);
-    const valve = readAppPush({ settings: { app: "servo", version: "0.1.0", memory_limit: 500 }, error: null });
+  it("reads the Servo app's own display settings, title fixes and account", () => {
+    const valve = readAppPush({ settings: { ...settings, memory_limit: 500 }, error: null });
     assert.equal(valve?.settings.memory_limit, 500);
-    const off = readAppPush({ settings: { app: "servo", version: "0.1.0", memory_limit: 0 }, error: null });
-    assert.equal(off?.settings.memory_limit, 0);
-    const odd = readAppPush({ settings: { app: "servo", version: "0.1.0", memory_limit: "lots" }, error: null });
-    assert.equal(odd?.settings.memory_limit, null);
-    assert.equal(servoCpu?.settings.cpu_rendering_now, false);
-    assert.equal(servoCpu?.settings.faster_scripts_now, null);
+    assert.equal(readAppPush({ settings: { ...settings, memory_limit: 0 }, error: null })?.settings.memory_limit, 0);
+    assert.equal(
+      readAppPush({ settings: { ...settings, memory_limit: "lots" }, error: null })?.settings.memory_limit,
+      null,
+    );
+    assert.equal(readAppPush({ settings, error: null })?.settings.faster_scripts_now, null);
     const scripts = readAppPush({
-      settings: { app: "servo", version: "0.1.0", faster_scripts: true, faster_scripts_now: false },
+      settings: { ...settings, faster_scripts: true, faster_scripts_now: false },
       error: null,
     });
     assert.equal(scripts?.settings.faster_scripts, true);
     assert.equal(scripts?.settings.faster_scripts_now, false);
-    assert.equal(readAppPush({ settings: { ...settings, app: "other" }, error: null })?.settings.app, "desktop");
+    const fixed = readAppPush({
+      settings: {
+        ...settings,
+        server: "https://music.example.com",
+        user: "sam",
+        playing: { artist: "artist", title: "song (official video)" },
+        sent_as: { artist: "Artist", title: "Song" },
+        fixes: [{ from: "a — b", to: "A — B" }, { from: 3 }],
+      },
+      error: null,
+    });
+    assert.equal(fixed?.settings.user, "sam");
+    assert.equal(fixed?.settings.server, "https://music.example.com");
+    assert.deepEqual(fixed?.settings.playing, { artist: "artist", title: "song (official video)" });
+    assert.deepEqual(fixed?.settings.sent_as, { artist: "Artist", title: "Song" });
+    assert.deepEqual(fixed?.settings.fixes, [{ from: "a — b", to: "A — B" }]);
+    const bare = readAppPush({ settings, error: null });
+    assert.equal(bare?.settings.playing, null);
+    assert.deepEqual(bare?.settings.fixes, []);
   });
 
   it("keeps an error to show", () => {

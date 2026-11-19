@@ -220,34 +220,59 @@ describe("smoke test", () => {
         new CustomEvent("soundscape-app-settings", {
           detail: {
             settings: {
-              app: "servo",
-              version: "0.1.0",
+              version: "0.10.0",
+              connected: true,
+              server: "https://music.example.com",
+              user: "sam",
+              scrobbling: true,
+              players: [],
+              waiting: 0,
               smooth_scrolling: true,
               cpu_rendering: false,
               cpu_rendering_now: false,
+              faster_scripts: false,
+              faster_scripts_now: false,
               memory_limit: 500,
+              playing: { artist: "the band", title: "a song (live)" },
+              fixes: [{ from: "old song · old band", to: "new song · new band" }],
             },
             error: null,
           },
         }),
       );
     });
-    await page.getByText("Soundscape on Servo 0.1.0, a test build, on this computer.").waitFor();
-    assert.equal(await page.getByRole("button", { name: "Send now" }).count(), 0);
-    await page.getByLabel("Smooth scrolling").uncheck();
-    await page.getByText("Takes effect after a restart.").waitFor({ state: "hidden" });
-    await page.getByLabel("Enable CPU rendering").check();
-    await page.getByRole("button", { name: "Restart now" }).click();
+    await page.getByText("Soundscape Desktop 0.10.0 on this computer.").waitFor();
+    await page.getByText("Connected to https://music.example.com as sam.").waitFor();
     const limit = page.getByLabel("Free memory by loading pages fresh");
     assert.equal(await limit.inputValue(), "500");
     await limit.selectOption("700");
+    await page.getByLabel("Faster scripts").check();
+    await page.getByRole("button", { name: "Restart now" }).click();
+    const fix = page.locator(".app-fix");
+    await fix.getByText("Playing: the band — a song (live)").waitFor();
+    await fix.getByLabel("Title").fill("A Song");
+    await fix.getByRole("button", { name: "Save fix" }).click();
+    await page.getByText("old song · old band → new song · new band").waitFor();
+    await page.getByRole("button", { name: "Remove" }).click();
+    await page.getByRole("button", { name: "Change server…" }).click();
+    await page.getByRole("button", { name: "Sign out" }).click();
     assert.deepEqual(
       await page.evaluate(() => (window as Window & { soundscapeAppCommands?: unknown[] }).soundscapeAppCommands),
       [
-        { do: "option", name: "smooth_scrolling", value: false },
-        { do: "option", name: "cpu_rendering", value: true },
-        { do: "restart" },
         { do: "memory-limit", mb: 700 },
+        { do: "option", name: "faster_scripts", value: true },
+        { do: "restart" },
+        {
+          do: "add-fix",
+          artist: "the band",
+          title: "a song (live)",
+          new_artist: "the band",
+          new_title: "A Song",
+          every_song: false,
+        },
+        { do: "remove-fix", index: 0 },
+        { do: "change-server" },
+        { do: "sign-out" },
       ],
     );
   });
