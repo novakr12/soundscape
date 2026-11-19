@@ -33,7 +33,10 @@ export type AppSettings = Record<AppOption, boolean> & {
   update: string | null;
   cpu_rendering_now: boolean | null;
   smooth_scrolling_known: boolean;
+  memory_limit: number | null;
 };
+
+export const MEMORY_LIMITS = [0, 400, 500, 700] as const;
 
 export type AppPush = { settings: AppSettings; error: string | null };
 
@@ -46,7 +49,8 @@ export type AppCommand =
   | { do: "test-notification" }
   | { do: "download" }
   | { do: "window" }
-  | { do: "restart" };
+  | { do: "restart" }
+  | { do: "memory-limit"; mb: number };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -89,6 +93,7 @@ export function readAppPush(value: unknown): AppPush | null {
       update: text(raw.update),
       cpu_rendering_now: typeof raw.cpu_rendering_now === "boolean" ? raw.cpu_rendering_now : null,
       smooth_scrolling_known: typeof raw.smooth_scrolling === "boolean",
+      memory_limit: count(raw.memory_limit),
     },
     error: text(value.error),
   };

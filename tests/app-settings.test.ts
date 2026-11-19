@@ -71,6 +71,13 @@ describe("readAppPush", () => {
       error: null,
     });
     assert.equal(servoCpu?.settings.cpu_rendering, true);
+    assert.equal(servoCpu?.settings.memory_limit, null);
+    const valve = readAppPush({ settings: { app: "servo", version: "0.1.0", memory_limit: 500 }, error: null });
+    assert.equal(valve?.settings.memory_limit, 500);
+    const off = readAppPush({ settings: { app: "servo", version: "0.1.0", memory_limit: 0 }, error: null });
+    assert.equal(off?.settings.memory_limit, 0);
+    const odd = readAppPush({ settings: { app: "servo", version: "0.1.0", memory_limit: "lots" }, error: null });
+    assert.equal(odd?.settings.memory_limit, null);
     assert.equal(servoCpu?.settings.cpu_rendering_now, false);
     assert.equal(readAppPush({ settings: { ...settings, app: "other" }, error: null })?.settings.app, "desktop");
   });

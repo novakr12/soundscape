@@ -225,6 +225,7 @@ describe("smoke test", () => {
               smooth_scrolling: true,
               cpu_rendering: false,
               cpu_rendering_now: false,
+              memory_limit: 500,
             },
             error: null,
           },
@@ -237,12 +238,16 @@ describe("smoke test", () => {
     await page.getByText("Takes effect after a restart.").waitFor({ state: "hidden" });
     await page.getByLabel("Enable CPU rendering").check();
     await page.getByRole("button", { name: "Restart now" }).click();
+    const limit = page.getByLabel("Free memory by loading pages fresh");
+    assert.equal(await limit.inputValue(), "500");
+    await limit.selectOption("700");
     assert.deepEqual(
       await page.evaluate(() => (window as Window & { soundscapeAppCommands?: unknown[] }).soundscapeAppCommands),
       [
         { do: "option", name: "smooth_scrolling", value: false },
         { do: "option", name: "cpu_rendering", value: true },
         { do: "restart" },
+        { do: "memory-limit", mb: 700 },
       ],
     );
   });

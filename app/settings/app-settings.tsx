@@ -8,6 +8,7 @@ import {
   type AppCommand,
   type AppOption,
   type AppPush,
+  MEMORY_LIMITS,
   readAndroidPush,
   readAppPush,
   scrobblingStatus,
@@ -125,6 +126,31 @@ export default function AppSettings() {
                 </button>
               </div>
             )}
+          </>
+        )}
+        {settings.memory_limit !== null && (
+          <>
+            <label className="app-toggle">
+              Free memory by loading pages fresh{" "}
+              <select
+                value={settings.memory_limit}
+                onChange={(event) => {
+                  const mb = Number(event.target.value);
+                  send({ do: "memory-limit", mb });
+                  setPushed((before) => before && { ...before, settings: { ...before.settings, memory_limit: mb } });
+                }}
+              >
+                {MEMORY_LIMITS.map((mb) => (
+                  <option key={mb} value={mb}>
+                    {mb === 0 ? "Off" : `Above ${mb} MB`}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <p className="muted">
+              Servo keeps every picture and old page data until a page loads fresh. Above this, the next page you open
+              loads fresh to free it. It waits while music plays in this window.
+            </p>
           </>
         )}
         {message && (
