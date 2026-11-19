@@ -8,29 +8,19 @@ import {
   LabelList,
   Line,
   ResponsiveContainer,
-  Tooltip,
   XAxis,
   YAxis,
 } from "recharts";
+import ChartHover, { PlotReport } from "./chart-hover";
 
-type TooltipBoxProps = {
-  active?: boolean;
-  label?: string | number;
-  payload?: readonly { value?: unknown }[];
-  formatLabel?: (label: string) => string;
-};
-
-function TooltipBox({ active, label, payload, formatLabel }: TooltipBoxProps) {
-  if (!active || !payload?.length) return null;
-  const plays = Number(payload[0].value);
-  const text = formatLabel ? formatLabel(String(label)) : String(label);
+function Plays({ label, plays }: { label: string; plays: number }) {
   return (
-    <div className="chart-tooltip">
-      <span>{text}</span>
+    <>
+      <span>{label}</span>
       <strong>
         {plays} {plays === 1 ? "play" : "plays"}
       </strong>
-    </div>
+    </>
   );
 }
 
@@ -41,26 +31,28 @@ const axisTick = { fill: "var(--chart-axis)", fontSize: 12 };
 
 export function DailyPlaysChart({ data }: { data: { day: string; plays: number }[] }) {
   return (
-    <ResponsiveContainer width="100%" height={240}>
-      <BarChart data={data} margin={{ top: 8, right: 8, bottom: 0, left: -16 }}>
-        <CartesianGrid vertical={false} stroke="var(--chart-grid)" />
-        <XAxis
-          dataKey="day"
-          tickFormatter={shortDate}
-          tick={axisTick}
-          tickLine={false}
-          axisLine={{ stroke: "var(--chart-baseline)" }}
-          interval="preserveStartEnd"
-          minTickGap={24}
-        />
-        <YAxis allowDecimals={false} tick={axisTick} tickLine={false} axisLine={false} />
-        <Tooltip
-          cursor={{ fill: "var(--chart-hover)" }}
-          content={(props) => <TooltipBox {...props} formatLabel={shortDate} />}
-        />
-        <Bar dataKey="plays" fill="var(--series-1)" radius={[4, 4, 0, 0]} maxBarSize={24} />
-      </BarChart>
-    </ResponsiveContainer>
+    <ChartHover
+      count={data.length}
+      tooltip={(index) => <Plays label={shortDate(data[index].day)} plays={data[index].plays} />}
+    >
+      <ResponsiveContainer width="100%" height={240}>
+        <BarChart data={data} margin={{ top: 8, right: 8, bottom: 0, left: -16 }}>
+          <CartesianGrid vertical={false} stroke="var(--chart-grid)" />
+          <XAxis
+            dataKey="day"
+            tickFormatter={shortDate}
+            tick={axisTick}
+            tickLine={false}
+            axisLine={{ stroke: "var(--chart-baseline)" }}
+            interval="preserveStartEnd"
+            minTickGap={24}
+          />
+          <YAxis allowDecimals={false} tick={axisTick} tickLine={false} axisLine={false} />
+          <PlotReport />
+          <Bar dataKey="plays" fill="var(--series-1)" radius={[4, 4, 0, 0]} maxBarSize={24} />
+        </BarChart>
+      </ResponsiveContainer>
+    </ChartHover>
   );
 }
 
@@ -73,73 +65,71 @@ const longMonth = (month: string) =>
 
 export function MonthlyPlaysChart({ data }: { data: { month: string; plays: number }[] }) {
   return (
-    <ResponsiveContainer width="100%" height={240}>
-      <BarChart data={data} margin={{ top: 8, right: 8, bottom: 0, left: -16 }}>
-        <CartesianGrid vertical={false} stroke="var(--chart-grid)" />
-        <XAxis
-          dataKey="month"
-          tickFormatter={shortMonth}
-          tick={{ ...axisTick, fontSize: 11 }}
-          tickLine={false}
-          axisLine={{ stroke: "var(--chart-baseline)" }}
-          interval="preserveStartEnd"
-          minTickGap={2}
-        />
-        <YAxis allowDecimals={false} tick={axisTick} tickLine={false} axisLine={false} />
-        <Tooltip
-          cursor={{ fill: "var(--chart-hover)" }}
-          content={(props) => <TooltipBox {...props} formatLabel={longMonth} />}
-        />
-        <Bar dataKey="plays" fill="var(--series-1)" radius={[4, 4, 0, 0]} maxBarSize={32} />
-      </BarChart>
-    </ResponsiveContainer>
+    <ChartHover
+      count={data.length}
+      tooltip={(index) => <Plays label={longMonth(data[index].month)} plays={data[index].plays} />}
+    >
+      <ResponsiveContainer width="100%" height={240}>
+        <BarChart data={data} margin={{ top: 8, right: 8, bottom: 0, left: -16 }}>
+          <CartesianGrid vertical={false} stroke="var(--chart-grid)" />
+          <XAxis
+            dataKey="month"
+            tickFormatter={shortMonth}
+            tick={{ ...axisTick, fontSize: 11 }}
+            tickLine={false}
+            axisLine={{ stroke: "var(--chart-baseline)" }}
+            interval="preserveStartEnd"
+            minTickGap={2}
+          />
+          <YAxis allowDecimals={false} tick={axisTick} tickLine={false} axisLine={false} />
+          <PlotReport />
+          <Bar dataKey="plays" fill="var(--series-1)" radius={[4, 4, 0, 0]} maxBarSize={32} />
+        </BarChart>
+      </ResponsiveContainer>
+    </ChartHover>
   );
 }
 
 export function RankedBarChart({ data }: { data: { name: string; plays: number }[] }) {
   return (
-    <ResponsiveContainer width="100%" height={Math.max(120, data.length * 32 + 16)}>
-      <BarChart data={data} layout="vertical" margin={{ top: 0, right: 40, bottom: 0, left: 0 }}>
-        <XAxis type="number" hide />
-        <YAxis
-          type="category"
-          dataKey="name"
-          width={140}
-          tick={{ fill: "var(--fg)", fontSize: 13 }}
-          tickLine={false}
-          axisLine={{ stroke: "var(--chart-baseline)" }}
-        />
-        <Tooltip cursor={{ fill: "var(--chart-hover)" }} content={(props) => <TooltipBox {...props} />} />
-        <Bar dataKey="plays" fill="var(--series-1)" radius={[0, 4, 4, 0]} maxBarSize={20}>
-          <LabelList dataKey="plays" position="right" fill="var(--muted)" fontSize={12} />
-        </Bar>
-      </BarChart>
-    </ResponsiveContainer>
+    <ChartHover
+      count={data.length}
+      vertical
+      tooltip={(index) => <Plays label={data[index].name} plays={data[index].plays} />}
+    >
+      <ResponsiveContainer width="100%" height={Math.max(120, data.length * 32 + 16)}>
+        <BarChart data={data} layout="vertical" margin={{ top: 0, right: 40, bottom: 0, left: 0 }}>
+          <XAxis type="number" hide />
+          <YAxis
+            type="category"
+            dataKey="name"
+            width={140}
+            tick={{ fill: "var(--fg)", fontSize: 13 }}
+            tickLine={false}
+            axisLine={{ stroke: "var(--chart-baseline)" }}
+          />
+          <PlotReport />
+          <Bar dataKey="plays" fill="var(--series-1)" radius={[0, 4, 4, 0]} maxBarSize={20}>
+            <LabelList dataKey="plays" position="right" fill="var(--muted)" fontSize={12} />
+          </Bar>
+        </BarChart>
+      </ResponsiveContainer>
+    </ChartHover>
   );
 }
 
 const hourLabel = (hour: number) => `${String(hour).padStart(2, "0")}:00`;
 const percent = (share: number) => `${Math.round(share * 1000) / 10}%`;
 
-type ClockTooltipProps = {
-  active?: boolean;
-  label?: string | number;
-  payload?: readonly { dataKey?: unknown; value?: unknown }[];
-};
-
-function ClockTooltip({ active, label, payload }: ClockTooltipProps) {
-  if (!active || !payload?.length) return null;
-  const hour = Number(label);
-  const value = (key: string) => payload.find((item) => item.dataKey === key)?.value;
-  const following = value("following");
+function ClockTooltip({ hour, you, following }: { hour: number; you: number; following?: number }) {
   return (
-    <div className="chart-tooltip">
+    <>
       <span>
         {hourLabel(hour)}–{hourLabel((hour + 1) % 24)}
       </span>
-      <strong>You {percent(Number(value("you")))}</strong>
-      {following !== undefined && <span>People you follow {percent(Number(following))}</span>}
-    </div>
+      <strong>You {percent(you)}</strong>
+      {following !== undefined && <span>People you follow {percent(following)}</span>}
+    </>
   );
 }
 
@@ -157,38 +147,40 @@ export function ListeningClockChart({ data }: { data: { hour: number; you: numbe
           </li>
         )}
       </ul>
-      <ResponsiveContainer width="100%" height={240}>
-        <ComposedChart data={data} margin={{ top: 8, right: 8, bottom: 0, left: -12 }}>
-          <CartesianGrid vertical={false} stroke="var(--chart-grid)" />
-          <XAxis
-            dataKey="hour"
-            tickFormatter={(hour) => String(hour).padStart(2, "0")}
-            ticks={[0, 3, 6, 9, 12, 15, 18, 21]}
-            tick={axisTick}
-            tickLine={false}
-            axisLine={{ stroke: "var(--chart-baseline)" }}
-          />
-          <YAxis
-            tickFormatter={(share) => `${Math.round(share * 100)}%`}
-            tick={axisTick}
-            tickLine={false}
-            axisLine={false}
-          />
-          <Tooltip cursor={{ fill: "var(--chart-hover)" }} content={(props) => <ClockTooltip {...props} />} />
-          <Bar dataKey="you" fill="var(--series-1)" radius={[4, 4, 0, 0]} maxBarSize={20} isAnimationActive={false} />
-          {comparing && (
-            <Line
-              dataKey="following"
-              type="linear"
-              stroke="var(--chart-axis)"
-              strokeWidth={2}
-              dot={false}
-              activeDot={{ r: 4, fill: "var(--chart-axis)", stroke: "var(--bg)", strokeWidth: 2 }}
-              isAnimationActive={false}
+      <ChartHover count={data.length} tooltip={(index) => <ClockTooltip {...data[index]} />}>
+        <ResponsiveContainer width="100%" height={240}>
+          <ComposedChart data={data} margin={{ top: 8, right: 8, bottom: 0, left: -12 }}>
+            <CartesianGrid vertical={false} stroke="var(--chart-grid)" />
+            <XAxis
+              dataKey="hour"
+              tickFormatter={(hour) => String(hour).padStart(2, "0")}
+              ticks={[0, 3, 6, 9, 12, 15, 18, 21]}
+              tick={axisTick}
+              tickLine={false}
+              axisLine={{ stroke: "var(--chart-baseline)" }}
             />
-          )}
-        </ComposedChart>
-      </ResponsiveContainer>
+            <YAxis
+              tickFormatter={(share) => `${Math.round(share * 100)}%`}
+              tick={axisTick}
+              tickLine={false}
+              axisLine={false}
+            />
+            <PlotReport />
+            <Bar dataKey="you" fill="var(--series-1)" radius={[4, 4, 0, 0]} maxBarSize={20} isAnimationActive={false} />
+            {comparing && (
+              <Line
+                dataKey="following"
+                type="linear"
+                stroke="var(--chart-axis)"
+                strokeWidth={2}
+                dot={false}
+                activeDot={false}
+                isAnimationActive={false}
+              />
+            )}
+          </ComposedChart>
+        </ResponsiveContainer>
+      </ChartHover>
     </>
   );
 }

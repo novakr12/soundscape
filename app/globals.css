@@ -825,6 +825,30 @@ code {
   font-size: 0.9em;
 }
 
+.chart-hover {
+  position: relative;
+}
+
+.chart-hover > .recharts-responsive-container {
+  position: relative;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.chart-cursor {
+  position: absolute;
+  z-index: 0;
+  background: var(--chart-hover);
+  pointer-events: none;
+}
+
+.chart-tooltip-floating {
+  position: absolute;
+  z-index: 2;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
 .chart-tooltip {
   display: flex;
   flex-direction: column;
