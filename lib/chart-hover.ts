@@ -4,16 +4,6 @@ export type Box = { left: number; top: number; width: number; height: number };
 
 const GAP = 12;
 
-export function samePlot(before: Plot | null, next: Plot) {
-  return (
-    before !== null &&
-    before.x === next.x &&
-    before.y === next.y &&
-    before.width === next.width &&
-    before.height === next.height
-  );
-}
-
 export function hoveredIndex(plot: Plot, count: number, vertical: boolean, x: number, y: number) {
   if (count <= 0 || plot.width <= 0 || plot.height <= 0) return null;
   if (x < plot.x || x >= plot.x + plot.width || y < plot.y || y >= plot.y + plot.height) return null;

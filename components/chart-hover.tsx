@@ -1,66 +1,40 @@
 "use client";
 
-import {
-  createContext,
-  type PointerEvent,
-  type ReactNode,
-  useCallback,
-  useContext,
-  useEffect,
-  useRef,
-  useState,
-} from "react";
-import { usePlotArea } from "recharts";
-import { cursorBox, hoveredIndex, type Plot, samePlot, tooltipPlace } from "@/lib/chart-hover";
+import { type PointerEvent, type ReactNode, useRef, useState } from "react";
+import { type Box, cursorBox, hoveredIndex, tooltipPlace } from "@/lib/chart-hover";
 
-const PlotContext = createContext<(plot: Plot) => void>(() => {});
-
-export function PlotReport() {
-  const report = useContext(PlotContext);
-  const plot = usePlotArea();
-  const x = plot?.x;
-  const y = plot?.y;
-  const width = plot?.width;
-  const height = plot?.height;
-  useEffect(() => {
-    if (x === undefined || y === undefined || width === undefined || height === undefined) return;
-    report({ x, y, width, height });
-  }, [report, x, y, width, height]);
-  return null;
-}
-
-type Hover = { index: number; x: number; y: number; width: number; height: number };
+type Hover = { index: number; x: number; y: number; width: number; height: number; cursor: Box };
 
 export default function ChartHover({
   count,
   vertical = false,
-  tooltip,
+  tips,
   children,
 }: {
   count: number;
   vertical?: boolean;
-  tooltip: (index: number) => ReactNode;
+  tips: ReactNode[];
   children: ReactNode;
 }) {
   const box = useRef<HTMLDivElement>(null);
-  const [plot, setPlot] = useState<Plot | null>(null);
   const [hover, setHover] = useState<Hover | null>(null);
-  const report = useCallback((next: Plot) => setPlot((before) => (samePlot(before, next) ? before : next)), []);
 
   function follow(event: PointerEvent<HTMLDivElement>) {
     const frame = box.current?.getBoundingClientRect();
-    if (!frame || !plot) return;
+    const area = box.current?.querySelector(".chart-plot")?.getBoundingClientRect();
+    if (!frame || !area) return;
+    const plot = { x: area.left - frame.left, y: area.top - frame.top, width: area.width, height: area.height };
     const x = event.clientX - frame.left;
     const y = event.clientY - frame.top;
     const index = hoveredIndex(plot, count, vertical, x, y);
     setHover((before) => {
       if (index === null) return null;
       if (before && before.index === index && before.x === x && before.y === y) return before;
-      return { index, x, y, width: frame.width, height: frame.height };
+      return { index, x, y, width: frame.width, height: frame.height, cursor: cursorBox(plot, count, vertical, index) };
     });
   }
 
-  const content = hover ? tooltip(hover.index) : null;
+  const content = hover ? tips[hover.index] : null;
   return (
     <div
       ref={box}
@@ -69,8 +43,8 @@ export default function ChartHover({
       onPointerDown={follow}
       onPointerLeave={() => setHover(null)}
     >
-      {hover && plot && <div className="chart-cursor" style={cursorBox(plot, count, vertical, hover.index)} />}
-      <PlotContext.Provider value={report}>{children}</PlotContext.Provider>
+      {hover && <div className="chart-cursor" style={hover.cursor} />}
+      {children}
       {hover && content && (
         <div
           className="chart-tooltip chart-tooltip-floating"

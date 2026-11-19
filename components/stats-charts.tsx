@@ -1,17 +1,7 @@
-"use client";
-
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  ComposedChart,
-  LabelList,
-  Line,
-  ResponsiveContainer,
-  XAxis,
-  YAxis,
-} from "recharts";
-import ChartHover, { PlotReport } from "./chart-hover";
+import type { ReactNode } from "react";
+import { niceTicks, share, shownLabels } from "@/lib/chart-scale";
+import ChartHover from "./chart-hover";
+import TrendLine from "./trend-line";
 
 function Plays({ label, plays }: { label: string; plays: number }) {
   return (
@@ -27,35 +17,6 @@ function Plays({ label, plays }: { label: string; plays: number }) {
 const shortDate = (day: string) =>
   new Date(`${day}T12:00:00Z`).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" });
 
-const axisTick = { fill: "var(--chart-axis)", fontSize: 12 };
-
-export function DailyPlaysChart({ data }: { data: { day: string; plays: number }[] }) {
-  return (
-    <ChartHover
-      count={data.length}
-      tooltip={(index) => <Plays label={shortDate(data[index].day)} plays={data[index].plays} />}
-    >
-      <ResponsiveContainer width="100%" height={240}>
-        <BarChart data={data} margin={{ top: 8, right: 8, bottom: 0, left: -16 }}>
-          <CartesianGrid vertical={false} stroke="var(--chart-grid)" />
-          <XAxis
-            dataKey="day"
-            tickFormatter={shortDate}
-            tick={axisTick}
-            tickLine={false}
-            axisLine={{ stroke: "var(--chart-baseline)" }}
-            interval="preserveStartEnd"
-            minTickGap={24}
-          />
-          <YAxis allowDecimals={false} tick={axisTick} tickLine={false} axisLine={false} />
-          <PlotReport />
-          <Bar dataKey="plays" fill="var(--series-1)" radius={[4, 4, 0, 0]} maxBarSize={24} />
-        </BarChart>
-      </ResponsiveContainer>
-    </ChartHover>
-  );
-}
-
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 const shortMonth = (month: string) => MONTHS[Number(month.slice(5, 7)) - 1];
@@ -63,63 +24,111 @@ const shortMonth = (month: string) => MONTHS[Number(month.slice(5, 7)) - 1];
 const longMonth = (month: string) =>
   new Date(`${month}-15T12:00:00Z`).toLocaleDateString("en-GB", { month: "long", year: "numeric", timeZone: "UTC" });
 
-export function MonthlyPlaysChart({ data }: { data: { month: string; plays: number }[] }) {
+function Bars({
+  values,
+  labels,
+  tips,
+  widest,
+  format = String,
+  integers = true,
+  line,
+}: {
+  values: number[];
+  labels: (string | null)[];
+  tips: ReactNode[];
+  widest: number;
+  format?: (value: number) => string;
+  integers?: boolean;
+  line?: number[];
+}) {
+  const ticks = niceTicks(Math.max(0, ...values, ...(line ?? [])), 4, integers);
+  const top = ticks[ticks.length - 1];
   return (
-    <ChartHover
-      count={data.length}
-      tooltip={(index) => <Plays label={longMonth(data[index].month)} plays={data[index].plays} />}
-    >
-      <ResponsiveContainer width="100%" height={240}>
-        <BarChart data={data} margin={{ top: 8, right: 8, bottom: 0, left: -16 }}>
-          <CartesianGrid vertical={false} stroke="var(--chart-grid)" />
-          <XAxis
-            dataKey="month"
-            tickFormatter={shortMonth}
-            tick={{ ...axisTick, fontSize: 11 }}
-            tickLine={false}
-            axisLine={{ stroke: "var(--chart-baseline)" }}
-            interval="preserveStartEnd"
-            minTickGap={2}
-          />
-          <YAxis allowDecimals={false} tick={axisTick} tickLine={false} axisLine={false} />
-          <PlotReport />
-          <Bar dataKey="plays" fill="var(--series-1)" radius={[4, 4, 0, 0]} maxBarSize={32} />
-        </BarChart>
-      </ResponsiveContainer>
+    <ChartHover count={values.length} tips={tips}>
+      <div className="bars">
+        <div className="bars-y" aria-hidden="true">
+          {ticks.map((tick) => (
+            <span key={tick} style={{ bottom: `${share(tick, top)}%` }}>
+              {format(tick)}
+            </span>
+          ))}
+        </div>
+        <div className="bars-plot chart-plot">
+          {ticks.map((tick) => (
+            <span key={tick} className="bars-grid" style={{ bottom: `${share(tick, top)}%` }} />
+          ))}
+          {values.map((value, index) => (
+            <span key={labels[index] ?? index} className="bars-slot">
+              <span className="bars-bar" style={{ height: `${share(value, top)}%`, maxWidth: widest }} />
+            </span>
+          ))}
+          {line && <TrendLine shares={line.map((value) => share(value, top))} />}
+        </div>
+        <span />
+        <div className="bars-x" aria-hidden="true">
+          {labels.map((label, index) =>
+            label === null ? null : (
+              <span key={label} style={{ left: `${((index + 0.5) / labels.length) * 100}%` }}>
+                {label}
+              </span>
+            ),
+          )}
+        </div>
+      </div>
     </ChartHover>
   );
 }
 
+export function DailyPlaysChart({ data }: { data: { day: string; plays: number }[] }) {
+  const shown = shownLabels(data.length);
+  return (
+    <Bars
+      values={data.map((day) => day.plays)}
+      labels={data.map((day, index) => (shown[index] ? shortDate(day.day) : null))}
+      tips={data.map((day) => <Plays key={day.day} label={shortDate(day.day)} plays={day.plays} />)}
+      widest={24}
+    />
+  );
+}
+
+export function MonthlyPlaysChart({ data }: { data: { month: string; plays: number }[] }) {
+  return (
+    <Bars
+      values={data.map((month) => month.plays)}
+      labels={data.map((month) => shortMonth(month.month))}
+      tips={data.map((month) => <Plays key={month.month} label={longMonth(month.month)} plays={month.plays} />)}
+      widest={32}
+    />
+  );
+}
+
 export function RankedBarChart({ data }: { data: { name: string; plays: number }[] }) {
+  const most = Math.max(1, ...data.map((row) => row.plays));
   return (
     <ChartHover
       count={data.length}
       vertical
-      tooltip={(index) => <Plays label={data[index].name} plays={data[index].plays} />}
+      tips={data.map((row) => <Plays key={row.name} label={row.name} plays={row.plays} />)}
     >
-      <ResponsiveContainer width="100%" height={Math.max(120, data.length * 32 + 16)}>
-        <BarChart data={data} layout="vertical" margin={{ top: 0, right: 40, bottom: 0, left: 0 }}>
-          <XAxis type="number" hide />
-          <YAxis
-            type="category"
-            dataKey="name"
-            width={140}
-            tick={{ fill: "var(--fg)", fontSize: 13 }}
-            tickLine={false}
-            axisLine={{ stroke: "var(--chart-baseline)" }}
-          />
-          <PlotReport />
-          <Bar dataKey="plays" fill="var(--series-1)" radius={[0, 4, 4, 0]} maxBarSize={20}>
-            <LabelList dataKey="plays" position="right" fill="var(--muted)" fontSize={12} />
-          </Bar>
-        </BarChart>
-      </ResponsiveContainer>
+      <div className="ranked chart-plot">
+        {data.map((row) => (
+          <div key={row.name} className="ranked-row">
+            <span className="ranked-name">{row.name}</span>
+            <span className="ranked-track">
+              <span className="ranked-bar" style={{ width: `calc((100% - 3.5rem) * ${row.plays / most})` }} />
+              <span className="ranked-value">{row.plays}</span>
+            </span>
+          </div>
+        ))}
+      </div>
     </ChartHover>
   );
 }
 
 const hourLabel = (hour: number) => `${String(hour).padStart(2, "0")}:00`;
-const percent = (share: number) => `${Math.round(share * 1000) / 10}%`;
+const percent = (fraction: number) => `${Math.round(fraction * 1000) / 10}%`;
+const tickPercent = (fraction: number) => `${Math.round(fraction * 1000) / 10}%`;
+const CLOCK_TICKS = new Set([0, 3, 6, 9, 12, 15, 18, 21]);
 
 function ClockTooltip({ hour, you, following }: { hour: number; you: number; following?: number }) {
   return (
@@ -147,40 +156,15 @@ export function ListeningClockChart({ data }: { data: { hour: number; you: numbe
           </li>
         )}
       </ul>
-      <ChartHover count={data.length} tooltip={(index) => <ClockTooltip {...data[index]} />}>
-        <ResponsiveContainer width="100%" height={240}>
-          <ComposedChart data={data} margin={{ top: 8, right: 8, bottom: 0, left: -12 }}>
-            <CartesianGrid vertical={false} stroke="var(--chart-grid)" />
-            <XAxis
-              dataKey="hour"
-              tickFormatter={(hour) => String(hour).padStart(2, "0")}
-              ticks={[0, 3, 6, 9, 12, 15, 18, 21]}
-              tick={axisTick}
-              tickLine={false}
-              axisLine={{ stroke: "var(--chart-baseline)" }}
-            />
-            <YAxis
-              tickFormatter={(share) => `${Math.round(share * 100)}%`}
-              tick={axisTick}
-              tickLine={false}
-              axisLine={false}
-            />
-            <PlotReport />
-            <Bar dataKey="you" fill="var(--series-1)" radius={[4, 4, 0, 0]} maxBarSize={20} isAnimationActive={false} />
-            {comparing && (
-              <Line
-                dataKey="following"
-                type="linear"
-                stroke="var(--chart-axis)"
-                strokeWidth={2}
-                dot={false}
-                activeDot={false}
-                isAnimationActive={false}
-              />
-            )}
-          </ComposedChart>
-        </ResponsiveContainer>
-      </ChartHover>
+      <Bars
+        values={data.map((hour) => hour.you)}
+        labels={data.map((hour) => (CLOCK_TICKS.has(hour.hour) ? String(hour.hour).padStart(2, "0") : null))}
+        tips={data.map((hour) => <ClockTooltip key={hour.hour} {...hour} />)}
+        widest={20}
+        format={tickPercent}
+        integers={false}
+        line={comparing ? data.map((hour) => hour.following ?? 0) : undefined}
+      />
     </>
   );
 }
