@@ -1,8 +1,10 @@
 import type { Metadata, Viewport } from "next";
 import { Space_Grotesk } from "next/font/google";
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import AppNav from "@/components/app-nav";
 import BrandLink from "@/components/brand-link";
+import { CanvasCoversProvider } from "@/components/canvas-covers";
 import CoverRetry from "@/components/cover-retry";
 import Credit from "@/components/credit";
 import Finder from "@/components/finder";
@@ -12,6 +14,7 @@ import { PlayerProvider } from "@/components/player";
 import SearchBox from "@/components/search-box";
 import ServiceWorker from "@/components/service-worker";
 import { isAdmin } from "@/lib/admin";
+import { drawsCoversOnCanvas } from "@/lib/cover-canvas";
 import { unreadCount } from "@/lib/notifications";
 import { currentUserId, logOut } from "@/lib/session";
 import { signupMode } from "@/lib/signups";
@@ -35,6 +38,7 @@ export const metadata: Metadata = {
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const username = await currentUserId();
   const unread = username ? await unreadCount(username) : 0;
+  const canvasCovers = drawsCoversOnCanvas((await headers()).get("user-agent"));
 
   async function logout() {
     "use server";
@@ -45,59 +49,61 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   return (
     <html lang="en" className={brandFont.variable}>
       <body>
-        <header>
-          <BrandLink />
-          <HeaderMenu />
-          <SearchBox />
-          <nav>
-            <NavLink href="/feed">Feed</NavLink>
-            <NavLink href="/music">Music</NavLink>
-            <NavLink href="/history">History</NavLink>
-            <NavLink href="/charts">Charts</NavLink>
-            <NavLink href="/recommendations">Recommendations</NavLink>
-            <NavLink href="/mixes">Mixes</NavLink>
-            <NavLink href="/stats">Stats</NavLink>
-            <NavLink href="/yearscape">Yearscape</NavLink>
-            <NavLink href="/import">Import</NavLink>
-            <NavLink href="/export">Export</NavLink>
-            <NavLink href="/connect">Connect</NavLink>
-          </nav>
-          <div className="account">
-            {username ? (
-              <>
-                <NavLink href={`/u/${username}`}>{username}</NavLink>
-                <NavLink href="/notifications">
-                  Notifications
-                  {unread > 0 && (
-                    <span className="badge" role="status" aria-label={`${unread} unread`}>
-                      {unread > 99 ? "99+" : unread}
-                    </span>
-                  )}
-                </NavLink>
-                <NavLink href="/settings">Settings</NavLink>
-                {isAdmin(username) && <NavLink href="/admin">Admin</NavLink>}
-                <form action={logout}>
-                  <button type="submit">Log out</button>
-                </form>
-              </>
-            ) : (
-              <>
-                <NavLink href="/login">Log in</NavLink>
-                {signupMode() === "open" && <NavLink href="/signup">Sign up</NavLink>}
-              </>
-            )}
-          </div>
-        </header>
-        <AppNav />
-        <ServiceWorker />
-        <CoverRetry />
-        <PlayerProvider username={username ?? null}>
-          <Finder username={username ?? null} admin={Boolean(username && isAdmin(username))} />
-          <main>
-            {children}
-            <Credit />
-          </main>
-        </PlayerProvider>
+        <CanvasCoversProvider value={canvasCovers}>
+          <header>
+            <BrandLink />
+            <HeaderMenu />
+            <SearchBox />
+            <nav>
+              <NavLink href="/feed">Feed</NavLink>
+              <NavLink href="/music">Music</NavLink>
+              <NavLink href="/history">History</NavLink>
+              <NavLink href="/charts">Charts</NavLink>
+              <NavLink href="/recommendations">Recommendations</NavLink>
+              <NavLink href="/mixes">Mixes</NavLink>
+              <NavLink href="/stats">Stats</NavLink>
+              <NavLink href="/yearscape">Yearscape</NavLink>
+              <NavLink href="/import">Import</NavLink>
+              <NavLink href="/export">Export</NavLink>
+              <NavLink href="/connect">Connect</NavLink>
+            </nav>
+            <div className="account">
+              {username ? (
+                <>
+                  <NavLink href={`/u/${username}`}>{username}</NavLink>
+                  <NavLink href="/notifications">
+                    Notifications
+                    {unread > 0 && (
+                      <span className="badge" role="status" aria-label={`${unread} unread`}>
+                        {unread > 99 ? "99+" : unread}
+                      </span>
+                    )}
+                  </NavLink>
+                  <NavLink href="/settings">Settings</NavLink>
+                  {isAdmin(username) && <NavLink href="/admin">Admin</NavLink>}
+                  <form action={logout}>
+                    <button type="submit">Log out</button>
+                  </form>
+                </>
+              ) : (
+                <>
+                  <NavLink href="/login">Log in</NavLink>
+                  {signupMode() === "open" && <NavLink href="/signup">Sign up</NavLink>}
+                </>
+              )}
+            </div>
+          </header>
+          <AppNav />
+          <ServiceWorker />
+          <CoverRetry />
+          <PlayerProvider username={username ?? null}>
+            <Finder username={username ?? null} admin={Boolean(username && isAdmin(username))} />
+            <main>
+              {children}
+              <Credit />
+            </main>
+          </PlayerProvider>
+        </CanvasCoversProvider>
       </body>
     </html>
   );

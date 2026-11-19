@@ -3,8 +3,8 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { downloadTracks } from "@/lib/app-downloads";
-import { sizedCover } from "@/lib/cover-size";
 import type { MusicSong } from "@/lib/music";
+import CoverPicture from "./cover-picture";
 import DownloadButton from "./download-button";
 import { SongLink } from "./music-links";
 import PlayButton from "./play-button";
@@ -101,7 +101,7 @@ export default function MusicList({
           <li key={`${song.songId ?? song.trackId}-${i}`}>
             <span className="music-number">{firstNumber + i}</span>
             {song.cover ? (
-              <img src={sizedCover(song.cover, 40)} alt="" width={40} height={40} loading="lazy" />
+              <CoverPicture src={song.cover} shown={40} lazy />
             ) : (
               <span className="music-cover-empty" aria-hidden="true" />
             )}

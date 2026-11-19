@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { type RefObject, useEffect, useState } from "react";
-import { sizedCover } from "@/lib/cover-size";
 import {
   type Device,
   type DeviceCommand,
@@ -12,6 +11,7 @@ import {
   shownPlayback,
 } from "@/lib/devices";
 import { nextRepeat, SEEK_STEP_SECONDS } from "@/lib/play-queue";
+import CoverPicture from "./cover-picture";
 import { clock, KindIcon, useLater } from "./devices";
 import { ArtistLink, SongLink } from "./music-links";
 import {
@@ -126,7 +126,7 @@ export default function RemoteBar({
   return (
     <div className="player remote-player" data-remote={device.id}>
       <div className="player-song">
-        {track?.cover && <img src={sizedCover(track.cover, 48)} alt="" width={48} height={48} />}
+        {track?.cover && <CoverPicture src={track.cover} shown={48} />}
         <div className="now-playing">
           {track ? (
             <>
