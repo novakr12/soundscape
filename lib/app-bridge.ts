@@ -3,6 +3,8 @@ import {
   type DeviceCommand,
   type HandedTrack,
   MOST_HANDED_TRACKS,
+  readDeviceReport,
+  readDeviceState,
   readHandedTrack,
   timeNow,
 } from "./devices";
@@ -135,4 +137,35 @@ export function savedVolume(text: string | null) {
   } catch {
     return 0.8;
   }
+}
+
+export type NativePort = { postMessage: (message: string) => void };
+
+export function nativePort(view: { soundscapeNative?: unknown }): NativePort | null {
+  const port = view.soundscapeNative;
+  if (typeof port !== "object" || port === null) return null;
+  return typeof (port as { postMessage?: unknown }).postMessage === "function" ? (port as NativePort) : null;
+}
+
+export function nativeDevice(value: unknown, now: number): Device | null {
+  let raw = value;
+  if (typeof value === "string") {
+    try {
+      raw = JSON.parse(value);
+    } catch {
+      return null;
+    }
+  }
+  const report = readDeviceReport(raw);
+  return report ? { ...report, at: now } : null;
+}
+
+export function idleNative(given: { id: string | null; name: string | null }, now: number): Device {
+  return {
+    id: given.id ?? "this-phone",
+    name: given.name ?? "this phone",
+    kind: "android",
+    state: readDeviceState(null),
+    at: now,
+  };
 }

@@ -5,6 +5,10 @@ import {
   BRIDGE_VERSION,
   bridgeTracks,
   type HandBack,
+  idleNative,
+  type NativePort,
+  nativeDevice,
+  nativePort,
   readCommand,
   readHandBack,
   remoteBridgeState,
@@ -13,7 +17,15 @@ import {
   wantsRemote,
 } from "@/lib/app-bridge";
 import { artistIdFor } from "@/lib/catalog";
-import { type Device, type DeviceCommand, type DeviceState, MOST_UP_NEXT, timeNow } from "@/lib/devices";
+import {
+  type AppView,
+  type Device,
+  type DeviceCommand,
+  type DeviceState,
+  givenDevice,
+  MOST_UP_NEXT,
+  timeNow,
+} from "@/lib/devices";
 import { HAND_BACK_STEP_MS, HAND_BACK_WITHIN_MS, handBackStep, phoneTime } from "@/lib/hand-back";
 import { type Gain, gainLevel, playingAnAlbum } from "@/lib/levelling";
 import {
@@ -245,7 +257,12 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
   const local = useRef<LocalPlayer>({ state: () => idleState(), obey: () => {} });
   const link = useDeviceLink(local, username);
   const [following, setFollowing] = useState<string | null>(null);
-  const followed = following ? (link.devices.find((device) => device.id === following) ?? null) : null;
+  const [native, setNative] = useState<Device | null>(null);
+  const port = useRef<NativePort | null>(null);
+  const nativeRef = useRef<Device | null>(null);
+  nativeRef.current = native;
+  const followed = following ? (link.devices.find((device) => device.id === following) ?? native) : native;
+  const here = followed !== null && native !== null && followed.id === native.id;
   const remoteKeys = useRef<(shortcut: string) => boolean>(() => false);
   const away = useRef<{ device: Device | null; offset: number; send: (command: DeviceCommand) => void }>({
     device: null,
@@ -254,11 +271,39 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
   });
   away.current = {
     device: followed,
-    offset: link.offset,
+    offset: here ? 0 : link.offset,
     send: (command) => {
-      if (followed) link.send(followed.id, command);
+      if (followed) sendTo(followed, command);
     },
   };
+
+  function sendTo(device: Device, command: DeviceCommand): Promise<string | null> {
+    const nativePlayer = nativeRef.current;
+    if (port.current && nativePlayer && device.id === nativePlayer.id) {
+      port.current.postMessage(JSON.stringify(command));
+      return Promise.resolve(null);
+    }
+    return link.send(device.id, command);
+  }
+
+  useEffect(() => {
+    const found = nativePort(window as Window & { soundscapeNative?: unknown });
+    if (!found) return;
+    port.current = found;
+    setNative(idleNative(givenDevice(window as Window & AppView), Date.now()));
+    const view = window as Window & { soundscapeNativeReport?: (value: unknown) => void };
+    view.soundscapeNativeReport = (value) => {
+      const device = nativeDevice(value, Date.now());
+      if (!device) return;
+      if (device.state.playing && !nativeRef.current?.state.playing) setFollowing(null);
+      setNative(device);
+    };
+    found.postMessage(JSON.stringify({ do: "hello" }));
+    return () => {
+      delete view.soundscapeNativeReport;
+      port.current = null;
+    };
+  }, []);
 
   function bind(element: HTMLAudioElement) {
     const mine = () => element === audioRef.current;
@@ -442,6 +487,7 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
     const view = window as Window & { soundscapePlayer?: unknown; soundscapeBridgeRemote?: unknown };
     view.soundscapePlayer = {
       version: BRIDGE_VERSION,
+      native: nativePort(view as Window & { soundscapeNative?: unknown }) !== null,
       state: () => {
         const elsewhere = away.current.device;
         if (elsewhere && wantsRemote(view)) return remoteBridgeState(elsewhere, Date.now() + away.current.offset);
@@ -522,7 +568,7 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
   }, [queueShape]);
 
   function restoreSaved() {
-    if (playing.current > 0) return;
+    if (playing.current > 0 || port.current) return;
     try {
       const saved = restoreQueue(JSON.parse(localStorage.getItem(QUEUE_KEY) ?? "null"));
       if (!saved) return;
@@ -698,20 +744,18 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
     }
     const inPlayOrder = order.map((at) => list[at]);
     const from = Math.max(0, index - HAND_BACK_BEFORE);
-    link
-      .send(target.id, {
-        do: "take",
-        tracks: inPlayOrder.slice(from, from + MOST_HANDED).map(handed),
-        position: index - from,
-        time: 0,
-        playing: true,
-      })
-      .then((failure) => {
-        if (!failure) return;
-        setFollowing(null);
-        arrange(list, order, index);
-        start(list[order[index]]);
-      });
+    sendTo(target, {
+      do: "take",
+      tracks: inPlayOrder.slice(from, from + MOST_HANDED).map(handed),
+      position: index - from,
+      time: 0,
+      playing: true,
+    }).then((failure) => {
+      if (!failure) return;
+      setFollowing(null);
+      arrange(list, order, index);
+      start(list[order[index]]);
+    });
   }
 
   function play(track: PlayerTrack) {
@@ -877,7 +921,7 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
   function enqueue(track: PlayerTrack, next: boolean) {
     const target = away.current.device;
     if (target) {
-      link.send(target.id, { do: "enqueue", track: handed(track), next }).then((failure) => {
+      sendTo(target, { do: "enqueue", track: handed(track), next }).then((failure) => {
         if (failure) queueHere(track, next);
       });
       return;
@@ -1101,6 +1145,12 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
   }
 
   async function moveMusicTo(to: string) {
+    if (port.current) {
+      if (!nativeRef.current?.state.track) return "Nothing is playing here to send.";
+      port.current.postMessage(JSON.stringify({ do: "send", to }));
+      setFollowing(to);
+      return null;
+    }
     const handed = handOff();
     if (!handed) return "Nothing is playing here to send.";
     const failure = await link.send(to, { do: "take", ...handed });
@@ -1112,6 +1162,10 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
   }
 
   function obey(command: DeviceCommand) {
+    if (port.current) {
+      port.current.postMessage(JSON.stringify(command));
+      return;
+    }
     const audio = audioRef.current;
     if (command.do === "take") {
       setRadio(null);
@@ -1168,6 +1222,7 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
 
   function pullHere(from: string) {
     if (link.me) link.send(from, { do: "send", to: link.me.id });
+    if (port.current) setFollowing(null);
   }
 
   skip.current = {
@@ -1307,12 +1362,13 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
       {!current && !followed && !showDevices && elsewhere && (
         <PlayingElsewhere device={elsewhere} onOpen={() => setFollowing(elsewhere.id)} />
       )}
-      {followed && (
+      {followed && (!here || followed.state.track) && (
         <RemoteBar
           device={followed}
-          offset={link.offset}
+          here={here}
+          offset={here ? 0 : link.offset}
           send={(command) => {
-            link.send(followed.id, command);
+            sendTo(followed, command);
           }}
           onPlayHere={() => pullHere(followed.id)}
           keys={remoteKeys}
@@ -1359,7 +1415,7 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
       )}
       {followed?.state.track && showQueue && (
         <QueuePanel
-          title={`Queue on ${followed.name}`}
+          title={here ? "Up next" : `Queue on ${followed.name}`}
           queue={[remoteTrack(followed.state.track), ...followed.state.upNext]}
           keys={[followed.state.track, ...followed.state.upNext].map((each, at) => `${at}:${each.trackId}`)}
           position={0}

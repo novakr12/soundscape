@@ -2,6 +2,9 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   bridgeTracks,
+  idleNative,
+  nativeDevice,
+  nativePort,
   readCommand,
   readHandBack,
   remoteBridgeState,
@@ -143,5 +146,38 @@ describe("the lock screen while following another device", () => {
     assert.deepEqual(remoteCommand("next", undefined, true), { do: "next" });
     assert.deepEqual(remoteCommand("seek", 42, true), { do: "seek", time: 42 });
     assert.equal(remoteCommand("seek", -1, true), null);
+  });
+});
+
+describe("the Android app's own player", () => {
+  it("finds the app's message channel only when it can take messages", () => {
+    const port = { postMessage: () => {} };
+    assert.equal(nativePort({ soundscapeNative: port }), port);
+    assert.equal(nativePort({ soundscapeNative: {} }), null);
+    assert.equal(nativePort({}), null);
+  });
+
+  it("reads what the app says its player is doing", () => {
+    const report = {
+      id: "phone0000001",
+      name: "Soundscape on Pixel",
+      kind: "android",
+      state: { playing: true, time: 42, duration: 200, track: { trackId: "t1", title: "Song", artist: "Band" } },
+    };
+    const device = nativeDevice(JSON.stringify(report), 5_000);
+    assert.equal(device?.at, 5_000);
+    assert.equal(device?.state.playing, true);
+    assert.equal(device?.state.track?.title, "Song");
+    assert.equal(nativeDevice(report, 1)?.id, "phone0000001");
+    assert.equal(nativeDevice("not json", 1), null);
+    assert.equal(nativeDevice({ ...report, kind: "toaster" }, 1), null);
+  });
+
+  it("starts out quiet", () => {
+    const idle = idleNative({ id: "phone0000001", name: "Soundscape on Pixel" }, 7);
+    assert.equal(idle.state.track, null);
+    assert.equal(idle.state.playing, false);
+    assert.equal(idle.kind, "android");
+    assert.equal(idleNative({ id: null, name: null }, 7).name, "this phone");
   });
 });

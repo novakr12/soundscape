@@ -35,6 +35,7 @@ const REPEAT_LABELS: Record<RepeatMode, string> = {
 
 export default function RemoteBar({
   device,
+  here = false,
   offset,
   send,
   onPlayHere,
@@ -47,6 +48,7 @@ export default function RemoteBar({
   onLyrics,
 }: {
   device: Device;
+  here?: boolean;
   offset: number;
   send: (command: DeviceCommand) => void;
   onPlayHere: () => void;
@@ -124,7 +126,7 @@ export default function RemoteBar({
   );
 
   return (
-    <div className="player remote-player" data-remote={device.id}>
+    <div className={here ? "player" : "player remote-player"} data-remote={device.id} data-here={here || undefined}>
       <div className="player-song">
         {track?.cover && <CoverPicture src={track.cover} shown={48} />}
         <div className="now-playing">
@@ -155,10 +157,12 @@ export default function RemoteBar({
           ) : (
             <strong>Nothing playing</strong>
           )}
-          <span className="remote-where">
-            <KindIcon kind={device.kind} />
-            <span>Playing on {device.name}</span>
-          </span>
+          {!here && (
+            <span className="remote-where">
+              <KindIcon kind={device.kind} />
+              <span>Playing on {device.name}</span>
+            </span>
+          )}
         </div>
       </div>
       <div className="player-center">
@@ -250,9 +254,11 @@ export default function RemoteBar({
         </div>
       </div>
       <div className="player-side">
-        <button type="button" className="secondary remote-here" onClick={onPlayHere} disabled={!track}>
-          Play here
-        </button>
+        {!here && (
+          <button type="button" className="secondary remote-here" onClick={onPlayHere} disabled={!track}>
+            Play here
+          </button>
+        )}
         {state.upNext.length > 0 && (
           <button
             type="button"

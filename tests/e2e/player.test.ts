@@ -856,6 +856,85 @@ describe("player", () => {
     }
   });
 
+  it("lets the Android app's own player do all the playing inside the app", async () => {
+    const context = await browser.newContext();
+    await context.addInitScript({
+      content: `
+        window.soundscapeDeviceId = "e2ephone00002";
+        window.soundscapeDeviceName = "Soundscape on Native Phone";
+        window.soundscapeSent = [];
+        window.soundscapeNative = { postMessage: function (message) { window.soundscapeSent.push(message); } };
+      `,
+    });
+    const phone = await context.newPage();
+    phone.on("pageerror", (error) => problems.push(`phone ${phone.url()}: ${error.message}`));
+    const sent = () =>
+      phone.evaluate(() =>
+        ((window as unknown as { soundscapeSent: string[] }).soundscapeSent ?? []).map(
+          (each) => JSON.parse(each) as { do: string; tracks?: { title: string }[]; position?: number },
+        ),
+      );
+    try {
+      await phone.goto(`${BASE_URL}/login`, { waitUntil: "domcontentloaded" });
+      await phone.fill('input[name="username"]', USERNAME);
+      await phone.fill('input[name="password"]', PASSWORD);
+      await phone.click('button[type="submit"]');
+      await phone.waitForURL((url) => !url.pathname.startsWith("/login"), { timeout: 30_000 });
+      await phone.goto(`${BASE_URL}/music?album=e2e-album`, { waitUntil: "domcontentloaded" });
+      await phone.waitForFunction(() =>
+        (window as unknown as { soundscapeSent: string[] }).soundscapeSent.some((each) => each.includes("hello")),
+      );
+      assert.equal(
+        await phone.evaluate(
+          () => (window as unknown as { soundscapePlayer: { native: boolean } }).soundscapePlayer.native,
+        ),
+        true,
+      );
+      assert.equal(await phone.locator(".player:not([hidden])").count(), 0);
+      await phone.locator(".music-songs li").nth(1).getByRole("button", { name: "▶ Play" }).click();
+      await phone.waitForFunction(() =>
+        (window as unknown as { soundscapeSent: string[] }).soundscapeSent.some((each) => each.includes('"take"')),
+      );
+      const take = (await sent()).find((each) => each.do === "take");
+      assert.equal(take?.tracks?.[take.position ?? 0]?.title, "Second Wind");
+      await phone.waitForTimeout(1000);
+      assert.equal(
+        await phone.evaluate(() => {
+          const audio = document.querySelector<HTMLAudioElement>(".player audio");
+          return Boolean(audio && !audio.paused);
+        }),
+        false,
+      );
+      await phone.evaluate(() => {
+        (window as unknown as { soundscapeNativeReport: (value: string) => void }).soundscapeNativeReport(
+          JSON.stringify({
+            id: "e2ephone00002",
+            name: "Soundscape on Native Phone",
+            kind: "android",
+            state: {
+              playing: true,
+              time: 3,
+              duration: 40,
+              volume: 0.8,
+              track: { trackId: "player-test-band-second-wind", title: "Second Wind", artist: "Player Test Band" },
+              upNext: [],
+            },
+          }),
+        );
+      });
+      const bar = phone.locator('.player[data-here="true"]');
+      await bar.getByText("Second Wind").waitFor();
+      assert.equal(await bar.getByText("Playing on").count(), 0);
+      assert.equal(await bar.getByRole("button", { name: "Play here" }).count(), 0);
+      await bar.getByRole("button", { name: "Pause on Soundscape on Native Phone" }).click();
+      await phone.waitForFunction(() =>
+        (window as unknown as { soundscapeSent: string[] }).soundscapeSent.some((each) => each.includes('"pause"')),
+      );
+    } finally {
+      await context.close();
+    }
+  });
+
   it("saw no errors in the browser", () => {
     assert.deepEqual(problems, []);
   });
