@@ -935,6 +935,43 @@ describe("player", () => {
     }
   });
 
+  it("plays in the page when the app's player can't be reached", async () => {
+    const context = await browser.newContext();
+    await context.addInitScript({
+      content: `
+        window.soundscapeDeviceId = "e2ephone00003";
+        window.soundscapeDeviceName = "Soundscape on Broken Phone";
+        window.soundscapeNative = {
+          postMessage: function (message) {
+            if (message.indexOf('"take"') >= 0) throw new Error("The channel is gone");
+          },
+        };
+      `,
+    });
+    const phone = await context.newPage();
+    phone.on("pageerror", (error) => problems.push(`broken phone ${phone.url()}: ${error.message}`));
+    try {
+      await phone.goto(`${BASE_URL}/login`, { waitUntil: "domcontentloaded" });
+      await phone.fill('input[name="username"]', USERNAME);
+      await phone.fill('input[name="password"]', PASSWORD);
+      await phone.click('button[type="submit"]');
+      await phone.waitForURL((url) => !url.pathname.startsWith("/login"), { timeout: 30_000 });
+      await phone.goto(`${BASE_URL}/music?album=e2e-album`, { waitUntil: "domcontentloaded" });
+      await phone.locator(".music-songs li").first().getByRole("button", { name: "▶ Play" }).click();
+      await phone.waitForFunction(
+        () => {
+          const audio = document.querySelector<HTMLAudioElement>(".player audio");
+          return Boolean(audio && !audio.paused && audio.currentTime > 0);
+        },
+        null,
+        { timeout: 30_000 },
+      );
+      await phone.locator('[data-player="play"]').click();
+    } finally {
+      await context.close();
+    }
+  });
+
   it("saw no errors in the browser", () => {
     assert.deepEqual(problems, []);
   });

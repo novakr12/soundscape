@@ -277,11 +277,24 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
     },
   };
 
+  function tellNative(message: unknown) {
+    const channel = port.current;
+    if (!channel) return false;
+    try {
+      channel.postMessage(JSON.stringify(message));
+      return true;
+    } catch {
+      port.current = null;
+      nativeRef.current = null;
+      setNative(null);
+      return false;
+    }
+  }
+
   function sendTo(device: Device, command: DeviceCommand): Promise<string | null> {
     const nativePlayer = nativeRef.current;
     if (port.current && nativePlayer && device.id === nativePlayer.id) {
-      port.current.postMessage(JSON.stringify(command));
-      return Promise.resolve(null);
+      return Promise.resolve(tellNative(command) ? null : "The phone's player can't be reached.");
     }
     return link.send(device.id, command);
   }
@@ -298,7 +311,12 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
       if (device.state.playing && !nativeRef.current?.state.playing) setFollowing(null);
       setNative(device);
     };
-    found.postMessage(JSON.stringify({ do: "hello" }));
+    try {
+      found.postMessage(JSON.stringify({ do: "hello" }));
+    } catch {
+      port.current = null;
+      setNative(null);
+    }
     return () => {
       delete view.soundscapeNativeReport;
       port.current = null;
@@ -1147,7 +1165,7 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
   async function moveMusicTo(to: string) {
     if (port.current) {
       if (!nativeRef.current?.state.track) return "Nothing is playing here to send.";
-      port.current.postMessage(JSON.stringify({ do: "send", to }));
+      if (!tellNative({ do: "send", to })) return "The phone's player can't be reached.";
       setFollowing(to);
       return null;
     }
@@ -1162,10 +1180,7 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
   }
 
   function obey(command: DeviceCommand) {
-    if (port.current) {
-      port.current.postMessage(JSON.stringify(command));
-      return;
-    }
+    if (port.current && tellNative(command)) return;
     const audio = audioRef.current;
     if (command.do === "take") {
       setRadio(null);
