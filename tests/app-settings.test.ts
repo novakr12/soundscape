@@ -79,6 +79,13 @@ describe("readAppPush", () => {
     const odd = readAppPush({ settings: { app: "servo", version: "0.1.0", memory_limit: "lots" }, error: null });
     assert.equal(odd?.settings.memory_limit, null);
     assert.equal(servoCpu?.settings.cpu_rendering_now, false);
+    assert.equal(servoCpu?.settings.faster_scripts_now, null);
+    const scripts = readAppPush({
+      settings: { app: "servo", version: "0.1.0", faster_scripts: true, faster_scripts_now: false },
+      error: null,
+    });
+    assert.equal(scripts?.settings.faster_scripts, true);
+    assert.equal(scripts?.settings.faster_scripts_now, false);
     assert.equal(readAppPush({ settings: { ...settings, app: "other" }, error: null })?.settings.app, "desktop");
   });
 

@@ -13,6 +13,7 @@ export const APP_OPTIONS = [
   "native_player",
   "cpu_rendering",
   "smooth_scrolling",
+  "faster_scripts",
 ] as const;
 
 export type AppOption = (typeof APP_OPTIONS)[number];
@@ -32,6 +33,7 @@ export type AppSettings = Record<AppOption, boolean> & {
   version: string;
   update: string | null;
   cpu_rendering_now: boolean | null;
+  faster_scripts_now: boolean | null;
   smooth_scrolling_known: boolean;
   memory_limit: number | null;
 };
@@ -92,6 +94,7 @@ export function readAppPush(value: unknown): AppPush | null {
       version,
       update: text(raw.update),
       cpu_rendering_now: typeof raw.cpu_rendering_now === "boolean" ? raw.cpu_rendering_now : null,
+      faster_scripts_now: typeof raw.faster_scripts_now === "boolean" ? raw.faster_scripts_now : null,
       smooth_scrolling_known: typeof raw.smooth_scrolling === "boolean",
       memory_limit: count(raw.memory_limit),
     },

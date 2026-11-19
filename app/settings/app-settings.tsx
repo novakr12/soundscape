@@ -104,6 +104,9 @@ export default function AppSettings() {
   }
 
   if (settings.app === "servo") {
+    const restart =
+      (settings.cpu_rendering_now !== null && settings.cpu_rendering !== settings.cpu_rendering_now) ||
+      (settings.faster_scripts_now !== null && settings.faster_scripts !== settings.faster_scripts_now);
     return (
       <section id={SECTION} className="app-settings">
         <h2>This app</h2>
@@ -118,15 +121,24 @@ export default function AppSettings() {
               Draws pages with the processor instead of the graphics card. Try it if pages draw wrongly or the app
               won&apos;t start.
             </p>
-            {settings.cpu_rendering !== settings.cpu_rendering_now && (
-              <div className="app-row">
-                <span className="muted">Takes effect after a restart.</span>
-                <button type="button" className="secondary" onClick={() => send({ do: "restart" })}>
-                  Restart now
-                </button>
-              </div>
-            )}
           </>
+        )}
+        {settings.faster_scripts_now !== null && (
+          <>
+            <Toggle label="Faster scripts" checked={settings.faster_scripts} onChange={option("faster_scripts")} />
+            <p className="muted">
+              Compiles the page&apos;s scripts so busy pages respond a little faster, at the cost of about 10 MB of
+              memory.
+            </p>
+          </>
+        )}
+        {restart && (
+          <div className="app-row">
+            <span className="muted">Takes effect after a restart.</span>
+            <button type="button" className="secondary" onClick={() => send({ do: "restart" })}>
+              Restart now
+            </button>
+          </div>
         )}
         {settings.memory_limit !== null && (
           <>

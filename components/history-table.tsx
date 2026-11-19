@@ -5,6 +5,7 @@ import { deletePlaysAction } from "@/app/history/actions";
 import type { AlbumRef } from "@/lib/albums";
 import { useConfirm } from "./confirm-dialog";
 import HistoryRow from "./history-row";
+import VisibleRows from "./visible-rows";
 
 export type HistoryPlay = {
   playId: string;
@@ -85,15 +86,17 @@ export default function HistoryTable({ plays }: { plays: HistoryPlay[] }) {
           </tr>
         </thead>
         <tbody>
-          {plays.map((play) => (
-            <HistoryRow
-              key={play.playId}
-              {...play}
-              selected={selected.has(play.playId)}
-              deleting={pending && selected.has(play.playId)}
-              onSelect={(on) => select(play.playId, on)}
-            />
-          ))}
+          <VisibleRows columns={5}>
+            {plays.map((play) => (
+              <HistoryRow
+                key={play.playId}
+                {...play}
+                selected={selected.has(play.playId)}
+                deleting={pending && selected.has(play.playId)}
+                onSelect={(on) => select(play.playId, on)}
+              />
+            ))}
+          </VisibleRows>
         </tbody>
       </table>
     </>

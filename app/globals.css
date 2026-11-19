@@ -180,6 +180,11 @@ th, td {
   border-bottom: 1px solid color-mix(in srgb, var(--muted) 30%, transparent);
 }
 
+.row-gap td {
+  padding: 0;
+  border: 0;
+}
+
 .columns {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));

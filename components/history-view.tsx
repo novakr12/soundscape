@@ -6,6 +6,7 @@ import { albumsFor } from "@/lib/albums";
 import { coversFor, getHistory, monthLabel, shiftMonth } from "@/lib/history";
 import { formatDateTime, monthBucket } from "@/lib/time";
 import PlayAllButton from "./play-all-button";
+import VisibleRows from "./visible-rows";
 
 const PAGE_SIZE = 200;
 
@@ -91,22 +92,24 @@ export default async function HistoryView({
             </tr>
           </thead>
           <tbody>
-            {plays.map((play) => (
-              <tr key={play.playId}>
-                <td className="muted">{formatDateTime(play.playedAt)}</td>
-                <td>
-                  <TrackCell
-                    trackId={play.trackId}
-                    title={play.title}
-                    cover={covers.get(play.trackId)}
-                    album={albums.get(play.trackId)}
-                  />
-                </td>
-                <td>
-                  <ArtistLink name={play.artist} />
-                </td>
-              </tr>
-            ))}
+            <VisibleRows columns={3}>
+              {plays.map((play) => (
+                <tr key={play.playId}>
+                  <td className="muted">{formatDateTime(play.playedAt)}</td>
+                  <td>
+                    <TrackCell
+                      trackId={play.trackId}
+                      title={play.title}
+                      cover={covers.get(play.trackId)}
+                      album={albums.get(play.trackId)}
+                    />
+                  </td>
+                  <td>
+                    <ArtistLink name={play.artist} />
+                  </td>
+                </tr>
+              ))}
+            </VisibleRows>
           </tbody>
         </table>
       )}
