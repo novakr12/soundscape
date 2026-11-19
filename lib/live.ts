@@ -19,14 +19,30 @@ export type TrackRef = {
 
 export type RecentPlay = TrackRef & { playedAt: string };
 
+const RECENT_LOOKBACK = 10;
+
+export function distinctTracks<T extends { track_id: string }>(rows: readonly T[], limit: number): T[] {
+  const seen = new Set<string>();
+  const kept: T[] = [];
+  for (const row of rows) {
+    if (seen.has(row.track_id)) continue;
+    seen.add(row.track_id);
+    kept.push(row);
+    if (kept.length === limit) break;
+  }
+  return kept;
+}
+
+type RecentRow = { track_id: string; title: string; artist: string; cover: string | null; played_at: Date };
+
 export async function getRecent(userId: string, limit = RECENT_LIMIT): Promise<RecentPlay[]> {
-  const rows = await sql`
+  const rows = await sql<RecentRow[]>`
     SELECT p.track_id, t.title, a.name AS artist, t.cover, p.played_at
     FROM plays p JOIN tracks t ON t.id = p.track_id JOIN artists a ON a.id = t.artist_id
     WHERE p.user_id = ${userId}
     ORDER BY p.played_at DESC, p.id DESC
-    LIMIT ${limit}`;
-  return rows.map((row) => ({
+    LIMIT ${limit * RECENT_LOOKBACK}`;
+  return distinctTracks(rows, limit).map((row) => ({
     trackId: row.track_id,
     title: row.title,
     artist: row.artist,
