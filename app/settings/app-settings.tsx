@@ -10,6 +10,8 @@ import {
   type AppPush,
   type AppSettings as AppSettingsView,
   type AppSong,
+  KEEP_WINDOW_CHOICES,
+  keepWindowLabel,
   MEMORY_LIMITS,
   readAndroidPush,
   readAppPush,
@@ -336,6 +338,31 @@ export default function AppSettings() {
         checked={settings.keep_running}
         onChange={option("keep_running")}
       />
+      {settings.keep_window !== null && settings.keep_running && (
+        <>
+          <label className="app-toggle">
+            Keep the window ready after closing it{" "}
+            <select
+              value={settings.keep_window}
+              onChange={(event) => {
+                const seconds = Number(event.target.value);
+                send({ do: "keep-window", seconds });
+                setPushed((before) => before && { ...before, settings: { ...before.settings, keep_window: seconds } });
+              }}
+            >
+              {KEEP_WINDOW_CHOICES.map((seconds) => (
+                <option key={seconds} value={seconds}>
+                  {keepWindowLabel(seconds)}
+                </option>
+              ))}
+            </select>
+          </label>
+          <p className="muted">
+            While it&apos;s ready, opening the window again is instant. After that it closes completely to free about
+            300 MB, and the next time it opens takes a few seconds. Music keeps playing either way.
+          </p>
+        </>
+      )}
       <Toggle
         label="Play music with the app's own player, so it keeps going smoothly when you close the window and uses far less memory (applies after a restart)"
         checked={settings.native_player}

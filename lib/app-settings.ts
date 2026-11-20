@@ -42,9 +42,25 @@ export type AppSettings = Record<AppOption, boolean> & {
   faster_scripts_now: boolean | null;
   smooth_scrolling_known: boolean;
   memory_limit: number | null;
+  keep_window: number | null;
 };
 
 export const MEMORY_LIMITS = [0, 400, 500, 700] as const;
+
+export const KEEP_WINDOW_ALWAYS = -1;
+
+export const KEEP_WINDOW_CHOICES = [0, 60, 300, 900, KEEP_WINDOW_ALWAYS] as const;
+
+export function keepWindowLabel(seconds: number) {
+  if (seconds === KEEP_WINDOW_ALWAYS) return "Always";
+  if (seconds === 0) return "Close right away";
+  const minutes = Math.round(seconds / 60);
+  return minutes === 1 ? "1 minute" : `${minutes} minutes`;
+}
+
+function keepWindow(value: unknown) {
+  return typeof value === "number" && (KEEP_WINDOW_CHOICES as readonly number[]).includes(value) ? value : null;
+}
 
 export type AppPush = { settings: AppSettings; error: string | null };
 
@@ -59,6 +75,7 @@ export type AppCommand =
   | { do: "window" }
   | { do: "restart" }
   | { do: "memory-limit"; mb: number }
+  | { do: "keep-window"; seconds: number }
   | { do: "add-fix"; artist: string; title: string; new_artist: string; new_title: string; every_song: boolean }
   | { do: "remove-fix"; index: number }
   | { do: "change-server" }
@@ -121,6 +138,7 @@ export function readAppPush(value: unknown): AppPush | null {
       faster_scripts_now: typeof raw.faster_scripts_now === "boolean" ? raw.faster_scripts_now : null,
       smooth_scrolling_known: typeof raw.smooth_scrolling === "boolean",
       memory_limit: count(raw.memory_limit),
+      keep_window: keepWindow(raw.keep_window),
     },
     error: text(value.error),
   };

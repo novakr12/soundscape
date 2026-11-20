@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { readAndroidPush, readAppPush, scrobblingStatus, waitingStatus } from "../lib/app-settings";
+import { keepWindowLabel, readAndroidPush, readAppPush, scrobblingStatus, waitingStatus } from "../lib/app-settings";
 
 const settings = {
   connected: true,
@@ -48,6 +48,17 @@ describe("readAppPush", () => {
     const smoother = readAppPush({ settings: { ...settings, smooth_scrolling: false }, error: null });
     assert.equal(smoother?.settings.smooth_scrolling_known, true);
     assert.equal(smoother?.settings.smooth_scrolling, false);
+  });
+
+  it("reads how long the window stays ready only from apps that send it", () => {
+    assert.equal(readAppPush({ settings, error: null })?.settings.keep_window, null);
+    assert.equal(readAppPush({ settings: { ...settings, keep_window: 300 }, error: null })?.settings.keep_window, 300);
+    assert.equal(readAppPush({ settings: { ...settings, keep_window: -1 }, error: null })?.settings.keep_window, -1);
+    assert.equal(readAppPush({ settings: { ...settings, keep_window: 42 }, error: null })?.settings.keep_window, null);
+    assert.equal(keepWindowLabel(0), "Close right away");
+    assert.equal(keepWindowLabel(60), "1 minute");
+    assert.equal(keepWindowLabel(900), "15 minutes");
+    assert.equal(keepWindowLabel(-1), "Always");
   });
 
   it("reads the Servo app's own display settings, title fixes and account", () => {
