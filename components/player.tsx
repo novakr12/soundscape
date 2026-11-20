@@ -1350,12 +1350,26 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
   }
 
   function learn(track: PlayerTrack, id: number) {
-    if (track.songId) return;
+    if (track.songId) {
+      if (!track.album) learnAlbum(track, id);
+      return;
+    }
     fetch(`${sourceFor(track)}?info`)
       .then((response) => (response.ok ? response.json() : { full: false }))
       .then((info: { full?: boolean; album?: string; albumHref?: string }) => {
         const known = info.album ? withAlbum(track, info.album, info.albumHref) : track;
         if (id === playing.current && !fellBack.current) describe(known, info.full === true);
+      })
+      .catch(() => {});
+  }
+
+  function learnAlbum(track: PlayerTrack, id: number) {
+    fetch(`/api/listen/${encodeURIComponent(track.trackId)}?info`)
+      .then((response) => (response.ok ? response.json() : {}))
+      .then((info: { album?: string; albumHref?: string }) => {
+        if (!info.album) return;
+        const known = withAlbum(track, info.album, info.albumHref);
+        if (id === playing.current && !fellBack.current) describe(known, true);
       })
       .catch(() => {});
   }
