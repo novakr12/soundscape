@@ -337,7 +337,7 @@ export default function AppSettings() {
         onChange={option("keep_running")}
       />
       <Toggle
-        label="When the window is closed, keep the music playing with the app's own player, which uses far less memory"
+        label="Play music with the app's own player, so it keeps going smoothly when you close the window and uses far less memory (applies after a restart)"
         checked={settings.native_player}
         onChange={option("native_player")}
       />

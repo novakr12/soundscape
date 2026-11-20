@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { applePreviewFor } from "@/lib/apple-preview";
 import { ensureDeezerId, getPreviewUrl } from "@/lib/deezer";
-import { currentUserId } from "@/lib/session";
+import { sessionOrTokenUser } from "@/lib/token-auth";
 
 type Context = {
   params: Promise<{ trackId: string }>;
@@ -12,8 +12,8 @@ async function fromDeezer(trackId: string): Promise<string | null> {
   return deezerId == null ? null : await getPreviewUrl(deezerId);
 }
 
-export async function GET(_request: Request, { params }: Context) {
-  if (!(await currentUserId())) {
+export async function GET(request: Request, { params }: Context) {
+  if (!(await sessionOrTokenUser(request))) {
     return NextResponse.json({ error: "Log in to listen" }, { status: 401 });
   }
 

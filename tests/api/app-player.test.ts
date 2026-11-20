@@ -41,6 +41,9 @@ describe("the desktop app's own player", () => {
       redirect: "manual",
     });
     assert.equal(listen.status, 307);
+    const preview = `${BASE_URL}/api/preview/${trackIdFor(user.artist, "Known Song")}`;
+    assert.equal((await fetch(preview, { redirect: "manual" })).status, 401);
+    assert.notEqual((await fetch(preview, { headers: withToken(token), redirect: "manual" })).status, 401);
   });
 
   it("tells the app the album and where a cover can be seen without logging in", async () => {
