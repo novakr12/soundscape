@@ -25,6 +25,7 @@ import {
   RepeatIcon,
   ShuffleIcon,
 } from "./player-icons";
+import { useBarEntrance } from "./use-bar-entrance";
 import { useNow } from "./use-now";
 
 const REPEAT_LABELS: Record<RepeatMode, string> = {
@@ -124,9 +125,14 @@ export default function RemoteBar({
     },
     [keys],
   );
+  const entrance = useBarEntrance(true);
 
   return (
-    <div className={here ? "player" : "player remote-player"} data-remote={device.id} data-here={here || undefined}>
+    <div
+      className={`${here ? "player" : "player remote-player"}${entrance}`}
+      data-remote={device.id}
+      data-here={here || undefined}
+    >
       <div className="player-song">
         {track?.cover && <CoverPicture src={track.cover} shown={48} />}
         <div className="now-playing">

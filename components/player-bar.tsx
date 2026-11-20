@@ -9,6 +9,7 @@ import type { PlayerTrack } from "./player";
 import { DevicesIcon, LyricsIcon, NextIcon, PreviousIcon, QueueIcon, RepeatIcon, ShuffleIcon } from "./player-icons";
 import { PlayPauseButton, SeekBar } from "./player-transport";
 import SleepTimer, { type Sleep } from "./sleep-timer";
+import { useBarEntrance } from "./use-bar-entrance";
 import VolumeControl from "./volume-control";
 
 const REPEAT_LABELS: Record<Repeat, string> = {
@@ -116,8 +117,9 @@ export function PlayerBar({
   elsewhere,
   onDevices,
 }: PlayerBarProps) {
+  const entrance = useBarEntrance(Boolean(current) && !away);
   return (
-    <div className="player" hidden={!current || away}>
+    <div className={`player${entrance}`} hidden={!current || away}>
       <div className="player-song">
         {current?.cover && <CoverPicture src={current.cover} shown={48} />}
         <div className="now-playing">

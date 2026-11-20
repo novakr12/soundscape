@@ -449,6 +449,10 @@ main {
   animation: slide-up 0.25s ease-out;
 }
 
+.player.player-settled {
+  animation: none;
+}
+
 .play-controls {
   display: inline-flex;
   align-items: center;
