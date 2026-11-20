@@ -102,6 +102,7 @@ async function genreNeighbours(artistId: string, limit: number) {
     JOIN artists a ON a.id = theirs.artist_id
     WHERE mine.artist_id = ${artistId}
     GROUP BY a.id, a.name
+    HAVING count(*) >= least(2, (SELECT count(*) FROM artist_genres WHERE artist_id = ${artistId}))
     ORDER BY shared DESC, random()
     LIMIT ${limit}`;
   return rows.map((row) => row.name as string);
@@ -111,6 +112,35 @@ async function inBatches<T, R>(items: T[], size: number, run: (item: T) => Promi
   const out: R[] = [];
   for (let i = 0; i < items.length; i += size) {
     out.push(...(await Promise.all(items.slice(i, i + size).map(run))));
+  }
+  return out;
+}
+
+const GENRE_FILLER = new Set(["and", "music", "the"]);
+
+export function genreWords(genres: Iterable<string | undefined>) {
+  const words = new Set<string>();
+  for (const genre of genres) {
+    for (const word of (genre ?? "").toLowerCase().split(/[^\p{L}\p{N}]+/u)) {
+      if (word.length > 1 && !GENRE_FILLER.has(word)) words.add(word);
+    }
+  }
+  return words;
+}
+
+export function sharesGenre(seed: Set<string>, other: Set<string>) {
+  if (seed.size === 0 || other.size === 0) return true;
+  for (const word of other) if (seed.has(word)) return true;
+  return false;
+}
+
+async function genresOf(artistIds: string[]) {
+  const out = new Map<string, string[]>();
+  if (artistIds.length === 0) return out;
+  const rows = await sql`SELECT artist_id, genre FROM artist_genres WHERE artist_id = ANY(${artistIds})`;
+  for (const row of rows) {
+    const id = row.artist_id as string;
+    out.set(id, [...(out.get(id) ?? []), row.genre as string]);
   }
   return out;
 }
@@ -138,15 +168,18 @@ export async function radioSongs(
     "trackId" in seed ? getAlsoPlayed(seed.trackId, 20) : Promise.resolve([]),
     genreNeighbours(start.artistId, GENRE_ARTISTS),
   ]);
+  const listenedWith = [...alsoPlayed.map((track) => track.artist), ...similar.map((artist) => artist.name)];
+  const known = await genresOf([start.artistId, ...listenedWith.map((name) => artistIdFor(name))]);
   const names = new Map<string, string>();
-  for (const name of [
-    ...alsoPlayed.map((track) => track.artist),
-    ...similar.map((artist) => artist.name),
-    ...genreArtists,
-  ]) {
+  const add = (name: string) => {
     const id = artistIdFor(name);
     if (id !== start.artistId && !names.has(id)) names.set(id, name);
+  };
+  const seedKnown = genreWords(known.get(start.artistId) ?? []);
+  for (const name of listenedWith) {
+    if (sharesGenre(seedKnown, genreWords(known.get(artistIdFor(name)) ?? []))) add(name);
   }
+  for (const name of genreArtists) add(name);
   const songsBy = async (artistId: string, name: string) => {
     try {
       const found = await getLibrarySongs(server, { query: name, offset: 0, size: SONGS_PER_ARTIST });
@@ -157,8 +190,10 @@ export async function radioSongs(
   };
   const seedSongs = await songsBy(start.artistId, start.name);
   const genre = mainGenre(seedSongs);
+  const seedWords = genreWords([...(known.get(start.artistId) ?? []), genre]);
+  const fits = (song: NavidromeSong) => sharesGenre(seedWords, genreWords([song.genre]));
   const [artistPools, genrePool] = await Promise.all([
-    inBatches([...names], SEARCHES_AT_ONCE, ([artistId, name]) => songsBy(artistId, name)),
+    inBatches([...names], SEARCHES_AT_ONCE, async ([artistId, name]) => (await songsBy(artistId, name)).filter(fits)),
     genre ? getRandomSongs(server, { size: GENRE_SONGS, genre }).catch(() => []) : Promise.resolve([]),
   ]);
   const byArtist = new Map<string, NavidromeSong[]>();

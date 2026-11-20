@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import type { NavidromeSong } from "../lib/navidrome-library";
-import { mainGenre, mixRadio } from "../lib/radio";
+import { genreWords, mainGenre, mixRadio, sharesGenre } from "../lib/radio";
 
 function songs(artist: string, count: number, genre?: string): NavidromeSong[] {
   return Array.from({ length: count }, (_, i) => ({
@@ -55,5 +55,16 @@ describe("radio", () => {
   it("takes the genre most of the artist's songs share", () => {
     assert.equal(mainGenre([...songs("A", 3, "Black Metal"), ...songs("B", 1, "Metal")]), "Black Metal");
     assert.equal(mainGenre(songs("A", 2)), undefined);
+  });
+
+  it("keeps artists that share a genre with the seed and drops the rest", () => {
+    const seed = genreWords(["Atmospheric Black Metal", "post-black metal"]);
+    assert.ok(sharesGenre(seed, genreWords(["black metal"])));
+    assert.ok(sharesGenre(seed, genreWords(["Folk Metal"])));
+    assert.ok(!sharesGenre(seed, genreWords(["Hip-Hop", "experimental hip hop"])));
+    assert.ok(!sharesGenre(seed, genreWords(["Trap"])));
+    assert.ok(sharesGenre(seed, genreWords([undefined])));
+    assert.ok(sharesGenre(genreWords([]), genreWords(["Trap"])));
+    assert.ok(!sharesGenre(genreWords(["R&B and Soul music"]), genreWords(["Black Metal"])));
   });
 });
