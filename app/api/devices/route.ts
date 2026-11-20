@@ -1,4 +1,5 @@
 import { readDeviceReport } from "@/lib/devices";
+import { deviceReported } from "@/lib/parties";
 import { listDevices, reportDevice } from "@/lib/player-devices";
 import { sessionOrTokenUser, unauthorized } from "@/lib/token-auth";
 
@@ -16,5 +17,6 @@ export async function POST(request: Request) {
   const report = readDeviceReport(await request.json().catch(() => null));
   if (!report) return Response.json({ error: "Send id, name, kind and state." }, { status: 400 });
   const device = await reportDevice(userId, report);
+  await deviceReported(userId, device).catch(() => {});
   return Response.json({ now: Date.now(), device });
 }

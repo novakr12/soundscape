@@ -681,6 +681,79 @@ main {
   color: var(--muted);
 }
 
+.party-section {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.5rem;
+  margin: 0.25rem 0 1rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--muted) 30%, transparent);
+}
+
+.party-section h3,
+.party-section p {
+  margin: 0;
+}
+
+.party-link {
+  display: flex;
+  gap: 0.5rem;
+  width: 100%;
+}
+
+.party-link input {
+  flex: 1;
+  min-width: 0;
+}
+
+.party-up-next,
+.party-friends {
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.party-up-next li {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0 0.75rem;
+  padding: 0.25rem 0;
+}
+
+.party-song {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.party-added {
+  font-size: 0.8rem;
+}
+
+.party-invite {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.4rem;
+  width: 100%;
+}
+
+.party-friends {
+  max-height: 8rem;
+  overflow-y: auto;
+}
+
+.party-join {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
 .queue-panel.devices-panel.alone {
   bottom: calc(1rem + env(safe-area-inset-bottom));
 }

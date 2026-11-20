@@ -11,7 +11,7 @@ const KEEP_DAYS = 90;
 const CHECK_EVERY_MS = 5 * 60 * 1000;
 const PAGE_SIZE = 50;
 
-export type NotificationKind = "follow" | "passed" | "milestone" | "release";
+export type NotificationKind = "follow" | "passed" | "milestone" | "release" | "party";
 
 export type ReleaseDetail = { artistId: string; artist: string; title: string; kind: string; mbid: string };
 
@@ -21,6 +21,7 @@ export type Notification = {
   otherUser?: string;
   count?: number;
   release?: ReleaseDetail;
+  party?: string;
   createdAt: Date;
   read: boolean;
 };
@@ -33,6 +34,7 @@ type New = {
   count?: number;
   read?: boolean;
   release?: ReleaseDetail;
+  party?: string;
 };
 
 export function notificationMessage(
@@ -42,8 +44,16 @@ export function notificationMessage(
     otherUser,
     count,
     release,
-  }: { kind: NotificationKind; otherUser?: string; count?: number; release?: ReleaseDetail },
+    party,
+  }: { kind: NotificationKind; otherUser?: string; count?: number; release?: ReleaseDetail; party?: string },
 ): PushMessage {
+  if (kind === "party" && party) {
+    return {
+      title: "Listening party",
+      body: `${otherUser} invited you to their listening party.`,
+      url: `/party/${party}`,
+    };
+  }
   if (kind === "release" && release) {
     return {
       title: `New ${release.kind === "EP" ? "EP" : "album"} from ${release.artist}`,
@@ -70,15 +80,18 @@ export async function pushesSent() {
   await Promise.all([...sending]);
 }
 
-async function add({ userId, kind, dedupe, otherUser, count, read, release }: New) {
+async function add({ userId, kind, dedupe, otherUser, count, read, release, party }: New) {
   const rows = await sql`
     INSERT INTO notifications (user_id, kind, other_user, count, dedupe, read_at, detail)
     VALUES (${userId}, ${kind}, ${otherUser ?? null}, ${count ?? null}, ${dedupe}, ${read ? new Date() : null},
-            ${release ? JSON.stringify(release) : null})
+            ${release ? JSON.stringify(release) : (party ?? null)})
     ON CONFLICT (user_id, dedupe) DO NOTHING
     RETURNING id`;
   if (rows.length > 0 && !read) {
-    const message = { ...notificationMessage(userId, { kind, otherUser, count, release }), tag: `${kind}:${dedupe}` };
+    const message = {
+      ...notificationMessage(userId, { kind, otherUser, count, release, party }),
+      tag: `${kind}:${dedupe}`,
+    };
     const push = sendPush(userId, message).catch(() => 0);
     sending.add(push);
     push.finally(() => sending.delete(push));
@@ -113,6 +126,7 @@ export async function listNotifications(userId: string, limit = PAGE_SIZE): Prom
     ...(row.other_user ? { otherUser: row.other_user as string } : {}),
     ...(row.count !== null ? { count: Number(row.count) } : {}),
     ...(row.kind === "release" && row.detail ? { release: readRelease(row.detail as string) } : {}),
+    ...(row.kind === "party" && row.detail ? { party: row.detail as string } : {}),
     createdAt: row.created_at as Date,
     read: row.read_at !== null,
   }));
@@ -125,6 +139,10 @@ function readRelease(detail: string): ReleaseDetail | undefined {
   } catch {
     return undefined;
   }
+}
+
+export async function notifyParty(host: string, guest: string, partyId: string) {
+  return add({ userId: guest, kind: "party", otherUser: host, dedupe: `party:${partyId}`, party: partyId });
 }
 
 export async function notifyRelease(userId: string, release: ReleaseDetail) {

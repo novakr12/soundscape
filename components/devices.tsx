@@ -17,6 +17,7 @@ import {
   nowPlayingLine,
   timeNow,
 } from "@/lib/devices";
+import { type PartyControls, PartySection } from "./listening-party";
 import { NextIcon, PauseIcon, PlayIcon, PreviousIcon } from "./player-icons";
 import { useNow } from "./use-now";
 
@@ -408,6 +409,7 @@ function RemoteDevice({
 
 export function DevicesPanel({
   link,
+  party,
   hasQueue,
   alone,
   following,
@@ -416,6 +418,7 @@ export function DevicesPanel({
   onFollow,
 }: {
   link: DeviceLink;
+  party: PartyControls;
   hasQueue: boolean;
   alone: boolean;
   following: string | null;
@@ -438,6 +441,7 @@ export function DevicesPanel({
           Close
         </button>
       </div>
+      <PartySection controls={party} />
       {link.me && (
         <p className="muted device-me">
           This device: <strong>{link.me.name}</strong>

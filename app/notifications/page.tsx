@@ -35,6 +35,14 @@ function Message({ notification, userId }: { notification: Notification; userId:
       </>
     );
   }
+  if (notification.kind === "party" && other && notification.party) {
+    return (
+      <>
+        <Link href={`/u/${other}`}>{other}</Link> invited you to{" "}
+        <Link href={`/party/${notification.party}`}>their listening party</Link>.
+      </>
+    );
+  }
   if (notification.kind === "milestone" && notification.count) {
     return (
       <>

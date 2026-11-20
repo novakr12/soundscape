@@ -52,6 +52,7 @@ import {
 import { DEFAULT_OPTIONS, type PlayerOptions, watchOptions } from "@/lib/player-options";
 import type { RadioSeed } from "@/lib/radio";
 import { DevicesPanel, type LocalPlayer, PlayingElsewhere, useDeviceLink } from "./devices";
+import { type PartyControls, useParty } from "./listening-party";
 import LyricsPanel from "./lyrics-panel";
 import { PlayerBar, QueuePanel } from "./player-bar";
 import { usePlayerKeys } from "./player-keys";
@@ -91,6 +92,7 @@ type PlayerContextValue = {
   jumpTo: (position: number) => void;
   startRadio: (seed: RadioSeed) => Promise<string | null>;
   radio: boolean;
+  party: PartyControls;
 };
 
 const SETTINGS_KEY = "soundscape:player";
@@ -113,7 +115,7 @@ const CLOSE_TO_END_SECONDS = 0.25;
 const HAND_BACK_BEFORE = 50;
 const MOST_HANDED = 500;
 
-type Actions = Omit<PlayerContextValue, "current" | "queue" | "position" | "shuffle" | "repeat" | "radio">;
+type Actions = Omit<PlayerContextValue, "current" | "queue" | "position" | "shuffle" | "repeat" | "radio" | "party">;
 
 const PlayerContext = createContext<PlayerContextValue | null>(null);
 
@@ -263,6 +265,9 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
   nativeRef.current = native;
   const followed = following ? (link.devices.find((device) => device.id === following) ?? native) : native;
   const here = followed !== null && native !== null && followed.id === native.id;
+  const party = useParty(username, () => nativeRef.current?.id ?? link.me?.id ?? null);
+  const partyRef = useRef(party);
+  partyRef.current = party;
   const remoteKeys = useRef<(shortcut: string) => boolean>(() => false);
   const away = useRef<{ device: Device | null; offset: number; send: (command: DeviceCommand) => void }>({
     device: null,
@@ -936,7 +941,27 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
     }
   }
 
+  function inPartyAsGuest() {
+    const current = partyRef.current.party;
+    return current?.role === "guest" ? current : null;
+  }
+
+  function onlyHost() {
+    const guestOf = inPartyAsGuest();
+    if (!guestOf) return false;
+    setError(`Only ${guestOf.host} can change what plays at this listening party.`);
+    return true;
+  }
+
+  function leavePartyFirst() {
+    if (inPartyAsGuest()) partyRef.current.leave();
+  }
+
   function enqueue(track: PlayerTrack, next: boolean) {
+    if (inPartyAsGuest()) {
+      partyRef.current.add(handed(track), next).then((problem) => setError(problem));
+      return;
+    }
     const target = away.current.device;
     if (target) {
       sendTo(target, { do: "enqueue", track: handed(track), next }).then((failure) => {
@@ -1254,23 +1279,41 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
     sleep: fallAsleep,
   };
   actions.current = {
-    play,
-    playAll,
-    playFrom,
-    next,
-    previous,
+    play: (track) => {
+      leavePartyFirst();
+      play(track);
+    },
+    playAll: (list, first) => {
+      leavePartyFirst();
+      playAll(list, first);
+    },
+    playFrom: (list, chosen) => {
+      leavePartyFirst();
+      playFrom(list, chosen);
+    },
+    next: () => {
+      if (!onlyHost()) next();
+    },
+    previous: () => {
+      if (!onlyHost()) previous();
+    },
     toggleShuffle,
     cycleRepeat,
     playNext,
     addToQueue,
     remove,
-    jumpTo,
-    startRadio,
+    jumpTo: (at) => {
+      if (!onlyHost()) jumpTo(at);
+    },
+    startRadio: (seed) => {
+      leavePartyFirst();
+      return startRadio(seed);
+    },
   };
   const radioOn = radio !== null;
   const value = useMemo(
-    () => ({ current, queue, position, shuffle, repeat, radio: radioOn, ...steady }),
-    [current, queue, position, shuffle, repeat, radioOn, steady],
+    () => ({ current, queue, position, shuffle, repeat, radio: radioOn, party, ...steady }),
+    [current, queue, position, shuffle, repeat, radioOn, party, steady],
   );
   const elsewhere = link.devices.find((device) => device.state.playing) ?? null;
   const hasNext = position + 1 < queue.length || (repeat === "all" && queue.length > 1);
@@ -1363,6 +1406,7 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
       {showDevices && (
         <DevicesPanel
           link={link}
+          party={party}
           hasQueue={queue.length > 0}
           alone={!current && !followed}
           following={followed?.id ?? null}
