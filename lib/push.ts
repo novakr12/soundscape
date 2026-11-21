@@ -88,6 +88,32 @@ export async function pushDeviceCount(userId: string): Promise<number> {
   return row.count;
 }
 
+export function buildPushRequest(
+  device: { endpoint: string; p256dh: string; auth: string },
+  payload: string,
+  keys: VapidKeys,
+) {
+  const { cipherText } = webpush.encrypt(device.p256dh, device.auth, payload, "aes128gcm");
+  const { Authorization } = webpush.getVapidHeaders(
+    new URL(device.endpoint).origin,
+    contact(),
+    keys.publicKey,
+    keys.privateKey,
+    "aes128gcm",
+  );
+  return {
+    headers: {
+      Authorization,
+      "Content-Encoding": "aes128gcm",
+      "Content-Length": String(cipherText.length),
+      "Content-Type": "application/octet-stream",
+      TTL: String(TTL_SECONDS),
+      Urgency: "normal",
+    },
+    body: new Uint8Array(cipherText),
+  };
+}
+
 export async function sendPush(userId: string, message: PushMessage): Promise<number> {
   const devices = await sql`SELECT id, endpoint, p256dh, auth FROM push_subscriptions WHERE user_id = ${userId}`;
   if (devices.length === 0) return 0;
@@ -98,19 +124,15 @@ export async function sendPush(userId: string, message: PushMessage): Promise<nu
     devices.map(async (device) => {
       if (!pushEndpointAllowed(device.endpoint)) return;
       try {
-        const request = webpush.generateRequestDetails(
-          { endpoint: device.endpoint, keys: { p256dh: device.p256dh, auth: device.auth } },
+        const { headers, body } = buildPushRequest(
+          { endpoint: device.endpoint, p256dh: device.p256dh, auth: device.auth },
           payload,
-          {
-            TTL: TTL_SECONDS,
-            urgency: "normal",
-            vapidDetails: { subject: contact(), publicKey: keys.publicKey, privateKey: keys.privateKey },
-          },
+          keys,
         );
-        const response = await send(request.endpoint, {
+        const response = await send(device.endpoint, {
           method: "POST",
-          headers: request.headers as Record<string, string>,
-          body: request.body ? new Uint8Array(request.body) : undefined,
+          headers,
+          body,
           redirect: "error",
           timeoutMs: SEND_TIMEOUT_MS,
         });
