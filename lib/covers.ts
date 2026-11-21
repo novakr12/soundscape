@@ -146,7 +146,7 @@ export function coverCacheKeys(trackId: string) {
 }
 
 export async function findCover(trackId: string, size = FULL_COVER): Promise<Cover | null | "busy"> {
-  const actualSize = size >= FULL_COVER ? FULL_COVER : size;
+  const actualSize = Math.min(size, FULL_COVER);
   const cacheKey = coverCacheKey(trackId, actualSize);
   const [cached] = await sql`SELECT type, data FROM cover_cache WHERE track_id = ${cacheKey} AND expires_at > now()`;
   if (cached) return { type: cached.type, data: cached.data };

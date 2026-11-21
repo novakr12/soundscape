@@ -81,11 +81,7 @@ function isValid(listen: Listen, now: Date) {
   );
 }
 
-export async function importListens(
-  userId: string,
-  listens: Listen[],
-  tx?: TransactionSql,
-): Promise<ImportResult> {
+export async function importListens(userId: string, listens: Listen[], tx?: TransactionSql): Promise<ImportResult> {
   const db = tx ?? sql;
   const now = new Date();
   const valid = listens
