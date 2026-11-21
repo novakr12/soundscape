@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { applePreviewFor } from "@/lib/apple-preview";
 import { ensureDeezerId, getPreviewUrl } from "@/lib/deezer";
+import { routeParam } from "@/lib/route-param";
 import { sessionOrTokenUser } from "@/lib/token-auth";
 
 type Context = {
@@ -17,7 +18,7 @@ export async function GET(request: Request, { params }: Context) {
     return NextResponse.json({ error: "Log in to listen" }, { status: 401 });
   }
 
-  const { trackId } = await params;
+  const trackId = routeParam((await params).trackId);
   let preview: string | null = null;
   let unreachable = 0;
   try {

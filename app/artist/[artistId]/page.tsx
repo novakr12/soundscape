@@ -13,6 +13,7 @@ import { artistAlias } from "@/lib/aliases";
 import { ensureArtistInfo } from "@/lib/artist-info";
 import { getArtist, getSimilarArtists, getTopSongs, getYourArtistPlays } from "@/lib/artists";
 import { getNavidrome } from "@/lib/navidrome";
+import { routeParam } from "@/lib/route-param";
 import { currentUserId } from "@/lib/session";
 
 type Props = { params: Promise<{ artistId: string }> };
@@ -22,12 +23,12 @@ function plural(count: number, word: string) {
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  const artist = await getArtist((await params).artistId);
+  const artist = await getArtist(routeParam((await params).artistId));
   return { title: artist ? `${artist.name} · Soundscape` : "Soundscape" };
 }
 
 export default async function ArtistPage({ params }: Props) {
-  const artistId = (await params).artistId;
+  const artistId = routeParam((await params).artistId);
   const [artist, viewer] = await Promise.all([getArtist(artistId), currentUserId()]);
   if (!artist) {
     const target = await artistAlias(artistId);

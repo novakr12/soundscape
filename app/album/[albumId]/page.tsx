@@ -5,6 +5,7 @@ import AlbumSongs, { type AlbumSongRow } from "@/components/album-songs";
 import Cover from "@/components/cover";
 import { getAlbum } from "@/lib/albums";
 import { guessTrackId, matchAlbumSongs, navidromeAlbumFor, navidromeCover } from "@/lib/music";
+import { routeParam } from "@/lib/route-param";
 import { currentUserId } from "@/lib/session";
 import { ensureTracklist } from "@/lib/tracklists";
 
@@ -15,12 +16,12 @@ function plural(count: number, word: string) {
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  const album = await getAlbum((await params).albumId, null);
+  const album = await getAlbum(routeParam((await params).albumId), null);
   return { title: album ? `${album.title} · ${album.artist} · Soundscape` : "Soundscape" };
 }
 
 export default async function AlbumPage({ params }: Props) {
-  const albumId = (await params).albumId;
+  const albumId = routeParam((await params).albumId);
   const [viewer] = await Promise.all([currentUserId(), ensureTracklist(albumId)]);
   const album = await getAlbum(albumId, viewer);
   if (!album) notFound();
