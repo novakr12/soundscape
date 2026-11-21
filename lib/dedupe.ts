@@ -64,14 +64,24 @@ export async function withoutKnownPlays(userId: string, listens: Listen[]): Prom
     SELECT played_at, track_id FROM plays
     WHERE user_id = ${userId} AND played_at >= ${from} AND played_at <= ${to}`;
   for (const row of rows) {
-    known.set(row.track_id, [...(known.get(row.track_id) ?? []), row.played_at.getTime()]);
+    let seen = known.get(row.track_id);
+    if (!seen) {
+      seen = [];
+      known.set(row.track_id, seen);
+    }
+    seen.push(row.played_at.getTime());
   }
   const resolved = await resolveTracks(listens);
   return listens.filter((listen, i) => {
     const trackId = resolved[i].trackId;
-    const plays = known.get(trackId) ?? [];
-    if (plays.some((time) => Math.abs(time - listen.playedAt.getTime()) <= SAME_PLAY_MS)) return false;
-    known.set(trackId, [...plays, listen.playedAt.getTime()]);
+    const at = listen.playedAt.getTime();
+    let plays = known.get(trackId);
+    if (plays?.some((time) => Math.abs(time - at) <= SAME_PLAY_MS)) return false;
+    if (!plays) {
+      plays = [];
+      known.set(trackId, plays);
+    }
+    plays.push(at);
     return true;
   });
 }

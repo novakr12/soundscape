@@ -6,7 +6,9 @@ cd "$(dirname "$0")/.."
 BACKUP_DIR="${BACKUP_DIR:-$HOME/soundscape-backups}"
 KEEP="${KEEP:-14}"
 
-compose() { docker compose -f docker-compose.yml "$@"; }
+files=(-f docker-compose.yml -f compose.prod.yml)
+if [ -f compose.local.yml ]; then files+=(-f compose.local.yml); fi
+compose() { docker compose "${files[@]}" "$@"; }
 
 stamp="$(date +%Y-%m-%d_%H%M%S)"
 work="$(mktemp -d)"
@@ -18,7 +20,10 @@ compose exec -T postgres pg_dump -U soundscape -d soundscape --format=custom > "
 
 archive="$BACKUP_DIR/soundscape-$stamp.tar.gz"
 tar -czf "$archive" -C "$work" postgres
-ls -1t "$BACKUP_DIR"/soundscape-*.tar.gz | tail -n +"$((KEEP + 1))" | xargs -r rm --
+mapfile -t old_backups < <(ls -1t -- "$BACKUP_DIR"/soundscape-*.tar.gz | tail -n +"$((KEEP + 1))")
+if (( ${#old_backups[@]} > 0 )); then
+  rm -f -- "${old_backups[@]}"
+fi
 last="$(date -u +%Y-%m-%dT%H:%M:%SZ)|$(basename "$archive")|$(du -h "$archive" | cut -f1)"
 compose exec -T postgres psql -q -U soundscape -d soundscape -c \
   "INSERT INTO kv (key, value) VALUES ('backup:last', to_jsonb('$last'::text)) ON CONFLICT (key) DO UPDATE SET value = excluded.value" \

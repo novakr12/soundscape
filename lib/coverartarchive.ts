@@ -1,4 +1,4 @@
-import { artistIdFor, slug, songTitle } from "./catalog";
+import { artistIdFor, mainArtist, slug, songTitle } from "./catalog";
 import { request } from "./http";
 import { sql } from "./postgres";
 
@@ -25,13 +25,18 @@ const musicBrainzUrl = () => process.env.MUSICBRAINZ_URL ?? "https://musicbrainz
 const coverArtArchiveUrl = () => process.env.COVER_ART_ARCHIVE_URL ?? "https://coverartarchive.org";
 const requestGapMs = () => Number(process.env.MUSICBRAINZ_REQUEST_GAP_MS ?? 1100);
 
-let nextRequestAt = 0;
+const globalForMusicBrainz = globalThis as unknown as {
+  soundscapeMbNextAt?: number;
+  soundscapeCaaFilling?: boolean;
+};
 
 const BUSY_RETRIES = 4;
 
 export async function musicBrainz<T>(path: string, params: Record<string, string>, attempt = 0): Promise<T | null> {
-  const wait = Math.max(0, nextRequestAt - Date.now());
-  nextRequestAt = Math.max(Date.now(), nextRequestAt) + requestGapMs();
+  const now = Date.now();
+  const nextAt = globalForMusicBrainz.soundscapeMbNextAt ?? 0;
+  const wait = Math.max(0, nextAt - now);
+  globalForMusicBrainz.soundscapeMbNextAt = Math.max(now, nextAt) + requestGapMs();
   if (wait > 0) await new Promise((resolve) => setTimeout(resolve, wait));
 
   let response: Response;
@@ -68,10 +73,6 @@ async function hasFrontCover(releaseGroup: string) {
 }
 
 const quote = (text: string) => `"${text.replace(/["\\]/g, " ")}"`;
-
-function mainArtist(artist: string) {
-  return artist.split(/\s*(?:,|&|;|\/|\bx\b|\bfeat\.?|\bft\.?|\bfeaturing\b)\s*/i)[0];
-}
 
 function isSameRecording(recording: Recording, artist: string, title: string) {
   if (slug(songTitle(recording.title)) !== slug(songTitle(title))) return false;
@@ -131,15 +132,13 @@ async function findCoverArt(artist: string, title: string, mbid?: string | null)
   return null;
 }
 
-let filling = false;
-
 type FillOptions = { userId?: string; limit?: number; now?: number };
 
 export async function fillCoversFromCoverArtArchive(options: FillOptions = {}): Promise<CoverArtSummary> {
   const { userId, limit = 25, now = Date.now() } = options;
   const summary = { checked: 0, found: 0, unreachable: false };
-  if (filling) return summary;
-  filling = true;
+  if (globalForMusicBrainz.soundscapeCaaFilling) return summary;
+  globalForMusicBrainz.soundscapeCaaFilling = true;
   try {
     const listened = userId
       ? sql`AND EXISTS (SELECT 1 FROM user_track_plays p WHERE p.track_id = t.id AND p.user_id = ${userId})`
@@ -176,6 +175,6 @@ export async function fillCoversFromCoverArtArchive(options: FillOptions = {}): 
     }
     return summary;
   } finally {
-    filling = false;
+    globalForMusicBrainz.soundscapeCaaFilling = false;
   }
 }

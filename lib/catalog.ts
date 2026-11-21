@@ -53,6 +53,17 @@ export function artistIdFor(artist: string) {
   return slug(songArtist(artist));
 }
 
+const MAIN_ARTIST_SPLIT = /\s*(?:,|&|;|\/|\bx\b|\bfeat\.?|\bft\.?|\bfeaturing\b)\s*/i;
+export const SONG_ID = /^[A-Za-z0-9_-]{1,64}$/;
+
+export function mainArtist(artist: string) {
+  return artist.split(MAIN_ARTIST_SPLIT)[0];
+}
+
+export function isSongId(id: string) {
+  return SONG_ID.test(id);
+}
+
 export function trackIdFor(artist: string, title: string) {
   return `${slug(songArtist(artist))}-${slug(songTitle(title))}`;
 }

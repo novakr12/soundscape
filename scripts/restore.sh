@@ -4,7 +4,9 @@ set -euo pipefail
 archive="$(realpath "${1:?Usage: scripts/restore.sh <backup.tar.gz>}")"
 cd "$(dirname "$0")/.."
 
-compose() { docker compose -f docker-compose.yml "$@"; }
+files=(-f docker-compose.yml -f compose.prod.yml)
+if [ -f compose.local.yml ]; then files+=(-f compose.local.yml); fi
+compose() { docker compose "${files[@]}" "$@"; }
 
 work="$(mktemp -d)"
 trap 'rm -rf "$work"; compose start postgres app > /dev/null 2>&1 || true' EXIT

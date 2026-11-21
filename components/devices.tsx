@@ -254,6 +254,18 @@ export function useLater(send: (value: number) => void, waitMs = 250) {
   };
 }
 
+export function useResetTimer(delayMs: number) {
+  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  useEffect(() => () => clearTimeout(timer.current), []);
+  return {
+    schedule: (run: () => void) => {
+      clearTimeout(timer.current);
+      timer.current = setTimeout(run, delayMs);
+    },
+    cancel: () => clearTimeout(timer.current),
+  };
+}
+
 function RemoteDevice({
   device,
   serverNow,
@@ -275,13 +287,15 @@ function RemoteDevice({
   const [volume, setVolume] = useState<number | null>(null);
   const state = device.state;
   const time = seeking ?? timeNow(state, device.at, serverNow);
+  const seekReset = useResetTimer(1500);
+  const volumeReset = useResetTimer(1500);
   const seekLater = useLater((value) => {
     send({ do: "seek", time: value });
-    setTimeout(() => setSeeking(null), 1500);
+    seekReset.schedule(() => setSeeking(null));
   });
   const volumeLater = useLater((value) => {
     send({ do: "volume", volume: value });
-    setTimeout(() => setVolume(null), 1500);
+    volumeReset.schedule(() => setVolume(null));
   });
   const shownVolume = volume ?? state.volume;
 
@@ -355,6 +369,7 @@ function RemoteDevice({
               style={{ "--fill": `${Math.round(shownVolume * 100)}%` } as React.CSSProperties}
               onChange={(event) => {
                 const value = Number(event.target.value);
+                volumeReset.cancel();
                 setVolume(value);
                 volumeLater(value);
               }}
@@ -377,6 +392,7 @@ function RemoteDevice({
                 }
                 onChange={(event) => {
                   const value = Number(event.target.value);
+                  seekReset.cancel();
                   setSeeking(value);
                   seekLater(value);
                 }}

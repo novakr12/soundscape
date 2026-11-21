@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { songArtist, songTitle, trackIdFor } from "../lib/catalog";
+import { isSongId, mainArtist, songArtist, songTitle, trackIdFor } from "../lib/catalog";
+import { shuffled } from "../lib/shuffle";
 
 describe("songTitle", () => {
   for (const [title, expected] of [
@@ -79,5 +80,31 @@ describe("trackIdFor", () => {
     assert.notEqual(trackIdFor("山下達郎", "あしおと"), trackIdFor("大貫妙子", "あしおと"));
     assert.equal(trackIdFor("방탄소년단", "Dynamite"), "방탄소년단-dynamite");
     assert.equal(trackIdFor("ＹＥＬＬＯＷ", "ばか"), "yellow-ばか");
+  });
+});
+
+describe("mainArtist and isSongId", () => {
+  it("extracts the primary artist from collaborations", () => {
+    assert.equal(mainArtist("Disclosure, Aminé, slowthai"), "Disclosure");
+    assert.equal(mainArtist("Simon & Garfunkel"), "Simon");
+    assert.equal(mainArtist("Artist x Other"), "Artist");
+    assert.equal(mainArtist("Artist feat. Guest"), "Artist");
+    assert.equal(mainArtist("Radiohead"), "Radiohead");
+  });
+
+  it("accepts safe song IDs and rejects invalid ones", () => {
+    assert.equal(isSongId("song_123-abc"), true);
+    assert.equal(isSongId(""), false);
+    assert.equal(isSongId("../secret"), false);
+    assert.equal(isSongId("a".repeat(65)), false);
+  });
+});
+
+describe("shuffled", () => {
+  it("returns a new array with the same elements without mutating input", () => {
+    const input = [1, 2, 3, 4, 5];
+    const out = shuffled(input, () => 0);
+    assert.deepEqual(input, [1, 2, 3, 4, 5]);
+    assert.deepEqual(out, [2, 3, 4, 5, 1]);
   });
 });

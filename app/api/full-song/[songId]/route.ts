@@ -12,7 +12,7 @@ export async function GET(request: Request, { params }: Context) {
   const userId = await sessionOrTokenUser(request);
   if (!userId) return Response.json({ error: "Log in to listen" }, { status: 401 });
   const { songId } = await params;
-  const shared = readPartySongId(decodeURIComponent(songId));
+  const shared = readPartySongId(songId);
   if (shared) {
     const host = await canStream(userId, shared.partyId, shared.songId);
     const hostServer = host ? await getNavidrome(host) : null;

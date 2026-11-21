@@ -1,18 +1,39 @@
 import { linkAlbums } from "./albums";
-import { artistIdFor, fold } from "./catalog";
+import { artistIdFor, fold, mainArtist } from "./catalog";
 import { request } from "./http";
 import { sql } from "./postgres";
+
+export { mainArtist };
 
 const deezerApi = () => process.env.DEEZER_API_URL ?? "https://api.deezer.com";
 const requestGapMs = () => Number(process.env.DEEZER_REQUEST_GAP_MS ?? 120);
 const QUOTA_EXCEEDED = 4;
+const RELATED_KEPT_MS = 24 * 60 * 60 * 1000;
+const MAX_RELATED_CACHE = 500;
 
-let nextRequestAt = 0;
+const globalForDeezer = globalThis as unknown as {
+  soundscapeDeezerNextAt?: number;
+  soundscapeDeezerRelated?: Map<string, { names: string[]; at: number }>;
+};
+globalForDeezer.soundscapeDeezerRelated ??= new Map();
+const relatedSeen = globalForDeezer.soundscapeDeezerRelated;
 
 async function waitForTurn() {
-  const wait = Math.max(0, nextRequestAt - Date.now());
-  nextRequestAt = Math.max(Date.now(), nextRequestAt) + requestGapMs();
+  const now = Date.now();
+  const nextAt = globalForDeezer.soundscapeDeezerNextAt ?? 0;
+  const wait = Math.max(0, nextAt - now);
+  globalForDeezer.soundscapeDeezerNextAt = Math.max(now, nextAt) + requestGapMs();
   if (wait > 0) await new Promise((resolve) => setTimeout(resolve, wait));
+}
+
+function rememberRelated(key: string, names: string[], at = Date.now()) {
+  if (relatedSeen.has(key)) relatedSeen.delete(key);
+  while (relatedSeen.size >= MAX_RELATED_CACHE) {
+    const oldest = relatedSeen.keys().next().value;
+    if (oldest === undefined) break;
+    relatedSeen.delete(oldest);
+  }
+  relatedSeen.set(key, { names, at });
 }
 
 type DeezerSearchResult = {
@@ -37,10 +58,6 @@ export function normalize(text: string) {
     .trim();
 }
 
-export function mainArtist(artist: string) {
-  return artist.split(/\s*(?:,|&|;|\/|\bx\b|\bfeat\.?|\bft\.?|\bfeaturing\b)\s*/i)[0];
-}
-
 function withoutFeatures(title: string) {
   return title.replace(/\s*[([]?\s*(?:feat\.?|ft\.?|featuring|prod\.?|produced by)\s.*$/i, "");
 }
@@ -50,21 +67,28 @@ export function mainTitle(title: string) {
   return clean.split(/\s+-\s+|\s*[([]/)[0].trim() || clean;
 }
 
-async function searchDeezer(query: string, retry = true): Promise<DeezerSearchResult[]> {
+async function deezerGet<T>(
+  path: string,
+  options: { retry?: boolean; throwOnError?: boolean } = {},
+): Promise<T & { error?: { message: string; code?: number } }> {
+  const { retry = true, throwOnError = false } = options;
   await waitForTurn();
-  const params = new URLSearchParams({ q: query, limit: "10" });
-  const response = await request(`${deezerApi()}/search?${params}`, { timeoutMs: 5000 });
-  if (!response.ok) throw new Error(`Deezer search failed with ${response.status}`);
-
-  const body = (await response.json()) as {
-    data?: DeezerSearchResult[];
-    error?: { message: string; code?: number };
-  };
+  const response = await request(`${deezerApi()}${path}`, { timeoutMs: 5000 });
+  if (!response.ok) throw new Error(`Deezer answered ${response.status}`);
+  const body = (await response.json()) as T & { error?: { message: string; code?: number } };
   if (body.error?.code === QUOTA_EXCEEDED && retry) {
     await new Promise((resolve) => setTimeout(resolve, 40 * requestGapMs()));
-    return searchDeezer(query, false);
+    return deezerGet<T>(path, { retry: false, throwOnError });
   }
-  if (body.error) throw new Error(`Deezer search failed: ${body.error.message}`);
+  if (body.error && (throwOnError || body.error.code === QUOTA_EXCEEDED)) {
+    throw new Error(`Deezer: ${body.error.message}`);
+  }
+  return body;
+}
+
+async function searchDeezer(query: string): Promise<DeezerSearchResult[]> {
+  const params = new URLSearchParams({ q: query, limit: "10" });
+  const body = await deezerGet<{ data?: DeezerSearchResult[] }>(`/search?${params}`, { throwOnError: true });
   return body.data ?? [];
 }
 
@@ -96,19 +120,6 @@ export async function findDeezerTrack(artist: string, title: string): Promise<De
   return null;
 }
 
-async function deezerGet<T>(path: string, retry = true): Promise<T & { error?: { message: string; code?: number } }> {
-  await waitForTurn();
-  const response = await request(`${deezerApi()}${path}`, { timeoutMs: 5000 });
-  if (!response.ok) throw new Error(`Deezer answered ${response.status}`);
-  const body = (await response.json()) as T & { error?: { message: string; code?: number } };
-  if (body.error?.code === QUOTA_EXCEEDED && retry) {
-    await new Promise((resolve) => setTimeout(resolve, 40 * requestGapMs()));
-    return deezerGet<T>(path, false);
-  }
-  if (body.error?.code === QUOTA_EXCEEDED) throw new Error(`Deezer: ${body.error.message}`);
-  return body;
-}
-
 async function deezerAlbumOf(deezerId: number): Promise<string | null> {
   const body = await deezerGet<{ album?: { title?: string } }>(`/track/${deezerId}`);
   return body.album?.title || null;
@@ -133,9 +144,6 @@ export async function findDeezerArtist(name: string): Promise<ArtistPhoto | null
   return null;
 }
 
-const RELATED_KEPT_MS = 24 * 60 * 60 * 1000;
-const relatedSeen = new Map<string, { names: string[]; at: number }>();
-
 export async function deezerRelatedArtists(name: string, limit = 20): Promise<string[]> {
   const key = artistIdFor(name);
   const kept = relatedSeen.get(key);
@@ -148,7 +156,7 @@ export async function deezerRelatedArtists(name: string, limit = 20): Promise<st
           (artist) => artist.name,
         )
       : [];
-    relatedSeen.set(key, { names, at: Date.now() });
+    rememberRelated(key, names);
     return names;
   } catch {
     return [];
@@ -216,14 +224,7 @@ export async function fillAlbumsFromDeezer(limit = 100, userId?: string): Promis
 }
 
 export async function getPreviewUrl(deezerId: number): Promise<string | null> {
-  const response = await request(`${deezerApi()}/track/${deezerId}`, {
-    timeoutMs: 5000,
-  });
-  if (!response.ok) throw new Error(`Deezer track lookup failed with ${response.status}`);
-
-  const body = (await response.json()) as { preview?: string; error?: { message: string } };
-  if (body.error) throw new Error(`Deezer track lookup failed: ${body.error.message}`);
-
+  const body = await deezerGet<{ preview?: string }>(`/track/${deezerId}`, { throwOnError: true });
   return body.preview || null;
 }
 

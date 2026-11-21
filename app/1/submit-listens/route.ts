@@ -4,7 +4,7 @@ import { resolveTrackId, resolveTracks } from "@/lib/aliases";
 import { songArtist, songTitle } from "@/lib/catalog";
 import { findMissingCovers } from "@/lib/covers";
 import { findTrackDetails } from "@/lib/deezer";
-import { importListens, type Listen } from "@/lib/imports";
+import { durationMsOf, importListens, type Listen } from "@/lib/imports";
 import { scrobbleToLastfm, sendNowPlayingToLastfm } from "@/lib/lastfm-scrobble";
 import { addListeningDetails, getListening, publishListening, publishPlay, setListening } from "@/lib/live";
 import { relaySubmission } from "@/lib/relay";
@@ -27,10 +27,6 @@ type SubmittedListen = {
     };
   };
 };
-
-function durationMsOf(info?: { duration_ms?: number; duration?: number }) {
-  return Number(info?.duration_ms) || Number(info?.duration) * 1000 || undefined;
-}
 
 function error(code: number, message: string) {
   return NextResponse.json({ code, error: message }, { status: code });

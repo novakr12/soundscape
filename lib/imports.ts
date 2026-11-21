@@ -1,3 +1,4 @@
+import type { TransactionSql } from "postgres";
 import { linkAlbums } from "./albums";
 import { resolveTracks } from "./aliases";
 import { songArtist, songTitle } from "./catalog";
@@ -23,6 +24,21 @@ export type ImportResult = {
 const PLAYS_PER_INSERT = 5000;
 const MAX_TEXT = 300;
 const ALLOWED_CLOCK_SKEW_MS = 5 * 60 * 1000;
+const MAX_DURATION_MS = 2_147_483_647;
+
+export function validDurationMs(value: unknown): number | undefined {
+  const ms = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(ms)) return undefined;
+  const rounded = Math.round(ms);
+  return rounded >= 1 && rounded <= MAX_DURATION_MS ? rounded : undefined;
+}
+
+export function durationMsOf(info?: { duration_ms?: unknown; duration?: unknown }): number | undefined {
+  return (
+    validDurationMs(info?.duration_ms) ??
+    (info?.duration !== undefined ? validDurationMs(Number(info.duration) * 1000) : undefined)
+  );
+}
 
 export type NewTrack = {
   trackId: string;
@@ -33,21 +49,21 @@ export type NewTrack = {
   durationMs?: number | null;
 };
 
-export async function saveTracks(tracks: NewTrack[]) {
+export async function saveTracks(tracks: NewTrack[], db: typeof sql | TransactionSql = sql) {
   const artists = new Map(tracks.map((track) => [track.artistId, track.artist]));
-  const newArtists = await sql`
+  const newArtists = await db`
     INSERT INTO artists (id, name)
     SELECT * FROM unnest(${[...artists.keys()]}::text[], ${[...artists.values()]}::text[])
     ON CONFLICT (id) DO NOTHING
     RETURNING id`;
-  const saved = await sql`
+  const saved = await db`
     INSERT INTO tracks (id, title, artist_id, mbid, duration_ms)
     SELECT * FROM unnest(
       ${tracks.map((track) => track.trackId)}::text[],
       ${tracks.map((track) => track.title)}::text[],
       ${tracks.map((track) => track.artistId)}::text[],
       ${tracks.map((track) => track.mbid ?? null)}::text[],
-      ${tracks.map((track) => track.durationMs ?? null)}::int[]
+      ${tracks.map((track) => (track.durationMs == null ? null : (validDurationMs(track.durationMs) ?? null)))}::int[]
     )
     ON CONFLICT (id) DO UPDATE SET
       mbid = coalesce(tracks.mbid, excluded.mbid),
@@ -65,7 +81,12 @@ function isValid(listen: Listen, now: Date) {
   );
 }
 
-export async function importListens(userId: string, listens: Listen[]): Promise<ImportResult> {
+export async function importListens(
+  userId: string,
+  listens: Listen[],
+  tx?: TransactionSql,
+): Promise<ImportResult> {
+  const db = tx ?? sql;
   const now = new Date();
   const valid = listens
     .map((listen) => ({ ...listen, artist: listen.artist.slice(0, MAX_TEXT), title: listen.title.slice(0, MAX_TEXT) }))
@@ -73,7 +94,7 @@ export async function importListens(userId: string, listens: Listen[]): Promise<
   const skipped = listens.length - valid.length;
   if (valid.length === 0) return { imported: 0, skipped, catalogNodesCreated: 0 };
 
-  const resolved = await resolveTracks(valid);
+  const resolved = await resolveTracks(valid, db);
   const uniqueTracks = new Map<string, NewTrack>();
   for (const [i, l] of valid.entries()) {
     const { trackId, artistId } = resolved[i];
@@ -84,29 +105,28 @@ export async function importListens(userId: string, listens: Listen[]): Promise<
       artistId,
       artist: songArtist(l.artist),
       mbid: seen?.mbid ?? l.mbid ?? null,
-      durationMs: seen?.durationMs ?? (l.durationMs ? Math.round(l.durationMs) : null),
+      durationMs: seen?.durationMs ?? validDurationMs(l.durationMs) ?? null,
     });
   }
-  const created = await saveTracks([...uniqueTracks.values()]);
+  const created = await saveTracks([...uniqueTracks.values()], db);
 
-  await linkAlbums(
-    valid.flatMap((listen, i) =>
-      listen.album ? [{ trackId: resolved[i].trackId, album: listen.album, number: listen.trackNumber }] : [],
-    ),
+  const albumLinks = valid.flatMap((listen, i) =>
+    listen.album ? [{ trackId: resolved[i].trackId, album: listen.album, number: listen.trackNumber }] : [],
   );
+  if (albumLinks.length > 0) await linkAlbums(albumLinks);
 
   const plays = valid.map((listen, i) => ({ trackId: resolved[i].trackId, playedAt: listen.playedAt }));
 
   for (let i = 0; i < plays.length; i += PLAYS_PER_INSERT) {
     const batch = plays.slice(i, i + PLAYS_PER_INSERT);
-    await sql`
+    await db`
       INSERT INTO plays (id, user_id, track_id, played_at)
       SELECT gen_random_uuid(), ${userId}, track_id, played_at
       FROM unnest(${batch.map((play) => play.trackId)}::text[], ${batch.map((play) => play.playedAt.toISOString())}::timestamptz[])
         AS play(track_id, played_at)`;
   }
 
-  await deleteValues(keys.listeningRecord(userId));
+  if (!tx) await deleteValues(keys.listeningRecord(userId));
 
   return { imported: plays.length, skipped, catalogNodesCreated: created };
 }

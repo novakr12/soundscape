@@ -184,7 +184,13 @@ export async function pollJellyfin() {
   const servers = new Map<string, ServerUsers>();
   const rows = await sql`SELECT user_id, server_url, api_key, jellyfin_user_id FROM jellyfin_settings`;
   for (const row of rows) {
-    const apiKey = decrypt(row.api_key, "jellyfin");
+    let apiKey: string;
+    try {
+      apiKey = decrypt(row.api_key, "jellyfin");
+    } catch (error) {
+      warn(row.user_id, `could not decrypt API key: ${error instanceof Error ? error.message : String(error)}`);
+      continue;
+    }
     const key = `${row.server_url} ${apiKey}`;
     const server: ServerUsers = servers.get(key) ?? { url: row.server_url, apiKey, users: [] };
     server.users.push({ userId: row.user_id, jellyfinUserId: row.jellyfin_user_id });
@@ -197,10 +203,16 @@ export async function pollJellyfin() {
       try {
         sessions = await request(server.url, server.apiKey, "/Sessions?activeWithinSeconds=60");
       } catch (error) {
-        if (error instanceof JellyfinError) return warn(server.url, error.message);
-        throw error;
+        warn(server.url, error instanceof Error ? error.message : String(error));
+        return;
       }
-      for (const user of server.users) await applyPlayback(user.userId, playbackFor(sessions, user.jellyfinUserId));
+      for (const user of server.users) {
+        try {
+          await applyPlayback(user.userId, playbackFor(sessions, user.jellyfinUserId));
+        } catch (error) {
+          warn(user.userId, error instanceof Error ? error.message : String(error));
+        }
+      }
     }),
   );
 }

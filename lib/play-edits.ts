@@ -52,7 +52,17 @@ export async function editPlay(
   artist: string,
   title: string,
 ): Promise<ImportResult | null> {
-  const play = await deletePlay(userId, key);
-  if (!play) return null;
-  return importListens(userId, [{ artist, title, playedAt: play.playedAt }]);
+  if (!UUID.test(key.playId) || Number.isNaN(key.playedAt.getTime())) return null;
+  if (!artist.trim() || !title.trim()) return { imported: 0, skipped: 1, catalogNodesCreated: 0 };
+  const result = await sql.begin(async (tx) => {
+    const [row] = await tx`
+      DELETE FROM plays WHERE id = ${key.playId} AND user_id = ${userId} AND played_at = ${key.playedAt}
+      RETURNING track_id, played_at`;
+    if (!row) return null;
+    const imported = await importListens(userId, [{ artist, title, playedAt: row.played_at }], tx);
+    if (imported.imported === 0) throw new Error("Edited play could not be saved");
+    return imported;
+  });
+  if (result) await deleteValues(keys.listeningRecord(userId));
+  return result;
 }

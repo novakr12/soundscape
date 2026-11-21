@@ -33,9 +33,7 @@ import {
   heardStep,
   inOrder,
   insertAfter,
-  LOCK_SCREEN_SKIP_SECONDS,
   LONGEST_QUEUE,
-  lockScreenPosition,
   nextPosition,
   nextRepeat,
   queueWindow,
@@ -58,6 +56,7 @@ import { PlayerBar, QueuePanel } from "./player-bar";
 import { usePlayerKeys } from "./player-keys";
 import RemoteBar from "./remote-bar";
 import type { Sleep } from "./sleep-timer";
+import { useMediaSession } from "./use-media-session";
 
 export type PlayerTrack = {
   trackId: string;
@@ -239,6 +238,17 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
     settledSince: number | null;
     timer: ReturnType<typeof setInterval>;
   } | null>(null);
+  const crossfadeTimer = useRef<{ timer: ReturnType<typeof setInterval>; old: HTMLAudioElement } | null>(null);
+  const sleepFadeTimer = useRef<{
+    timer: ReturnType<typeof setInterval>;
+    audio: HTMLAudioElement;
+    from: number;
+  } | null>(null);
+  const earlyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const loadTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const skipTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const radioRetryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const currentTrack = () => tracksRef.current[orderRef.current[positionRef.current]] ?? null;
   const [showQueue, setShowQueue] = useState(false);
   const [showLyrics, setShowLyrics] = useState(false);
   const [showDevices, setShowDevices] = useState(false);
@@ -379,91 +389,29 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
     return first;
   }
 
-  useEffect(() => {
-    skip.current.prepare();
-    if (!("mediaSession" in navigator)) return;
-    const session = navigator.mediaSession;
-    const handlers: [MediaSessionAction, MediaSessionActionHandler][] = [
-      ["play", () => audioRef.current?.play().catch(() => {})],
-      ["pause", () => audioRef.current?.pause()],
-      [
-        "stop",
-        () => {
-          const audio = audioRef.current;
-          if (!audio) return;
-          audio.pause();
-          audio.currentTime = 0;
-        },
-      ],
-      [
-        "seekto",
-        (details) => {
-          const audio = audioRef.current;
-          if (audio && details.seekTime !== undefined) audio.currentTime = details.seekTime;
-        },
-      ],
-      [
-        "seekbackward",
-        (details) => {
-          const audio = audioRef.current;
-          if (!audio) return;
-          audio.currentTime = seekTarget(
-            audio.currentTime,
-            -(details.seekOffset ?? LOCK_SCREEN_SKIP_SECONDS),
-            songLength(audio.duration, tracksRef.current[orderRef.current[positionRef.current]]?.duration),
-          );
-        },
-      ],
-      [
-        "seekforward",
-        (details) => {
-          const audio = audioRef.current;
-          if (!audio) return;
-          audio.currentTime = seekTarget(
-            audio.currentTime,
-            details.seekOffset ?? LOCK_SCREEN_SKIP_SECONDS,
-            songLength(audio.duration, tracksRef.current[orderRef.current[positionRef.current]]?.duration),
-          );
-        },
-      ],
-      ["nexttrack", () => skip.current.next()],
-      ["previoustrack", () => skip.current.previous()],
-    ];
-    for (const [action, handler] of handlers) {
-      try {
-        session.setActionHandler(action, handler);
-      } catch {}
-    }
-    return () => {
-      for (const [action] of handlers) {
-        try {
-          session.setActionHandler(action, null);
-        } catch {}
-      }
-    };
-  }, []);
+  useMediaSession(audioRef, active, currentTrack, skip);
 
-  useEffect(() => {
-    const audio = active;
-    if (!audio || !("mediaSession" in navigator) || !navigator.mediaSession.setPositionState) return;
-    let last = 0;
-    const tell = (event?: Event) => {
-      const now = performance.now();
-      if (event?.type === "timeupdate" && now - last < 1000) return;
-      last = now;
-      const known = tracksRef.current[orderRef.current[positionRef.current]]?.duration;
-      const state = lockScreenPosition(songLength(audio.duration, known), audio.currentTime, audio.playbackRate);
-      try {
-        navigator.mediaSession.setPositionState(state ?? undefined);
-      } catch {}
-    };
-    const events = ["timeupdate", "durationchange", "loadedmetadata", "seeked", "ratechange", "play", "pause"];
-    for (const name of events) audio.addEventListener(name, tell);
-    tell();
-    return () => {
-      for (const name of events) audio.removeEventListener(name, tell);
-    };
-  }, [active]);
+  useEffect(
+    () => () => {
+      if (crossfadeTimer.current) {
+        clearInterval(crossfadeTimer.current.timer);
+        crossfadeTimer.current = null;
+      }
+      if (sleepFadeTimer.current) {
+        clearInterval(sleepFadeTimer.current.timer);
+        sleepFadeTimer.current = null;
+      }
+      if (handing.current) {
+        clearInterval(handing.current.timer);
+        handing.current = null;
+      }
+      if (earlyTimer.current) clearTimeout(earlyTimer.current);
+      if (loadTimer.current) clearTimeout(loadTimer.current);
+      if (skipTimer.current) clearTimeout(skipTimer.current);
+      if (radioRetryTimer.current) clearTimeout(radioRetryTimer.current);
+    },
+    [],
+  );
 
   function announce() {
     const audio = audioRef.current;
@@ -689,12 +637,51 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
     standby.load();
   }
 
+  function clearTrackTimers() {
+    if (earlyTimer.current) {
+      clearTimeout(earlyTimer.current);
+      earlyTimer.current = null;
+    }
+    early.current = null;
+    if (loadTimer.current) {
+      clearTimeout(loadTimer.current);
+      loadTimer.current = null;
+    }
+    if (skipTimer.current) {
+      clearTimeout(skipTimer.current);
+      skipTimer.current = null;
+    }
+  }
+
+  function stopCrossfade() {
+    const activeFade = crossfadeTimer.current;
+    if (!activeFade) return;
+    clearInterval(activeFade.timer);
+    crossfadeTimer.current = null;
+    fading.current = false;
+    setFadeIn(1);
+    if (activeFade.old === standbyRef.current) {
+      activeFade.old.remove();
+      unload(activeFade.old);
+    }
+  }
+
+  function stopSleepFade(restore = true) {
+    const activeSleep = sleepFadeTimer.current;
+    if (!activeSleep) return;
+    clearInterval(activeSleep.timer);
+    sleepFadeTimer.current = null;
+    if (restore) activeSleep.audio.volume = activeSleep.from;
+  }
+
   function handOver(index: number, fadeSeconds = 0) {
     const old = audioRef.current;
     const standby = standbyRef.current;
     const key = preparedKey(index);
     if (!old || !standby || !key || key !== prepared.current) return false;
     if (standby.error || standby.readyState < HTMLMediaElement.HAVE_FUTURE_DATA) return false;
+    clearTrackTimers();
+    stopSleepFade();
     const track = tracksRef.current[orderRef.current[index]];
     prepared.current = null;
     standby.volume = fadeSeconds > 0 ? 0 : old.volume;
@@ -727,26 +714,36 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
   }
 
   function crossfade(old: HTMLAudioElement, seconds: number) {
+    stopCrossfade();
     const from = old.volume;
     const began = performance.now();
     fading.current = true;
     setFadeIn(0);
     const timer = setInterval(() => {
+      if (old !== standbyRef.current) {
+        clearInterval(timer);
+        if (crossfadeTimer.current?.timer === timer) crossfadeTimer.current = null;
+        fading.current = false;
+        setFadeIn(1);
+        return;
+      }
       const done = Math.min(1, (performance.now() - began) / (seconds * 1000));
-      if (old === standbyRef.current) old.volume = from * (1 - done);
+      old.volume = from * (1 - done);
       setFadeIn(done);
       if (done < 1) return;
       clearInterval(timer);
+      if (crossfadeTimer.current?.timer === timer) crossfadeTimer.current = null;
       fading.current = false;
       old.remove();
-      if (old === standbyRef.current) unload(old);
+      unload(old);
     }, FADE_TICK_MS);
+    crossfadeTimer.current = { timer, old };
   }
 
   function crossfadeSeconds(index: number) {
     const seconds = optionsRef.current.crossfade;
     if (seconds <= 0 || repeatRef.current === "one") return 0;
-    const here = tracksRef.current[orderRef.current[positionRef.current]];
+    const here = currentTrack();
     const next = tracksRef.current[orderRef.current[index]];
     return here && next && playingAnAlbum([here, next], 0) ? 0 : seconds;
   }
@@ -786,14 +783,26 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
     });
   }
 
-  function play(track: PlayerTrack) {
+  function clearRadioRetry() {
+    if (radioRetryTimer.current) {
+      clearTimeout(radioRetryTimer.current);
+      radioRetryTimer.current = null;
+    }
+  }
+
+  function stopRadio() {
+    clearRadioRetry();
     setRadio(null);
+  }
+
+  function play(track: PlayerTrack) {
+    stopRadio();
     begin([track], [0], 0);
   }
 
   function playAll(list: PlayerTrack[], first = 0) {
     if (list.length === 0) return;
-    setRadio(null);
+    stopRadio();
     const chosen = Math.min(Math.max(first, 0), list.length - 1);
     const listOrder = shuffleRef.current
       ? first === 0
@@ -806,7 +815,7 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
 
   function playFrom(list: PlayerTrack[], chosen: number) {
     if (list.length === 0) return;
-    setRadio(null);
+    stopRadio();
     const at = Math.min(Math.max(chosen, 0), list.length - 1);
     const { from, to } = queueWindow(list.length, at);
     const part = list.slice(from, to);
@@ -830,6 +839,7 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
   }
 
   function finishEarly(id: number) {
+    earlyTimer.current = null;
     const audio = audioRef.current;
     if (id !== playing.current || !audio || audio.paused) {
       early.current = null;
@@ -852,7 +862,8 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
     const id = playing.current;
     if (left > WATCH_END_SECONDS || early.current === id) return;
     early.current = id;
-    setTimeout(() => skip.current.finish(id), Math.max(0, left * 1000 - START_NEXT_EARLY_MS));
+    if (earlyTimer.current) clearTimeout(earlyTimer.current);
+    earlyTimer.current = setTimeout(() => skip.current.finish(id), Math.max(0, left * 1000 - START_NEXT_EARLY_MS));
   }
 
   function listened() {
@@ -866,7 +877,7 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
     if (!audio.paused) state.heard += heardStep(state.last, now);
     state.last = audio.paused ? null : now;
     if (state.counted || !state.full || !countsAsPlay(state.heard, lengthOf(audio))) return;
-    const track = tracksRef.current[orderRef.current[positionRef.current]];
+    const track = currentTrack();
     if (!track) return;
     state.counted = true;
     fetch("/api/play", {
@@ -899,6 +910,7 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
   }
 
   function chooseSleep(next: Sleep) {
+    stopSleepFade();
     sleepRef.current = next;
     setSleep(next);
   }
@@ -909,16 +921,18 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
     if (!audio || audio.paused) return;
     const from = audio.volume;
     let step = 0;
-    const fade = setInterval(() => {
+    const timer = setInterval(() => {
       step++;
       if (audio !== audioRef.current || audio.paused || step >= FADE_STEPS) {
-        clearInterval(fade);
+        clearInterval(timer);
+        if (sleepFadeTimer.current?.timer === timer) sleepFadeTimer.current = null;
         audio.pause();
         audio.volume = from;
         return;
       }
       audio.volume = from * (1 - step / FADE_STEPS);
     }, FADE_OUT_MS / FADE_STEPS);
+    sleepFadeTimer.current = { timer, audio, from };
   }
 
   function previous() {
@@ -933,22 +947,30 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
     moveTo(positionRef.current - 1);
   }
 
-  function toggleShuffle() {
-    const device = away.current.device;
-    shuffleRef.current = !(device?.state.shuffle ?? shuffleRef.current);
-    setShuffle(shuffleRef.current);
+  function applyLocalShuffle(on: boolean) {
+    shuffleRef.current = on;
+    setShuffle(on);
     remember();
-    if (device) {
-      away.current.send({ do: "shuffle", on: shuffleRef.current });
-      return;
-    }
     if (orderRef.current.length < 2) return;
-    if (shuffleRef.current) {
+    if (on) {
       arrange(tracksRef.current, shuffleAfter(orderRef.current, positionRef.current), positionRef.current);
     } else {
       const restored = unshuffle(orderRef.current, positionRef.current);
       arrange(tracksRef.current, restored.order, restored.position);
     }
+  }
+
+  function toggleShuffle() {
+    const device = away.current.device;
+    const nextOn = !(device?.state.shuffle ?? shuffleRef.current);
+    if (device) {
+      shuffleRef.current = nextOn;
+      setShuffle(nextOn);
+      remember();
+      away.current.send({ do: "shuffle", on: nextOn });
+      return;
+    }
+    applyLocalShuffle(nextOn);
   }
 
   function inPartyAsGuest() {
@@ -984,7 +1006,7 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
 
   function queueHere(track: PlayerTrack, next: boolean) {
     if (orderRef.current.length === 0) {
-      setRadio(null);
+      stopRadio();
       arrange([track], [0], 0);
       start(track);
       return;
@@ -1038,12 +1060,13 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
   }
 
   function refill(seed: RadioSeed) {
+    clearRadioRetry();
     radioLoading.current = true;
     moreRadio(seed)
       .then((songs) => {
         if (songs.length === 0) {
-          gaveUpOn.current = tracksRef.current[orderRef.current[positionRef.current]]?.trackId ?? null;
-          return setRadio(null);
+          gaveUpOn.current = currentTrack()?.trackId ?? null;
+          return stopRadio();
         }
         gaveUpOn.current = null;
         const from = tracksRef.current.length;
@@ -1054,7 +1077,9 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
         );
       })
       .catch(() => {
-        setTimeout(() => {
+        clearRadioRetry();
+        radioRetryTimer.current = setTimeout(() => {
+          radioRetryTimer.current = null;
           if (radioNow.current === seed && !radioLoading.current) skip.current.refill(seed);
         }, RADIO_RETRY_MS);
       })
@@ -1102,14 +1127,17 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
   }
 
   function cycleRepeat() {
-    repeatRef.current = nextRepeat(repeatRef.current);
-    setRepeat(repeatRef.current);
+    const device = away.current.device;
+    const nextMode = nextRepeat(device?.state.repeat ?? repeatRef.current);
+    repeatRef.current = nextMode;
+    setRepeat(nextMode);
     remember();
+    if (device) away.current.send({ do: "repeat", mode: nextMode });
   }
 
   bridge.current = (back) => {
     if (back.tracks) {
-      setRadio(null);
+      stopRadio();
       arrange(
         back.tracks,
         back.tracks.map((_, index) => index),
@@ -1129,6 +1157,7 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
   };
 
   function quietly(back: HandBack) {
+    endHandBack();
     const audio = audioRef.current;
     if (!audio || !back.playing || back.at === null) return;
     audio.muted = true;
@@ -1257,7 +1286,7 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
     if (port.current && tellNative(command)) return;
     const audio = audioRef.current;
     if (command.do === "take") {
-      setRadio(null);
+      stopRadio();
       const order = command.tracks.map((_, index) => index);
       arrange(command.tracks, order, command.position);
       start(command.tracks[command.position], command.playing, command.time);
@@ -1272,7 +1301,7 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
       return;
     }
     if (command.do === "shuffle") {
-      if (shuffleRef.current !== command.on) toggleShuffle();
+      if (shuffleRef.current !== command.on) applyLocalShuffle(command.on);
       return;
     }
     if (command.do === "repeat") {
@@ -1290,7 +1319,7 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
       return;
     }
     if (!audio?.currentSrc) {
-      const track = tracksRef.current[orderRef.current[positionRef.current]];
+      const track = currentTrack();
       if ((command.do === "play" || command.do === "toggle") && track) start(track, true, pendingTime.current);
       return;
     }
@@ -1302,7 +1331,7 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
     } else if (command.do === "next") next();
     else if (command.do === "previous") previous();
     else if (command.do === "seek") {
-      const known = tracksRef.current[orderRef.current[positionRef.current]]?.duration;
+      const known = currentTrack()?.duration;
       audio.currentTime = seekTarget(0, command.time, songLength(audio.duration, known));
     }
   }
@@ -1314,9 +1343,19 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
     if (port.current) setFollowing(null);
   }
 
+  const nextGuarded = () => {
+    if (!onlyHost()) next();
+  };
+  const previousGuarded = () => {
+    if (!onlyHost()) previous();
+  };
+  const jumpToGuarded = (at: number) => {
+    if (!onlyHost()) jumpTo(at);
+  };
+
   skip.current = {
-    next,
-    previous,
+    next: nextGuarded,
+    previous: previousGuarded,
     ended,
     restore: restoreSaved,
     listened,
@@ -1340,20 +1379,14 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
       leavePartyFirst();
       playFrom(list, chosen);
     },
-    next: () => {
-      if (!onlyHost()) next();
-    },
-    previous: () => {
-      if (!onlyHost()) previous();
-    },
+    next: nextGuarded,
+    previous: previousGuarded,
     toggleShuffle,
     cycleRepeat,
     playNext,
     addToQueue,
     remove,
-    jumpTo: (at) => {
-      if (!onlyHost()) jumpTo(at);
-    },
+    jumpTo: jumpToGuarded,
     startRadio: (seed) => {
       leavePartyFirst();
       return startRadio(seed);
@@ -1361,14 +1394,24 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
   };
   const radioOn = radio !== null;
   const shownShuffle = followed?.state.shuffle ?? shuffle;
+  const shownRepeat = followed?.state.repeat ?? repeat;
   const value = useMemo(
-    () => ({ current, queue, position, shuffle: shownShuffle, repeat, radio: radioOn, party, ...steady }),
-    [current, queue, position, shownShuffle, repeat, radioOn, party, steady],
+    () => ({ current, queue, position, shuffle: shownShuffle, repeat: shownRepeat, radio: radioOn, party, ...steady }),
+    [current, queue, position, shownShuffle, shownRepeat, radioOn, party, steady],
   );
   const elsewhere = link.devices.find((device) => device.state.playing) ?? null;
   const hasNext = position + 1 < queue.length || (repeat === "all" && queue.length > 1);
 
+  function togglePanel(panel: "queue" | "lyrics" | "devices") {
+    setShowQueue((open) => (panel === "queue" ? !open : false));
+    setShowLyrics((open) => (panel === "lyrics" ? !open : false));
+    setShowDevices((open) => (panel === "devices" ? !open : false));
+  }
+
   function start(track: PlayerTrack, play = true, at = 0) {
+    stopCrossfade();
+    stopSleepFade();
+    clearTrackTimers();
     endHandBack();
     const audio = audioElement();
     if (!audio) return;
@@ -1436,7 +1479,9 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
   }
 
   function watchLoading(id: number) {
-    setTimeout(() => {
+    if (loadTimer.current) clearTimeout(loadTimer.current);
+    loadTimer.current = setTimeout(() => {
+      loadTimer.current = null;
       const audio = audioRef.current;
       if (!audio || id !== playing.current || audio.paused) return;
       if (audio.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) return;
@@ -1448,18 +1493,21 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
 
   function failed() {
     const audio = audioRef.current;
-    if (!current || !audio) return;
+    const track = currentTrack();
+    if (!track || !audio) return;
     if (!fellBack.current) {
       fellBack.current = true;
-      describe(current, false);
-      audio.src = `/api/preview/${encodeURIComponent(current.trackId)}`;
+      describe(track, false);
+      audio.src = `/api/preview/${encodeURIComponent(track.trackId)}`;
       if (autoplay.current) audio.play().catch(() => {});
       return;
     }
     setError("Can't play this song right now");
     if (!autoplay.current) return;
     const id = playing.current;
-    setTimeout(() => {
+    if (skipTimer.current) clearTimeout(skipTimer.current);
+    skipTimer.current = setTimeout(() => {
+      skipTimer.current = null;
       if (id === playing.current) next();
     }, SKIP_BROKEN_AFTER_MS);
   }
@@ -1497,22 +1545,10 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
           keys={remoteKeys}
           showQueue={showQueue}
           showLyrics={showLyrics}
-          onQueue={() => {
-            setShowLyrics(false);
-            setShowDevices(false);
-            setShowQueue(!showQueue);
-          }}
-          onLyrics={() => {
-            setShowQueue(false);
-            setShowDevices(false);
-            setShowLyrics(!showLyrics);
-          }}
+          onQueue={() => togglePanel("queue")}
+          onLyrics={() => togglePanel("lyrics")}
           showDevices={showDevices}
-          onDevices={() => {
-            setShowQueue(false);
-            setShowLyrics(false);
-            setShowDevices(!showDevices);
-          }}
+          onDevices={() => togglePanel("devices")}
         />
       )}
       {!followed && current && showLyrics && (
@@ -1544,7 +1580,7 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
           position={0}
           onClose={() => setShowQueue(false)}
           onJump={(at) => {
-            if (at > 0) away.current.send({ do: "jump", ahead: at });
+            if (at > 0 && !onlyHost()) away.current.send({ do: "jump", ahead: at });
           }}
         />
       )}
@@ -1554,7 +1590,7 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
           keys={order}
           position={position}
           onClose={() => setShowQueue(false)}
-          onJump={jumpTo}
+          onJump={jumpToGuarded}
           onRemove={remove}
         />
       )}
@@ -1576,27 +1612,15 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
         live={audioRef}
         holder={holderRef}
         onShuffle={toggleShuffle}
-        onPrevious={previous}
-        onNext={next}
+        onPrevious={previousGuarded}
+        onNext={nextGuarded}
         onRepeat={cycleRepeat}
-        onQueue={() => {
-          setShowLyrics(false);
-          setShowDevices(false);
-          setShowQueue(!showQueue);
-        }}
+        onQueue={() => togglePanel("queue")}
         showLyrics={showLyrics}
-        onLyrics={() => {
-          setShowQueue(false);
-          setShowDevices(false);
-          setShowLyrics(!showLyrics);
-        }}
+        onLyrics={() => togglePanel("lyrics")}
         showDevices={showDevices}
         elsewhere={elsewhere !== null}
-        onDevices={() => {
-          setShowQueue(false);
-          setShowLyrics(false);
-          setShowDevices(!showDevices);
-        }}
+        onDevices={() => togglePanel("devices")}
       />
     </PlayerContext.Provider>
   );

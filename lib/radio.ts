@@ -4,6 +4,7 @@ import { type MusicSong, toMusicSongs } from "./music";
 import { getNavidrome } from "./navidrome";
 import { getLibrarySongs, getRandomSongs, type NavidromeSong } from "./navidrome-library";
 import { sql } from "./postgres";
+import { shuffled } from "./shuffle";
 import { similarArtists } from "./similar-artists";
 import { getAlsoPlayed } from "./tracks";
 
@@ -20,15 +21,6 @@ const SEARCHES_AT_ONCE = 4;
 const SEED_EVERY = 5;
 const SPACING = 4;
 const MOST_PER_ARTIST = 2;
-
-function shuffled<T>(items: T[], random: () => number) {
-  const out = [...items];
-  for (let i = out.length - 1; i > 0; i--) {
-    const j = Math.floor(random() * (i + 1));
-    [out[i], out[j]] = [out[j], out[i]];
-  }
-  return out;
-}
 
 function songKey(song: NavidromeSong) {
   return `${artistIdFor(song.artist)}|${slug(songTitle(song.title))}`;
@@ -156,7 +148,12 @@ async function genresOf(artistIds: string[]) {
   const rows = await sql`SELECT artist_id, genre FROM artist_genres WHERE artist_id = ANY(${artistIds})`;
   for (const row of rows) {
     const id = row.artist_id as string;
-    out.set(id, [...(out.get(id) ?? []), row.genre as string]);
+    let genres = out.get(id);
+    if (!genres) {
+      genres = [];
+      out.set(id, genres);
+    }
+    genres.push(row.genre as string);
   }
   return out;
 }
@@ -218,7 +215,12 @@ export async function radioSongs(
   for (const song of genrePool) {
     const id = artistIdFor(song.artist);
     if (id === start.artistId) continue;
-    byArtist.set(id, [...(byArtist.get(id) ?? []), song]);
+    let group = byArtist.get(id);
+    if (!group) {
+      group = [];
+      byArtist.set(id, group);
+    }
+    group.push(song);
   }
   const skipTracks = new Set(more.skipTracks ?? []);
   if (more.continuing && start.title) skipTracks.add(trackIdFor(start.name, start.title));

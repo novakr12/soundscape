@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import {
   admins,
+  formatJobInterval,
   getAccounts,
   getJobStatus,
   getLastBackup,
@@ -136,10 +137,7 @@ export default async function AdminPage() {
                 <tr key={job.name}>
                   <td>
                     {job.label}
-                    <small className="muted">
-                      {" "}
-                      · every {job.everyMinutes === 60 ? "hour" : `${job.everyMinutes} min`}
-                    </small>
+                    <small className="muted"> · {formatJobInterval(job.everyMinutes)}</small>
                   </td>
                   <td className="muted">{lastRunText(job, now)}</td>
                   <td>{jobResult(job)}</td>

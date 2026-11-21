@@ -20,7 +20,7 @@ function plural(count: number, word: string) {
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  const username = decodeURIComponent((await params).username).toLowerCase();
+  const username = (await params).username.toLowerCase();
   return { title: `You and ${username} · Soundscape` };
 }
 
@@ -57,7 +57,7 @@ const STAT_LABELS = ["Plays", "Listening time", "Longest streak", "Artists", "So
 
 export default async function ComparePage({ params, searchParams }: Props) {
   const viewer = await requireUserId();
-  const username = decodeURIComponent((await params).username).toLowerCase();
+  const username = (await params).username.toLowerCase();
   const currentYear = Number(localDay(new Date()).slice(0, 4));
   const requested = Number((await searchParams).year);
   const year = Number.isInteger(requested) && requested >= 2000 && requested <= currentYear ? requested : currentYear;

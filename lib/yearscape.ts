@@ -112,11 +112,9 @@ async function summarize(plays: Play[], earlierArtists: Set<string>): Promise<Su
   const average = known.length > 0 ? knownMs / known.length : DEFAULT_SONG_MS;
   const withCover = (song: YearSong) => ({ ...song, cover: details.get(song.trackId)?.cover ?? undefined });
   const songsByPlays = top(songs.values(), songs.size);
-  const artistPlays = new Map<string, number>();
-  for (const play of plays)
-    artistPlays.set(artistIdFor(play.artist), (artistPlays.get(artistIdFor(play.artist)) ?? 0) + 1);
-  const photoRows =
-    await sql`SELECT id, photo FROM artists WHERE id = ANY(${[...artistPlays.keys()]}) AND photo IS NOT NULL`;
+  const artists = countArtists(plays);
+  const artistIds = [...artists.keys()];
+  const photoRows = await sql`SELECT id, photo FROM artists WHERE id = ANY(${artistIds}) AND photo IS NOT NULL`;
   const photos = new Map(photoRows.map((row) => [row.id as string, row.photo as string]));
   const artistCover = (artist: YearArtist) => {
     const photo = photos.get(artistIdFor(artist.name));
@@ -131,11 +129,10 @@ async function summarize(plays: Play[], earlierArtists: Set<string>): Promise<Su
           .find(Boolean) ?? undefined,
     };
   };
-  const genreRows =
-    await sql`SELECT artist_id, genre FROM artist_genres WHERE artist_id = ANY(${[...artistPlays.keys()]})`;
+  const genreRows = await sql`SELECT artist_id, genre FROM artist_genres WHERE artist_id = ANY(${artistIds})`;
   const genrePlays = new Map<string, number>();
   for (const row of genreRows) {
-    genrePlays.set(row.genre, (genrePlays.get(row.genre) ?? 0) + (artistPlays.get(row.artist_id) ?? 0));
+    genrePlays.set(row.genre, (genrePlays.get(row.genre) ?? 0) + (artists.get(row.artist_id)?.plays ?? 0));
   }
   const topGenres = [...genrePlays]
     .map(([name, count]) => ({ name, plays: count }))
@@ -173,10 +170,10 @@ async function summarize(plays: Play[], earlierArtists: Set<string>): Promise<Su
   return {
     plays: plays.length,
     listeningMs: knownMs + (plays.length - known.length) * average,
-    artists: countArtists(plays).size,
+    artists: artists.size,
     songs: songs.size,
     topSongs: top(songs.values()).map(withCover),
-    topArtists: top(countArtists(plays).values()).map(artistCover),
+    topArtists: top(artists.values()).map(artistCover),
     topGenres,
     topAlbums,
     busiestDay: busiest,
@@ -208,12 +205,23 @@ export async function getYearscape(userId: string, year: number, now = new Date(
   if (cached?.print === print) return { ...cached.scape, years };
   const { plays, earlierArtists } = await readPeriod(userId, `${year}-01`, `${year}-12`, `${year}-`);
 
+  const byMonth = new Map<string, Play[]>();
+  for (const play of plays) {
+    const month = play.day.slice(0, 7);
+    let bucket = byMonth.get(month);
+    if (!bucket) {
+      bucket = [];
+      byMonth.set(month, bucket);
+    }
+    bucket.push(play);
+  }
+
   const scape: Omit<Yearscape, "years"> = {
     year,
     ...(await summarize(plays, earlierArtists)),
     months: Array.from({ length: 12 }, (_, i) => {
       const month = `${year}-${String(i + 1).padStart(2, "0")}`;
-      const monthPlays = plays.filter((play) => play.day.startsWith(month));
+      const monthPlays = byMonth.get(month) ?? [];
       return {
         month,
         plays: monthPlays.length,

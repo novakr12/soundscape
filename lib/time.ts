@@ -1,4 +1,4 @@
-export const TIME_ZONE = "Europe/Belgrade";
+export const TIME_ZONE = process.env.TIME_ZONE || "Europe/Belgrade";
 
 const dayFormat = new Intl.DateTimeFormat("en-CA", {
   timeZone: TIME_ZONE,

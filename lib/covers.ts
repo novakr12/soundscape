@@ -1,5 +1,5 @@
 import { fillArtistPhotos } from "./artist-photos";
-import { FULL_COVER } from "./cover-size";
+import { COVER_SIZES, FULL_COVER } from "./cover-size";
 import { fillCoversFromCoverArtArchive } from "./coverartarchive";
 import { matchMissingTracks, needsDeezer } from "./deezer";
 import { getValue, keys, setValue } from "./kv";
@@ -137,12 +137,19 @@ export async function getCover(trackId: string): Promise<Cover | null> {
   return cover === "busy" ? null : cover;
 }
 
+export function coverCacheKey(trackId: string, size = FULL_COVER) {
+  return size >= FULL_COVER ? trackId : `${trackId}@${size}`;
+}
+
+export function coverCacheKeys(trackId: string) {
+  return [trackId, ...COVER_SIZES.map((size) => `${trackId}@${size}`)];
+}
+
 export async function findCover(trackId: string, size = FULL_COVER): Promise<Cover | null | "busy"> {
-  const full = size >= FULL_COVER;
-  if (full) {
-    const [cached] = await sql`SELECT type, data FROM cover_cache WHERE track_id = ${trackId} AND expires_at > now()`;
-    if (cached) return { type: cached.type, data: cached.data };
-  }
+  const actualSize = size >= FULL_COVER ? FULL_COVER : size;
+  const cacheKey = coverCacheKey(trackId, actualSize);
+  const [cached] = await sql`SELECT type, data FROM cover_cache WHERE track_id = ${cacheKey} AND expires_at > now()`;
+  if (cached) return { type: cached.type, data: cached.data };
 
   const [row] = await sql`SELECT navidrome_cover, navidrome_user FROM tracks WHERE id = ${trackId}`;
   const coverArt: string | null = row?.navidrome_cover ?? null;
@@ -153,15 +160,15 @@ export async function findCover(trackId: string, size = FULL_COVER): Promise<Cov
   if (!server) return null;
   let cover: Cover | null;
   try {
-    cover = await fetchCoverArt(server, coverArt, full ? FULL_COVER : size);
+    cover = await fetchCoverArt(server, coverArt, actualSize);
   } catch (error) {
     if (error instanceof NavidromeBusy) return "busy";
     throw error;
   }
-  if (!cover || !full) return cover;
+  if (!cover) return null;
   await sql`
     INSERT INTO cover_cache (track_id, type, data, expires_at)
-    VALUES (${trackId}, ${cover.type}, ${cover.data}, ${new Date(Date.now() + CACHE_SECONDS * 1000)})
+    VALUES (${cacheKey}, ${cover.type}, ${cover.data}, ${new Date(Date.now() + CACHE_SECONDS * 1000)})
     ON CONFLICT (track_id) DO UPDATE SET type = excluded.type, data = excluded.data, expires_at = excluded.expires_at`;
   return cover;
 }
@@ -171,6 +178,6 @@ export async function forgetNavidromeCovers(userId: string) {
     UPDATE tracks SET cover = NULL, navidrome_cover = NULL, navidrome_user = NULL
     WHERE navidrome_user = ${userId}
     RETURNING id`;
-  const trackIds = rows.map((row) => row.id as string);
-  if (trackIds.length > 0) await sql`DELETE FROM cover_cache WHERE track_id = ANY(${trackIds})`;
+  const cacheKeys = rows.flatMap((row) => coverCacheKeys(row.id as string));
+  if (cacheKeys.length > 0) await sql`DELETE FROM cover_cache WHERE track_id = ANY(${cacheKeys})`;
 }

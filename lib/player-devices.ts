@@ -19,11 +19,57 @@ export type DeviceMessage =
 
 const LONGEST_MESSAGE = 7500;
 
+function clipUtf8(text: string, maxBytes: number) {
+  if (Buffer.byteLength(text, "utf8") <= maxBytes) return text;
+  let out = "";
+  let bytes = 0;
+  for (const ch of text) {
+    const len = Buffer.byteLength(ch, "utf8");
+    if (bytes + len > maxBytes) break;
+    out += ch;
+    bytes += len;
+  }
+  return out;
+}
+
 export function fitMessage(message: DeviceMessage) {
   const text = JSON.stringify(message);
-  if (Buffer.byteLength(text) <= LONGEST_MESSAGE || message.type !== "device") return text;
+  if (Buffer.byteLength(text, "utf8") <= LONGEST_MESSAGE || message.type !== "device") return text;
   const device = message.device;
-  return JSON.stringify({ ...message, device: { ...device, state: { ...device.state, upNext: [] } } });
+  const withoutQueue: DeviceMessage = { ...message, device: { ...device, state: { ...device.state, upNext: [] } } };
+  const trimmed = JSON.stringify(withoutQueue);
+  if (Buffer.byteLength(trimmed, "utf8") <= LONGEST_MESSAGE) return trimmed;
+  const track = device.state.track;
+  const compact: DeviceMessage = {
+    ...message,
+    device: {
+      ...device,
+      name: clipUtf8(device.name, 200),
+      state: {
+        ...device.state,
+        upNext: [],
+        track: track
+          ? {
+              ...track,
+              trackId: clipUtf8(track.trackId, 300),
+              title: clipUtf8(track.title, 300),
+              artist: clipUtf8(track.artist, 300),
+              album: track.album ? clipUtf8(track.album, 300) : null,
+              cover: null,
+              songId: track.songId ? clipUtf8(track.songId, 100) : null,
+              albumHref: null,
+              artistHref: null,
+            }
+          : null,
+      },
+    },
+  };
+  const compactText = JSON.stringify(compact);
+  if (Buffer.byteLength(compactText, "utf8") <= LONGEST_MESSAGE) return compactText;
+  return JSON.stringify({
+    ...compact,
+    device: { ...compact.device, state: { ...compact.device.state, track: null } },
+  });
 }
 
 async function tell(message: DeviceMessage) {

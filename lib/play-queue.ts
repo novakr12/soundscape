@@ -1,4 +1,6 @@
+import { isSongId } from "./catalog";
 import { type Gain, savedGain } from "./levelling";
+import { shuffled } from "./shuffle";
 
 export type Repeat = "off" | "all" | "one";
 
@@ -8,25 +10,16 @@ export function nextRepeat(repeat: Repeat): Repeat {
   return REPEAT_ORDER[(REPEAT_ORDER.indexOf(repeat) + 1) % REPEAT_ORDER.length];
 }
 
-function shuffle(items: number[], random: () => number) {
-  const out = [...items];
-  for (let i = out.length - 1; i > 0; i--) {
-    const j = Math.floor(random() * (i + 1));
-    [out[i], out[j]] = [out[j], out[i]];
-  }
-  return out;
-}
-
 export function inOrder(length: number) {
   return Array.from({ length }, (_, i) => i);
 }
 
 export function shuffleAll(length: number, random = Math.random) {
-  return shuffle(inOrder(length), random);
+  return shuffled(inOrder(length), random);
 }
 
 export function shuffleAfter(order: number[], position: number, random = Math.random) {
-  return [...order.slice(0, position + 1), ...shuffle(order.slice(position + 1), random)];
+  return [...order.slice(0, position + 1), ...shuffled(order.slice(position + 1), random)];
 }
 
 export function unshuffle(order: number[], position: number) {
@@ -85,8 +78,6 @@ function savedDuration(value: unknown) {
 
 const ALBUM_HREF = /^\/(album\/[^/?#]+|music\?album=[A-Za-z0-9_-]+)$/;
 
-const SONG_ID = /^[A-Za-z0-9_-]{1,64}$/;
-
 function isTrack(value: unknown): value is SavedTrack {
   if (typeof value !== "object" || value === null) return false;
   const track = value as Record<string, unknown>;
@@ -95,7 +86,7 @@ function isTrack(value: unknown): value is SavedTrack {
     typeof track.title === "string" &&
     typeof track.artist === "string" &&
     (track.cover === undefined || typeof track.cover === "string") &&
-    (track.songId === undefined || (typeof track.songId === "string" && SONG_ID.test(track.songId))) &&
+    (track.songId === undefined || (typeof track.songId === "string" && isSongId(track.songId))) &&
     (track.newSong === undefined || typeof track.newSong === "boolean") &&
     (track.album === undefined || (typeof track.album === "string" && track.album.length <= 300)) &&
     (track.albumHref === undefined || (typeof track.albumHref === "string" && ALBUM_HREF.test(track.albumHref)))

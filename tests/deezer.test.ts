@@ -138,3 +138,24 @@ describe("normalize", () => {
     assert.equal(normalize("Beyoncé"), "beyonce");
   });
 });
+
+describe("getPreviewUrl", () => {
+  it("retries once when Deezer reports quota exceeded", async () => {
+    const prevGap = process.env.DEEZER_REQUEST_GAP_MS;
+    process.env.DEEZER_REQUEST_GAP_MS = "1";
+    try {
+      let calls = 0;
+      mock.method(globalThis, "fetch", async () => {
+        calls++;
+        if (calls === 1) return Response.json({ error: { code: 4, message: "Quota limit exceeded" } });
+        return Response.json({ preview: "https://cdns-preview.dzcdn.net/stream/sample.mp3" });
+      });
+      const { getPreviewUrl } = await import("../lib/deezer");
+      assert.equal(await getPreviewUrl(42), "https://cdns-preview.dzcdn.net/stream/sample.mp3");
+      assert.equal(calls, 2);
+    } finally {
+      if (prevGap === undefined) delete process.env.DEEZER_REQUEST_GAP_MS;
+      else process.env.DEEZER_REQUEST_GAP_MS = prevGap;
+    }
+  });
+});

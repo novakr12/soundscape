@@ -4,6 +4,8 @@ import type { AddressInfo } from "node:net";
 import { after, before, describe, it } from "node:test";
 import { closeConnections, createTestUser, removeTestUser, testUser } from "./helpers";
 
+process.env.AUTH_SECRET ??= "test-only-secret";
+
 const user = testUser();
 const other = testUser();
 const received: { auth?: string; body: unknown }[] = [];

@@ -30,12 +30,12 @@ function duration(ms: number) {
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  const track = await getTrack(decodeURIComponent((await params).trackId));
+  const track = await getTrack((await params).trackId);
   return { title: track ? `${track.title} · ${track.artist} · Soundscape` : "Soundscape" };
 }
 
 export default async function TrackPage({ params, searchParams }: Props) {
-  const trackId = decodeURIComponent((await params).trackId);
+  const trackId = (await params).trackId;
   const autoplay = (await searchParams)?.play === "1";
   const [track, viewer] = await Promise.all([getTrack(trackId), currentUserId()]);
   if (!track) {

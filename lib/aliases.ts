@@ -1,9 +1,13 @@
+import type { TransactionSql } from "postgres";
 import { artistIdFor, trackIdFor } from "./catalog";
 import { sql } from "./postgres";
 
 export type Resolved = { trackId: string; artistId: string };
 
-export async function resolveTracks(songs: { artist: string; title: string }[]): Promise<Resolved[]> {
+export async function resolveTracks(
+  songs: { artist: string; title: string }[],
+  db: typeof sql | TransactionSql = sql,
+): Promise<Resolved[]> {
   const raw = songs.map((song) => {
     const artistId = artistIdFor(song.artist);
     const trackId = trackIdFor(song.artist, song.title);
@@ -12,7 +16,7 @@ export async function resolveTracks(songs: { artist: string; title: string }[]):
   if (raw.length === 0) return [];
   const artistAliases = new Map(
     (
-      await sql`SELECT alias, artist_id FROM artist_aliases WHERE alias = ANY(${[...new Set(raw.map((r) => r.artistId))]})`
+      await db`SELECT alias, artist_id FROM artist_aliases WHERE alias = ANY(${[...new Set(raw.map((r) => r.artistId))]})`
     ).map((row) => [row.alias as string, row.artist_id as string]),
   );
   const candidates = raw.map((r) => {
@@ -21,7 +25,7 @@ export async function resolveTracks(songs: { artist: string; title: string }[]):
   });
   const trackAliases = new Map(
     (
-      await sql`
+      await db`
         SELECT x.alias, x.track_id, t.artist_id
         FROM track_aliases x JOIN tracks t ON t.id = x.track_id
         WHERE x.alias = ANY(${[...new Set([...raw, ...candidates].map((r) => r.trackId))]})`

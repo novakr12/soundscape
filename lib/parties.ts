@@ -188,13 +188,28 @@ async function hostDevice(party: PartyRow): Promise<Device | null> {
 }
 
 async function noteSongs(party: PartyRow, songIds: (string | null | undefined)[]) {
-  const fresh = songIds.filter(
-    (id): id is string => Boolean(id && isSongId(id)) && !party.songs.includes(id as string),
-  );
+  const fresh = [...new Set(songIds.filter((id): id is string => Boolean(id && isSongId(id))))];
   if (fresh.length === 0) return;
-  const songs = [...party.songs, ...fresh].slice(-MOST_SONGS);
-  party.songs = songs;
-  await sql`UPDATE parties SET songs = ${songs} WHERE id = ${party.id}`;
+  const [row] = await sql`
+    UPDATE parties
+    SET songs = (
+      SELECT coalesce(array_agg(song ORDER BY pos), '{}')
+      FROM (
+        SELECT song, pos
+        FROM (
+          SELECT song, pos FROM unnest(parties.songs) WITH ORDINALITY AS existing(song, pos)
+          UNION ALL
+          SELECT song, coalesce(array_length(parties.songs, 1), 0) + pos
+          FROM unnest(${fresh}::text[]) WITH ORDINALITY AS added(song, pos)
+          WHERE NOT (song = ANY(parties.songs))
+        ) combined
+        ORDER BY pos DESC
+        LIMIT ${MOST_SONGS}
+      ) trimmed
+    )
+    WHERE id = ${party.id}
+    RETURNING songs`;
+  if (row) party.songs = (row.songs as string[]) ?? [];
 }
 
 async function bringGuest(party: PartyRow, member: MemberRow, device: Device | null, now: number) {

@@ -1,13 +1,16 @@
 import { request } from "./http";
+import type { JobResult } from "./jobs";
 import { deleteValues, takeLock } from "./kv";
 import { advanceImportState } from "./listenbrainz";
 import { type JSONValue, sql } from "./postgres";
+import { decrypt, encrypt } from "./servers";
 
 const RELAY_URL = process.env.LISTENBRAINZ_RELAY_URL ?? "https://api.listenbrainz.org/1/";
 const MAX_QUEUE = 10_000;
 const FLUSH_BATCH = 50;
 const FLUSH_LOCK = "relay:flush";
 const FLUSH_LOCK_SECONDS = 10 * 60;
+const RELAY_PURPOSE = "relay";
 
 export type Relay = {
   token: string;
@@ -23,9 +26,17 @@ type SendResult = "ok" | "retry" | "rejected";
 
 export class RelayError extends Error {}
 
+export function readRelayToken(stored: string): string {
+  try {
+    return decrypt(stored, RELAY_PURPOSE);
+  } catch {
+    return stored;
+  }
+}
+
 export async function getRelay(userId: string): Promise<Relay | null> {
   const [row] = await sql`SELECT listenbrainz_token, listenbrainz_user FROM relay_settings WHERE user_id = ${userId}`;
-  return row ? { token: row.listenbrainz_token, listenBrainzUser: row.listenbrainz_user } : null;
+  return row ? { token: readRelayToken(row.listenbrainz_token), listenBrainzUser: row.listenbrainz_user } : null;
 }
 
 export async function saveRelay(userId: string, token: string): Promise<Relay> {
@@ -42,7 +53,8 @@ export async function saveRelay(userId: string, token: string): Promise<Relay> {
   if (!body?.valid || !body.user_name) throw new RelayError("ListenBrainz did not accept that token.");
 
   await sql`
-    INSERT INTO relay_settings (user_id, listenbrainz_token, listenbrainz_user) VALUES (${userId}, ${token}, ${body.user_name})
+    INSERT INTO relay_settings (user_id, listenbrainz_token, listenbrainz_user)
+    VALUES (${userId}, ${encrypt(token, RELAY_PURPOSE)}, ${body.user_name})
     ON CONFLICT (user_id) DO UPDATE SET listenbrainz_token = excluded.listenbrainz_token,
       listenbrainz_user = excluded.listenbrainz_user, created_at = now()`;
   return { token, listenBrainzUser: body.user_name };
@@ -77,21 +89,28 @@ async function delivered(userId: string, relay: Relay, body: Submission) {
   await advanceImportState(userId, relay.listenBrainzUser, new Date(newest * 1000));
 }
 
-async function flushRelayQueue() {
-  if (!(await takeLock(FLUSH_LOCK, FLUSH_LOCK_SECONDS))) return;
+export async function flushRelayQueue(): Promise<JobResult> {
+  if (!(await takeLock(FLUSH_LOCK, FLUSH_LOCK_SECONDS))) return { checked: 0, found: 0 };
+  let checked = 0;
+  let found = 0;
   try {
     for (let i = 0; i < FLUSH_BATCH; i++) {
       const [job] = await sql`SELECT id, user_id, body FROM relay_queue ORDER BY id LIMIT 1`;
-      if (!job) return;
+      if (!job) break;
+      checked++;
       const relay = await getRelay(job.user_id);
       const result = relay ? await send(relay.token, job.body) : "rejected";
-      if (result === "retry") return;
+      if (result === "retry") return { checked, found, unreachable: true, reason: "ListenBrainz was unreachable" };
       await sql`DELETE FROM relay_queue WHERE id = ${job.id}`;
-      if (result === "ok") await delivered(job.user_id, relay!, job.body);
+      if (result === "ok") {
+        found++;
+        await delivered(job.user_id, relay!, job.body);
+      }
     }
   } finally {
     await deleteValues(FLUSH_LOCK);
   }
+  return { checked, found };
 }
 
 export async function relaySubmission(userId: string, body: Submission) {
@@ -104,7 +123,15 @@ export async function relaySubmission(userId: string, body: Submission) {
     await flushRelayQueue();
   } else if (result === "retry" && body.listen_type !== "playing_now") {
     await sql`INSERT INTO relay_queue (user_id, body) VALUES (${userId}, ${sql.json(body as JSONValue)})`;
-    await sql`DELETE FROM relay_queue WHERE id <= (SELECT max(id) FROM relay_queue) - ${MAX_QUEUE}`;
+    await sql`
+      DELETE FROM relay_queue
+      WHERE user_id = ${userId}
+        AND id IN (
+          SELECT id FROM relay_queue
+          WHERE user_id = ${userId}
+          ORDER BY id DESC
+          OFFSET ${MAX_QUEUE}
+        )`;
   }
 }
 

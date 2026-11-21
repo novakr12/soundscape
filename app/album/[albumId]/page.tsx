@@ -15,12 +15,12 @@ function plural(count: number, word: string) {
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  const album = await getAlbum(decodeURIComponent((await params).albumId), null);
+  const album = await getAlbum((await params).albumId, null);
   return { title: album ? `${album.title} · ${album.artist} · Soundscape` : "Soundscape" };
 }
 
 export default async function AlbumPage({ params }: Props) {
-  const albumId = decodeURIComponent((await params).albumId);
+  const albumId = (await params).albumId;
   const [viewer] = await Promise.all([currentUserId(), ensureTracklist(albumId)]);
   const album = await getAlbum(albumId, viewer);
   if (!album) notFound();

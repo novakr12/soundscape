@@ -162,11 +162,22 @@ describe("readAndroidPush", () => {
     assert.equal(pushed?.settings.downloads, "12 songs · 84 MB");
     assert.equal(pushed?.settings.extras, false);
     assert.equal(pushed?.settings.update, null);
+    assert.equal(pushed?.settings.discord_known, false);
+    assert.equal(pushed?.settings.discord, false);
+    assert.equal(pushed?.settings.discord_app_id, null);
   });
 
-  it("reads the recap, streak and update switches from newer apps", () => {
+  it("reads the recap, streak, update and Discord switches from newer apps", () => {
     const pushed = readAndroidPush({
-      settings: { ...android, weekly_recap: false, streak_reminder: true, update_notice: true, update: "0.7.0" },
+      settings: {
+        ...android,
+        weekly_recap: false,
+        streak_reminder: true,
+        update_notice: true,
+        update: "0.7.0",
+        discord: true,
+        discord_app_id: "1234567890123456789",
+      },
       error: null,
     });
     assert.equal(pushed?.settings.extras, true);
@@ -174,6 +185,9 @@ describe("readAndroidPush", () => {
     assert.equal(pushed?.settings.streak_reminder, true);
     assert.equal(pushed?.settings.update_notice, true);
     assert.equal(pushed?.settings.update, "0.7.0");
+    assert.equal(pushed?.settings.discord_known, true);
+    assert.equal(pushed?.settings.discord, true);
+    assert.equal(pushed?.settings.discord_app_id, "1234567890123456789");
   });
 
   it("keeps the desktop and Android sections apart", () => {

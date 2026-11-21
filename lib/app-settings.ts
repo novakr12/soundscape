@@ -165,6 +165,7 @@ export const ANDROID_OPTIONS = [
   "weekly_recap",
   "streak_reminder",
   "update_notice",
+  "discord",
 ] as const;
 
 export type AndroidOption = (typeof ANDROID_OPTIONS)[number];
@@ -177,12 +178,15 @@ export type AndroidSettings = Record<AndroidOption, boolean> & {
   downloads: string | null;
   update: string | null;
   extras: boolean;
+  discord_known: boolean;
+  discord_app_id: string | null;
 };
 
 export type AndroidPush = { settings: AndroidSettings; error: string | null };
 
 export type AndroidCommand =
   | { do: "option"; name: AndroidOption; value: boolean }
+  | { do: "discord-app"; id: string }
   | { do: "connect" }
   | { do: "disconnect" }
   | { do: "change-server" }
@@ -211,6 +215,9 @@ export function readAndroidPush(value: unknown): AndroidPush | null {
       update_notice: raw.update_notice !== false,
       update: text(raw.update),
       extras: typeof raw.weekly_recap === "boolean",
+      discord: raw.discord === true,
+      discord_known: typeof raw.discord === "boolean",
+      discord_app_id: text(raw.discord_app_id),
     },
     error: text(value.error),
   };

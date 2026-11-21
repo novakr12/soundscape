@@ -103,7 +103,7 @@ export async function notifyFollow(follower: string, followee: string) {
   return add({ userId: followee, kind: "follow", otherUser: follower, dedupe: `follow:${follower}` });
 }
 
-const visible = sql`(n.other_user IS NULL OR n.kind = 'follow' OR NOT EXISTS (
+const visible = sql`(n.other_user IS NULL OR n.kind IN ('follow', 'party') OR NOT EXISTS (
   SELECT 1 FROM users u WHERE u.username = n.other_user AND u.is_private))`;
 
 export async function unreadCount(userId: string): Promise<number> {

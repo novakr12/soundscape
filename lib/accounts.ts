@@ -17,6 +17,7 @@ export async function deleteAccount(userId: string): Promise<number> {
     keys.coverProgress(userId),
     keys.lastfmProgress(userId),
     keys.listeningRecord(userId),
+    keys.leaderboardAbove(userId),
   );
   await deleteValuesStartingWith(`yearscape:${userId}:`);
   return plays;

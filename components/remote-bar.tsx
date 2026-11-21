@@ -12,7 +12,7 @@ import {
 } from "@/lib/devices";
 import { nextRepeat, SEEK_STEP_SECONDS } from "@/lib/play-queue";
 import CoverPicture from "./cover-picture";
-import { clock, KindIcon, useLater } from "./devices";
+import { clock, KindIcon, useLater, useResetTimer } from "./devices";
 import { ArtistLink, SongLink } from "./music-links";
 import {
   DevicesIcon,
@@ -84,6 +84,7 @@ export default function RemoteBar({
   const shuffle = fresh?.shuffle ?? state.shuffle;
   const repeat = fresh?.repeat ?? state.repeat;
 
+  const volumeReset = useResetTimer(2000);
   const seekLater = useLater((value) => {
     send({ do: "seek", time: value });
     setGuess({ playing: shown.playing, time: value, since: Date.now() });
@@ -91,7 +92,7 @@ export default function RemoteBar({
   });
   const volumeLater = useLater((value) => {
     send({ do: "volume", volume: value });
-    setTimeout(() => setVolume(null), 2000);
+    volumeReset.schedule(() => setVolume(null));
   });
 
   function toggle() {
@@ -316,6 +317,7 @@ export default function RemoteBar({
             style={{ "--fill": `${Math.round(shownVolume * 100)}%` } as React.CSSProperties}
             onChange={(event) => {
               const value = Number(event.target.value);
+              volumeReset.cancel();
               setVolume(value);
               volumeLater(value);
             }}

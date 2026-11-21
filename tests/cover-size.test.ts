@@ -45,4 +45,11 @@ describe("cover sizes", () => {
     assert.equal(readCoverSize(null), 300);
     assert.equal(readCoverSize("-1"), 300);
   });
+
+  it("keys cached covers by size so resized covers are cached too", async () => {
+    const { coverCacheKey, coverCacheKeys } = await import("../lib/covers");
+    assert.equal(coverCacheKey("track-1", 300), "track-1");
+    assert.equal(coverCacheKey("track-1", 96), "track-1@96");
+    assert.deepEqual(coverCacheKeys("track-1"), ["track-1", "track-1@96", "track-1@160", "track-1@256"]);
+  });
 });

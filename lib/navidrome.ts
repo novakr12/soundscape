@@ -1,8 +1,10 @@
 import { createHash, randomBytes } from "node:crypto";
-import { artistIdFor, slug, songTitle } from "./catalog";
+import { artistIdFor, isSongId, mainArtist, slug, songTitle } from "./catalog";
 import { request } from "./http";
 import { sql } from "./postgres";
 import { decrypt, encrypt, serverUrl } from "./servers";
+
+export { isSongId };
 
 const API_VERSION = "1.16.1";
 const CLIENT = "soundscape";
@@ -105,7 +107,7 @@ export async function removeNavidrome(userId: string) {
 }
 
 function artistIds(artist: string) {
-  return new Set([artist, artist.split(/\s*(?:,|&|;|\/|\bx\b)\s*/i)[0]].map(artistIdFor));
+  return new Set([artist, mainArtist(artist)].map(artistIdFor));
 }
 
 function isSameSong(song: LibrarySong, candidate: SubsonicSong) {
@@ -144,12 +146,7 @@ async function findInLibrary(server: Navidrome, song: LibrarySong): Promise<stri
   return (await findLibrarySong(server, song))?.id ?? null;
 }
 
-const SONG_ID = /^[A-Za-z0-9_-]{1,64}$/;
 const PASSED_HEADERS = ["content-type", "content-length", "content-range", "accept-ranges"];
-
-export function isSongId(id: string) {
-  return SONG_ID.test(id);
-}
 
 const REMEMBER_FOUND_MS = 10 * 60_000;
 const REMEMBER_MISSING_MS = 2 * 60_000;

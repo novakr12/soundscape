@@ -31,7 +31,7 @@ function plural(count: number, word: string) {
 }
 
 export default async function ProfilePage({ params, searchParams }: Props) {
-  const username = decodeURIComponent((await params).username).toLowerCase();
+  const username = (await params).username.toLowerCase();
   const [exists, viewer, hidden] = await Promise.all([userExists(username), currentUserId(), isPrivate(username)]);
   if (!exists) notFound();
 

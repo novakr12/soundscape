@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef, useState } from "react";
 import type { AndroidCommand, AndroidOption, AndroidPush } from "@/lib/app-settings";
 
 function Toggle({ label, checked, onChange }: { label: string; checked: boolean; onChange: (value: boolean) => void }) {
@@ -22,6 +23,13 @@ export default function AndroidSettings({
   change: (name: AndroidOption, value: boolean) => void;
 }) {
   const settings = pushed.settings;
+  const [discordId, setDiscordId] = useState(settings.discord_app_id ?? "");
+  const typing = useRef(false);
+
+  useEffect(() => {
+    if (!typing.current) setDiscordId(settings.discord_app_id ?? "");
+  }, [settings.discord_app_id]);
+
   const option = (name: AndroidOption) => (value: boolean) => {
     send({ do: "option", name, value });
     change(name, value);
@@ -128,6 +136,51 @@ export default function AndroidSettings({
         The app checks every 15 minutes while the phone is online.
         {!settings.connected && " Needs the app to be connected."}
       </p>
+
+      {settings.discord_known && (
+        <>
+          <h3>Discord</h3>
+          <Toggle
+            label="Show what I'm playing in my Discord status"
+            checked={settings.discord}
+            onChange={option("discord")}
+          />
+          <form
+            className="app-row"
+            onSubmit={(event) => {
+              event.preventDefault();
+              typing.current = false;
+              send({ do: "discord-app", id: discordId });
+            }}
+          >
+            <label>
+              Discord application ID{" "}
+              <input
+                value={discordId}
+                inputMode="numeric"
+                autoComplete="off"
+                spellCheck={false}
+                placeholder="1234567890123456789"
+                onFocus={() => {
+                  typing.current = true;
+                }}
+                onBlur={() => {
+                  typing.current = false;
+                }}
+                onChange={(event) => setDiscordId(event.target.value)}
+              />
+            </label>
+            <button type="submit" className="secondary">
+              Save
+            </button>
+          </form>
+          <p className="muted">
+            Discord shows the name of an application of your own: create one called &ldquo;Soundscape&rdquo; at
+            discord.com/developers/applications and paste its Application ID here. Discord has to be installed and
+            signed in on this phone.
+          </p>
+        </>
+      )}
 
       {settings.extras && (
         <>

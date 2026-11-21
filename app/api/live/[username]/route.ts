@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 type Props = { params: Promise<{ username: string }> };
 
 export async function GET(request: Request, { params }: Props) {
-  const username = decodeURIComponent((await params).username).toLowerCase();
+  const username = (await params).username.toLowerCase();
   const [exists, viewer, hidden] = await Promise.all([userExists(username), currentUserId(), isPrivate(username)]);
   if (!exists || (hidden && viewer !== username)) return new Response(null, { status: 404 });
 

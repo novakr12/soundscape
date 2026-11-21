@@ -215,6 +215,27 @@ describe("device helpers", () => {
       fitMessage({ user: "u", type: "device", device: { ...device, state: readDeviceState({ track: song }) } }),
     );
     assert.equal(short.device.state.track.trackId, "t1");
+
+    const wide = "🎵".repeat(1200);
+    const hugeTrack = {
+      trackId: wide,
+      title: wide,
+      artist: wide,
+      album: wide,
+      cover: `https://example.com/${"a".repeat(3000)}`,
+      songId: "song1",
+      albumHref: `/album/${"b".repeat(2000)}`,
+      artistHref: `/artist/${"c".repeat(2000)}`,
+    };
+    const fitted = fitMessage({
+      user: "u",
+      type: "device",
+      device: { id: "abcdefgh12", name: wide, kind: "browser", at: 0, state: { ...state, track: hugeTrack } },
+    });
+    assert.ok(Buffer.byteLength(fitted, "utf8") <= 7500, `got ${Buffer.byteLength(fitted, "utf8")} bytes`);
+    const parsed = JSON.parse(fitted);
+    assert.equal(parsed.device.state.track.cover, null);
+    assert.ok(parsed.device.state.track.title.length > 0);
   });
 
   it("describes what plays", () => {

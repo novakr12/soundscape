@@ -97,11 +97,22 @@ export async function getLastBackup(): Promise<Backup | null> {
 
 export type JobStatus = { name: string; label: string; everyMinutes: number; last: JobRun | null; waiting?: number };
 
+export function formatJobInterval(everyMinutes: number) {
+  if (everyMinutes < 60) return `every ${everyMinutes} min`;
+  if (everyMinutes === 60) return "every hour";
+  if (everyMinutes % 60 === 0) return `every ${everyMinutes / 60} hours`;
+  const hours = Math.floor(everyMinutes / 60);
+  const minutes = everyMinutes % 60;
+  return `every ${hours} h ${minutes} min`;
+}
+
 const JOBS = [
   { name: "genres", label: "Genres from MusicBrainz", everyMinutes: 60 },
   { name: "artist-photos", label: "Artist photos from Deezer", everyMinutes: 60 },
   { name: "artist-info", label: "Artist info from MusicBrainz and Wikipedia", everyMinutes: 60 },
   { name: "notifications", label: "Notifications for milestones and leaderboard passes", everyMinutes: 5 },
+  { name: "lastfm-scrobbles", label: "Queued scrobbles to Last.fm", everyMinutes: 5 },
+  { name: "relay-queue", label: "Queued listens to ListenBrainz", everyMinutes: 5 },
   { name: "new-releases", label: "New releases from MusicBrainz", everyMinutes: 360 },
   { name: "cleanup", label: "Removing expired sessions and caches", everyMinutes: 10 },
 ];
@@ -116,6 +127,7 @@ export async function getJobStatus(): Promise<{ jobs: JobStatus[]; relayQueued: 
       SELECT count(*) FILTER (WHERE genres_checked_at IS NULL) AS genres,
              count(*) FILTER (WHERE photo_checked_at IS NULL) AS photos,
              count(*) FILTER (WHERE mbid IS NOT NULL AND info_checked_at IS NULL) AS info,
+             (SELECT count(*) FROM lastfm_queue) AS lastfm,
              (SELECT count(*) FROM relay_queue) AS relay
       FROM played`,
     Promise.all(JOBS.map((job) => lastRun(job.name))),
@@ -124,6 +136,8 @@ export async function getJobStatus(): Promise<{ jobs: JobStatus[]; relayQueued: 
     genres: waiting.genres,
     "artist-photos": waiting.photos,
     "artist-info": waiting.info,
+    "lastfm-scrobbles": waiting.lastfm,
+    "relay-queue": waiting.relay,
   };
   return {
     jobs: JOBS.map((job, i) => ({ ...job, last: runs[i], waiting: backlog[job.name] })),

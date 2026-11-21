@@ -1,5 +1,6 @@
 import type { TransactionSql } from "postgres";
 import { artistIdFor, slug, songTitle } from "./catalog";
+import { coverCacheKeys, coverUrl } from "./covers";
 import { sql } from "./postgres";
 
 const MAX_NAME = 300;
@@ -17,20 +18,24 @@ function cleanName(text: string) {
 
 export async function moveTrack(tx: Tx, fromId: string, intoId: string, artistId: string, title?: string) {
   if (fromId === intoId) return;
+  const fromCover = coverUrl(fromId);
+  const intoCover = coverUrl(intoId);
   await tx`
     INSERT INTO tracks (id, title, artist_id, album_id, album_source, track_number, duration_ms, mbid, cover,
                         deezer_id, deezer_missing, deezer_album_missing, navidrome_cover, navidrome_user,
                         navidrome_checked_at, cover_art_checked_at, cover_art_release_group, apple_preview,
                         apple_checked_at)
     SELECT ${intoId}, coalesce(${title ?? null}, title), ${artistId}, album_id, album_source, track_number,
-           duration_ms, mbid, cover, deezer_id, deezer_missing, deezer_album_missing, navidrome_cover,
-           navidrome_user, navidrome_checked_at, cover_art_checked_at, cover_art_release_group, apple_preview,
-           apple_checked_at
+           duration_ms, mbid, CASE WHEN cover = ${fromCover} THEN ${intoCover} ELSE cover END, deezer_id,
+           deezer_missing, deezer_album_missing, navidrome_cover, navidrome_user, navidrome_checked_at,
+           cover_art_checked_at, cover_art_release_group, apple_preview, apple_checked_at
     FROM tracks WHERE id = ${fromId}
     ON CONFLICT (id) DO NOTHING`;
   await tx`
     UPDATE tracks target SET
-      cover = coalesce(target.cover, other.cover),
+      cover = coalesce(target.cover, CASE WHEN other.cover = ${fromCover} THEN ${intoCover} ELSE other.cover END),
+      navidrome_cover = coalesce(target.navidrome_cover, other.navidrome_cover),
+      navidrome_user = CASE WHEN target.navidrome_cover IS NULL THEN other.navidrome_user ELSE target.navidrome_user END,
       deezer_id = coalesce(target.deezer_id, other.deezer_id),
       duration_ms = coalesce(target.duration_ms, other.duration_ms),
       mbid = coalesce(target.mbid, other.mbid),
@@ -50,7 +55,16 @@ export async function moveTrack(tx: Tx, fromId: string, intoId: string, artistId
     WHERE l.track_id = ${fromId}
       AND NOT EXISTS (SELECT 1 FROM loved_tracks o WHERE o.user_id = l.user_id AND o.track_id = ${intoId})`;
   await tx`UPDATE track_aliases SET track_id = ${intoId} WHERE track_id = ${fromId}`;
-  await tx`DELETE FROM cover_cache WHERE track_id = ${fromId}`;
+  const fromCacheKeys = coverCacheKeys(fromId);
+  const intoCacheKeys = coverCacheKeys(intoId);
+  for (let i = 0; i < fromCacheKeys.length; i++) {
+    await tx`
+      INSERT INTO cover_cache (track_id, type, data, expires_at)
+      SELECT ${intoCacheKeys[i]}, type, data, expires_at
+      FROM cover_cache WHERE track_id = ${fromCacheKeys[i]}
+      ON CONFLICT (track_id) DO NOTHING`;
+  }
+  await tx`DELETE FROM cover_cache WHERE track_id = ANY(${fromCacheKeys})`;
   await tx`DELETE FROM tracks WHERE id = ${fromId}`;
   await tx`
     INSERT INTO track_aliases (alias, track_id) VALUES (${fromId}, ${intoId})

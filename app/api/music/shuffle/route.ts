@@ -3,20 +3,12 @@ import { toMusicSongs } from "@/lib/music";
 import { getNavidrome, NavidromeError } from "@/lib/navidrome";
 import { getLibrarySongs, getRandomSongs } from "@/lib/navidrome-library";
 import { currentUserId } from "@/lib/session";
+import { shuffled } from "@/lib/shuffle";
 
 export const dynamic = "force-dynamic";
 
 const RANDOM_SONGS = 200;
 const MOST_FOUND = 500;
-
-function shuffled<T>(items: T[]) {
-  const out = [...items];
-  for (let i = out.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [out[i], out[j]] = [out[j], out[i]];
-  }
-  return out;
-}
 
 export async function GET(request: Request) {
   const userId = await currentUserId();

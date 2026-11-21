@@ -22,12 +22,12 @@ function plural(count: number, word: string) {
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  const artist = await getArtist(decodeURIComponent((await params).artistId));
+  const artist = await getArtist((await params).artistId);
   return { title: artist ? `${artist.name} · Soundscape` : "Soundscape" };
 }
 
 export default async function ArtistPage({ params }: Props) {
-  const artistId = decodeURIComponent((await params).artistId);
+  const artistId = (await params).artistId;
   const [artist, viewer] = await Promise.all([getArtist(artistId), currentUserId()]);
   if (!artist) {
     const target = await artistAlias(artistId);

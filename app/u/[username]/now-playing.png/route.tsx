@@ -16,7 +16,7 @@ const THEMES = {
 };
 
 export async function GET(request: Request, { params }: { params: Promise<{ username: string }> }) {
-  const username = decodeURIComponent((await params).username).toLowerCase();
+  const username = (await params).username.toLowerCase();
   const theme = THEMES[new URL(request.url).searchParams.get("theme") === "light" ? "light" : "dark"];
   const playing = await nowPlaying(username);
   const song = playing.state === "now" || playing.state === "last" ? playing : null;
