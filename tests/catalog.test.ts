@@ -73,4 +73,11 @@ describe("trackIdFor", () => {
     assert.equal(trackIdFor("Radiohead", "Creep"), "radiohead-creep");
     assert.equal(trackIdFor("Beyoncé", "Don't Hurt Yourself"), "beyonce-dont-hurt-yourself");
   });
+
+  it("keeps letters from every alphabet", () => {
+    assert.equal(trackIdFor("山下達郎", "あしおと"), "山下達郎-あしおと");
+    assert.notEqual(trackIdFor("山下達郎", "あしおと"), trackIdFor("大貫妙子", "あしおと"));
+    assert.equal(trackIdFor("방탄소년단", "Dynamite"), "방탄소년단-dynamite");
+    assert.equal(trackIdFor("ＹＥＬＬＯＷ", "ばか"), "yellow-ばか");
+  });
 });

@@ -50,7 +50,7 @@ import {
   unshuffle,
 } from "@/lib/play-queue";
 import { DEFAULT_OPTIONS, type PlayerOptions, watchOptions } from "@/lib/player-options";
-import type { RadioSeed } from "@/lib/radio";
+import type { RadioMore, RadioSeed } from "@/lib/radio";
 import { DevicesPanel, type LocalPlayer, PlayingElsewhere, useDeviceLink } from "./devices";
 import { type PartyControls, useParty } from "./listening-party";
 import LyricsPanel from "./lyrics-panel";
@@ -97,6 +97,8 @@ type PlayerContextValue = {
 
 const SETTINGS_KEY = "soundscape:player";
 const RADIO_REFILL_AT = 3;
+const RADIO_REMEMBERS = 500;
+const RADIO_RETRY_MS = 20_000;
 const FADE_OUT_MS = 10_000;
 const FADE_STEPS = 40;
 const FADE_TICK_MS = 100;
@@ -194,6 +196,9 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
   const [options, setOptions] = useState<PlayerOptions>(DEFAULT_OPTIONS);
   const [radio, setRadio] = useState<RadioSeed | null>(null);
   const radioLoading = useRef(false);
+  const gaveUpOn = useRef<string | null>(null);
+  const radioNow = useRef<RadioSeed | null>(null);
+  radioNow.current = radio;
   const [sleep, setSleep] = useState<Sleep>(null);
   const [fadeIn, setFadeIn] = useState(1);
   const fading = useRef(false);
@@ -985,11 +990,11 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
     arrange(nextTracks, nextOrder, positionRef.current);
   }
 
-  async function radioBatch(seed: RadioSeed, exclude: string[]) {
+  async function radioBatch(seed: RadioSeed, exclude: string[], more: RadioMore = {}) {
     const response = await fetch("/api/radio", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ ...seed, exclude }),
+      body: JSON.stringify({ ...seed, ...more, exclude }),
     });
     const answer = (await response.json().catch(() => null)) as { songs?: PlayerTrack[]; error?: string } | null;
     if (!response.ok) throw new Error(answer?.error ?? "The radio couldn't start");
@@ -1011,12 +1016,31 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
     }
   }
 
+  async function moreRadio(seed: RadioSeed) {
+    const queued = tracksRef.current.slice(-RADIO_REMEMBERS);
+    const exclude = queued.flatMap((track) => (track.songId ? [track.songId] : []));
+    const skipTracks = queued.map((track) => track.trackId);
+    const songs = await radioBatch(seed, exclude, { continuing: true, skipTracks });
+    if (songs.length > 0) return songs;
+    const now = tracksRef.current[orderRef.current[positionRef.current]];
+    if (!now) return songs;
+    return radioBatch({ trackId: now.trackId }, exclude, {
+      artist: now.artist,
+      title: now.title,
+      continuing: true,
+      skipTracks,
+    });
+  }
+
   function refill(seed: RadioSeed) {
     radioLoading.current = true;
-    const exclude = tracksRef.current.flatMap((track) => (track.songId ? [track.songId] : []));
-    radioBatch(seed, exclude)
+    moreRadio(seed)
       .then((songs) => {
-        if (songs.length === 0) return setRadio(null);
+        if (songs.length === 0) {
+          gaveUpOn.current = tracksRef.current[orderRef.current[positionRef.current]]?.trackId ?? null;
+          return setRadio(null);
+        }
+        gaveUpOn.current = null;
         const from = tracksRef.current.length;
         arrange(
           [...tracksRef.current, ...songs],
@@ -1024,7 +1048,11 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
           positionRef.current,
         );
       })
-      .catch(() => {})
+      .catch(() => {
+        setTimeout(() => {
+          if (radioNow.current === seed && !radioLoading.current) skip.current.refill(seed);
+        }, RADIO_RETRY_MS);
+      })
       .finally(() => {
         radioLoading.current = false;
       });
@@ -1037,7 +1065,9 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
       return;
     }
     const last = queue[position];
-    if (options.autoplay && last && repeat === "off") setRadio({ trackId: last.trackId });
+    if (options.autoplay && last && repeat === "off" && gaveUpOn.current !== last.trackId) {
+      setRadio({ trackId: last.trackId });
+    }
   }, [radio, position, order.length, options.autoplay, queue, repeat]);
 
   const nativeId = native?.id ?? null;

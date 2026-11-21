@@ -5,9 +5,14 @@ import { sessionOrTokenUser } from "@/lib/token-auth";
 
 const MOST_EXCLUDED = 500;
 const ID = /^[^\s/]{1,300}$/;
+const MOST_TEXT = 300;
 
 function id(value: unknown) {
   return typeof value === "string" && ID.test(value) ? value : null;
+}
+
+function text(value: unknown) {
+  return typeof value === "string" && value.trim() && value.length <= MOST_TEXT ? value : undefined;
 }
 
 export async function POST(request: Request) {
@@ -20,8 +25,16 @@ export async function POST(request: Request) {
   if (!seed) return NextResponse.json({ error: "Choose a song or an artist" }, { status: 400 });
   const exclude = (Array.isArray(body?.exclude) ? body.exclude : [])
     .filter((value: unknown): value is string => typeof value === "string" && isSongId(value))
-    .slice(0, MOST_EXCLUDED);
-  const songs = await radioSongs(userId, seed, exclude);
+    .slice(-MOST_EXCLUDED);
+  const skipTracks = (Array.isArray(body?.skipTracks) ? body.skipTracks : [])
+    .filter((value: unknown): value is string => id(value) !== null)
+    .slice(-MOST_EXCLUDED);
+  const songs = await radioSongs(userId, seed, exclude, {
+    artist: text(body?.artist),
+    title: text(body?.title),
+    continuing: body?.continuing === true,
+    skipTracks,
+  });
   if (songs === null) return NextResponse.json({ error: "Connect Navidrome to start a radio" }, { status: 409 });
   return NextResponse.json({ songs });
 }

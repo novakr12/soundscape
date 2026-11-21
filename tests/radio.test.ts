@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import type { NavidromeSong } from "../lib/navidrome-library";
-import { genreWords, mainGenre, mixRadio, sharesGenre } from "../lib/radio";
+import { clearlySharesGenre, genreWords, mainGenre, mixRadio, sharesGenre } from "../lib/radio";
 
 function songs(artist: string, count: number, genre?: string): NavidromeSong[] {
   return Array.from({ length: count }, (_, i) => ({
@@ -66,5 +66,29 @@ describe("radio", () => {
     assert.ok(sharesGenre(seed, genreWords([undefined])));
     assert.ok(sharesGenre(genreWords([]), genreWords(["Trap"])));
     assert.ok(!sharesGenre(genreWords(["R&B and Soul music"]), genreWords(["Black Metal"])));
+  });
+
+  it("leaves out songs already in the queue, even when they are another copy", () => {
+    const seed = songs("Seed", 4);
+    const copy = { id: "other-copy", title: "Seed song 1", artist: "Seed" };
+    const mixed = mixRadio([...seed, copy], [songs("A", 3)], {
+      exclude: new Set(["Seed-0"]),
+      skipTracks: new Set(["seed-seed-song-1"]),
+      limit: 20,
+      random: keep,
+    });
+    const ids = mixed.map((song) => song.id);
+    assert.ok(!ids.includes("Seed-0"));
+    assert.ok(!ids.includes("Seed-1"));
+    assert.ok(!ids.includes("other-copy"));
+    assert.ok(ids.includes("Seed-2"));
+  });
+
+  it("only trusts co-listened artists whose genres are known and shared", () => {
+    const seed = genreWords(["City Pop", "J-Pop"]);
+    assert.ok(clearlySharesGenre(seed, genreWords(["city pop"])));
+    assert.ok(!clearlySharesGenre(seed, genreWords([])));
+    assert.ok(!clearlySharesGenre(genreWords([]), genreWords(["Hyperpop"])));
+    assert.ok(!clearlySharesGenre(seed, genreWords(["Hip-Hop"])));
   });
 });

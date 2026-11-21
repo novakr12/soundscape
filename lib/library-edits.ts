@@ -15,7 +15,7 @@ function cleanName(text: string) {
   return name;
 }
 
-async function moveTrack(tx: Tx, fromId: string, intoId: string, artistId: string, title?: string) {
+export async function moveTrack(tx: Tx, fromId: string, intoId: string, artistId: string, title?: string) {
   if (fromId === intoId) return;
   await tx`
     INSERT INTO tracks (id, title, artist_id, album_id, album_source, track_number, duration_ms, mbid, cover,
@@ -45,6 +45,10 @@ async function moveTrack(tx: Tx, fromId: string, intoId: string, artistId: strin
     WHERE w.track_id = ${fromId}
       AND NOT EXISTS (SELECT 1 FROM wanted o WHERE o.user_id = w.user_id AND o.track_id = ${intoId})`;
   await tx`DELETE FROM wanted WHERE track_id = ${fromId}`;
+  await tx`
+    UPDATE loved_tracks l SET track_id = ${intoId}
+    WHERE l.track_id = ${fromId}
+      AND NOT EXISTS (SELECT 1 FROM loved_tracks o WHERE o.user_id = l.user_id AND o.track_id = ${intoId})`;
   await tx`UPDATE track_aliases SET track_id = ${intoId} WHERE track_id = ${fromId}`;
   await tx`DELETE FROM cover_cache WHERE track_id = ${fromId}`;
   await tx`DELETE FROM tracks WHERE id = ${fromId}`;

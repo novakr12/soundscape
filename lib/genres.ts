@@ -14,7 +14,7 @@ type Genre = { name: string; count?: number };
 export type GenreSummary = { checked: number; found: number; unreachable: boolean; reason?: string };
 
 function normalize(text: string) {
-  return fold(text).replace(/[^a-z0-9]+/g, "");
+  return fold(text).replace(/[^\p{L}\p{N}]+/gu, "");
 }
 
 export function pickGenres(genres: Genre[]): string[] {
@@ -38,7 +38,7 @@ async function artistFromRecordings(name: string, recordings: string[]): Promise
   return null;
 }
 
-async function artistFromSearch(name: string): Promise<string | null> {
+export async function artistFromSearch(name: string): Promise<string | null> {
   const result = await musicBrainz<{
     artists?: { id: string; name: string; score?: number; aliases?: { name: string }[] }[];
   }>("/artist", { query: `artist:"${name.replace(/"/g, "")}"`, limit: "10" });

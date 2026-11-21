@@ -16,13 +16,14 @@ export function fold(text: string) {
   return text
     .toLowerCase()
     .normalize("NFKD")
-    .replace(/[\u0300-\u036f]/g, "");
+    .replace(/[\u0300-\u036f]/g, "")
+    .normalize("NFC");
 }
 
 export function slug(text: string) {
   return fold(text)
     .replace(/['’.]/g, "")
-    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/[^\p{L}\p{N}]+/gu, "-")
     .replace(/^-|-$/g, "");
 }
 

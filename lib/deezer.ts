@@ -1,5 +1,5 @@
 import { linkAlbums } from "./albums";
-import { fold } from "./catalog";
+import { artistIdFor, fold } from "./catalog";
 import { request } from "./http";
 import { sql } from "./postgres";
 
@@ -33,7 +33,7 @@ export type DeezerMatch = {
 export function normalize(text: string) {
   return fold(text)
     .replace(/['’]/g, "")
-    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
     .trim();
 }
 
@@ -131,6 +131,28 @@ export async function findDeezerArtist(name: string): Promise<ArtistPhoto | null
     }
   }
   return null;
+}
+
+const RELATED_KEPT_MS = 24 * 60 * 60 * 1000;
+const relatedSeen = new Map<string, { names: string[]; at: number }>();
+
+export async function deezerRelatedArtists(name: string, limit = 20): Promise<string[]> {
+  const key = artistIdFor(name);
+  const kept = relatedSeen.get(key);
+  if (kept && Date.now() - kept.at < RELATED_KEPT_MS) return kept.names;
+  try {
+    const [row] = await sql`SELECT deezer_artist_id FROM artists WHERE id = ${key}`;
+    const deezerId = (row?.deezer_artist_id as number | null) ?? (await findDeezerArtist(name))?.deezerArtistId;
+    const names = deezerId
+      ? ((await deezerGet<{ data?: DeezerArtist[] }>(`/artist/${deezerId}/related?limit=${limit}`)).data ?? []).map(
+          (artist) => artist.name,
+        )
+      : [];
+    relatedSeen.set(key, { names, at: Date.now() });
+    return names;
+  } catch {
+    return [];
+  }
 }
 
 export type AlbumTracklist = { deezerAlbumId: number; tracks: { title: string; number: number; disc: number }[] };

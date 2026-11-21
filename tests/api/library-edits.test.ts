@@ -51,8 +51,14 @@ describe("fixing the library", () => {
   it("merges two versions of a song, and new plays of the old one follow", async () => {
     const hit = trackIdFor(band, "Hit");
     const take = trackIdFor(band, "Hit Take Two");
+    await sql`INSERT INTO loved_tracks (user_id, track_id) VALUES (${user.userId}, ${take})`;
     assert.equal(await mergeSong(take, hit), hit);
     assert.equal(await plays(hit), 3);
+    const loved = await sql`SELECT track_id FROM loved_tracks WHERE user_id = ${user.userId}`;
+    assert.deepEqual(
+      loved.map((row) => row.track_id),
+      [hit],
+    );
     assert.equal(await exists("tracks", take), false);
     await importListens(user.userId, [{ artist: band, title: "Hit Take Two", playedAt: ago(10) }]);
     assert.equal(await plays(hit), 4);
