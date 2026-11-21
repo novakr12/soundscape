@@ -244,7 +244,7 @@ export default function RemoteBar({
             type="range"
             min={0}
             max={length || 1}
-            step={1}
+            step="any"
             value={at}
             disabled={length === 0}
             aria-label={`Seek on ${device.name}`}

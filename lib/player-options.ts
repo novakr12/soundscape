@@ -1,11 +1,11 @@
-export type PlayerOptions = { levelling: boolean; crossfade: number };
+export type PlayerOptions = { levelling: boolean; crossfade: number; autoplay: boolean };
 
 export const CROSSFADE_CHOICES = [0, 2, 4, 6, 8, 12];
 
 const KEY = "soundscape:player-options";
 export const OPTIONS_CHANGED = "soundscape:player-options";
 
-export const DEFAULT_OPTIONS: PlayerOptions = { levelling: true, crossfade: 0 };
+export const DEFAULT_OPTIONS: PlayerOptions = { levelling: true, crossfade: 0, autoplay: false };
 
 export function readOptions(raw: unknown): PlayerOptions {
   if (typeof raw !== "object" || raw === null) return DEFAULT_OPTIONS;
@@ -16,6 +16,7 @@ export function readOptions(raw: unknown): PlayerOptions {
       typeof saved.crossfade === "number" && CROSSFADE_CHOICES.includes(saved.crossfade)
         ? saved.crossfade
         : DEFAULT_OPTIONS.crossfade,
+    autoplay: typeof saved.autoplay === "boolean" ? saved.autoplay : DEFAULT_OPTIONS.autoplay,
   };
 }
 

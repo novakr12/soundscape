@@ -49,6 +49,18 @@ export default function PlayerSettings() {
         Fades one song into the next. Songs from the same album still follow each other without a gap, the way the album
         was made.
       </p>
+      <label>
+        <input
+          type="checkbox"
+          checked={options.autoplay}
+          onChange={(event) => change({ autoplay: event.target.checked })}
+        />{" "}
+        Keep playing similar music
+      </label>
+      <p className="muted">
+        When a single song or the last song in your queue finishes, a radio based on it carries on. Albums and playlists
+        play to the end first. Needs Navidrome.
+      </p>
     </>
   );
 }

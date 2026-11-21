@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { isSongId } from "@/lib/navidrome";
 import { radioSongs } from "@/lib/radio";
-import { currentUserId } from "@/lib/session";
+import { sessionOrTokenUser } from "@/lib/token-auth";
 
 const MOST_EXCLUDED = 500;
 const ID = /^[^\s/]{1,300}$/;
@@ -11,7 +11,7 @@ function id(value: unknown) {
 }
 
 export async function POST(request: Request) {
-  const userId = await currentUserId();
+  const userId = await sessionOrTokenUser(request);
   if (!userId) return NextResponse.json({ error: "Log in to start a radio" }, { status: 401 });
   const body = await request.json().catch(() => null);
   const trackId = id(body?.trackId);

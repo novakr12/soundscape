@@ -59,9 +59,17 @@ describe("volume levelling", () => {
     assert.equal(saved?.tracks[1].gain, undefined);
   });
 
-  it("levels by default, crossfades only when asked and remembers both", () => {
-    assert.deepEqual(readOptions(null), { levelling: true, crossfade: 0 });
-    assert.deepEqual(readOptions({ levelling: false, crossfade: 6 }), { levelling: false, crossfade: 6 });
-    assert.deepEqual(readOptions({ levelling: "no", crossfade: 5 }), { levelling: true, crossfade: 0 });
+  it("levels by default, crossfades and autoplays only when asked and remembers all three", () => {
+    assert.deepEqual(readOptions(null), { levelling: true, crossfade: 0, autoplay: false });
+    assert.deepEqual(readOptions({ levelling: false, crossfade: 6, autoplay: true }), {
+      levelling: false,
+      crossfade: 6,
+      autoplay: true,
+    });
+    assert.deepEqual(readOptions({ levelling: "no", crossfade: 5, autoplay: "yes" }), {
+      levelling: true,
+      crossfade: 0,
+      autoplay: false,
+    });
   });
 });

@@ -367,7 +367,7 @@ function RemoteDevice({
                 type="range"
                 min={0}
                 max={state.duration}
-                step={1}
+                step="any"
                 value={Math.min(time, state.duration)}
                 aria-label={`Position on ${device.name}`}
                 style={

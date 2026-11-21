@@ -1031,9 +1031,23 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
   }
 
   useEffect(() => {
-    if (!radio || radioLoading.current || order.length - position > RADIO_REFILL_AT) return;
-    skip.current.refill(radio);
-  }, [radio, position, order.length]);
+    if (away.current.device || radioLoading.current || order.length - position > RADIO_REFILL_AT) return;
+    if (radio) {
+      skip.current.refill(radio);
+      return;
+    }
+    const last = queue[position];
+    if (options.autoplay && last && repeat === "off") setRadio({ trackId: last.trackId });
+  }, [radio, position, order.length, options.autoplay, queue, repeat]);
+
+  const nativeId = native?.id ?? null;
+  const keepGoing = options.autoplay || radio !== null;
+  const tellAutoplay = useRef(tellNative);
+  tellAutoplay.current = tellNative;
+
+  useEffect(() => {
+    if (nativeId) tellAutoplay.current({ do: "autoplay", on: keepGoing });
+  }, [nativeId, keepGoing]);
 
   function playNext(track: PlayerTrack) {
     enqueue(track, true);

@@ -142,7 +142,7 @@ export function SeekBar({ audio, known }: { audio: RefObject<HTMLAudioElement | 
         type="range"
         min={0}
         max={length || 1}
-        step={0.1}
+        step="any"
         value={at}
         disabled={length === 0}
         aria-label="Seek"
