@@ -2,7 +2,9 @@
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
-compose() { docker compose -f docker-compose.yml -f compose.prod.yml "$@"; }
+files=(-f docker-compose.yml -f compose.prod.yml)
+if [ -f compose.local.yml ]; then files+=(-f compose.local.yml); fi
+compose() { docker compose "${files[@]}" "$@"; }
 
 echo "Getting the latest code"
 git pull --ff-only

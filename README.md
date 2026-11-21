@@ -23,6 +23,15 @@ echo "AUTH_SECRET=$(openssl rand -base64 32)" > .env
 docker compose -f docker-compose.yml -f compose.prod.yml up -d --build
 ```
 
+Your own changes to the production setup go in `compose.local.yml`, which `scripts/update.sh` reads when it exists and git leaves alone. For example, to reach the database from this computer on port 5433:
+
+```yaml
+services:
+  postgres:
+    ports: !override
+      - "127.0.0.1:5433:5432"
+```
+
 Then open the app, sign up, and follow the **Connect** page to point your player at Soundscape.
 
 To choose who can create accounts, set `SIGNUPS` in `.env`: `open` (anyone, the default), `invite` (only with an invite link, which any member can create in Settings) or `closed`.
