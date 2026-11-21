@@ -11,6 +11,7 @@ import {
   getLibraries,
   getLibraryAlbums,
   getLibrarySongs,
+  getNavidromeArtist,
   getPlaylistSongs,
   getPlaylists,
   getSong,
@@ -18,6 +19,7 @@ import {
 } from "../../lib/navidrome-library";
 import { recordPlay } from "../../lib/plays";
 import { sql } from "../../lib/postgres";
+import { startSession } from "../../lib/sessions";
 import { createToken } from "../../lib/tokens";
 import { closeConnections, createTestUser, removeTestUser, testUser } from "./helpers";
 
@@ -97,6 +99,12 @@ function fakeNavidrome() {
             ]
           : [songs[1]];
       return response.end(subsonic({ album: { song: album } }));
+    }
+    if (method === "getArtist") {
+      if (params.get("id") !== "ar-1") {
+        return response.end(JSON.stringify({ "subsonic-response": { status: "failed", error: { code: 70 } } }));
+      }
+      return response.end(subsonic({ artist: { name: "$ilk Band", album: [{ id: "al-first" }, { id: "../no" }] } }));
     }
     if (method === "getSong") {
       const song = songs.find((s) => s.id === params.get("id"));
@@ -226,6 +234,27 @@ describe("Browsing Navidrome", () => {
     });
     assert.equal(listed[1].newSong, true);
     assert.equal(listed[1].cover, undefined);
+  });
+
+  it("links artists Soundscape doesn't know yet to their songs in the same library", async () => {
+    const navidrome = (await getNavidrome(user.userId))!;
+    const unheard = `${user.artist} Unheard`;
+    const [unknown] = await toMusicSongs([{ id: "odd-1", title: "Odd", artist: unheard, artistId: "ar-1" }], {
+      library: "2",
+    });
+    assert.equal(unknown.artistHref, "/music?artist=ar-1&library=2");
+    const [noId] = await toMusicSongs([{ id: "odd-2", title: "Odd", artist: unheard }]);
+    assert.equal(noId.artistHref, `/music?${new URLSearchParams({ q: unheard })}`);
+    assert.deepEqual(await getNavidromeArtist(navidrome, "ar-1"), { name: "$ilk Band", albums: ["al-first"] });
+    assert.equal(await getNavidromeArtist(navidrome, "ar-2"), null);
+    const page = await fetch(`${BASE_URL}/music?artist=ar-1&library=2`, {
+      headers: { cookie: `soundscape_session=${await startSession(user.userId)}` },
+    });
+    const html = await page.text();
+    assert.equal(page.status, 200);
+    assert.ok(html.includes("$ilk Band"));
+    assert.ok(html.includes("Track One"));
+    assert.match(html, /aria-current="page"[^>]*>music 2</);
   });
 
   it("finds the same album in Navidrome and matches its songs by title", async () => {

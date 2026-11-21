@@ -9,6 +9,7 @@ import {
   getLibraryAlbums,
   getLibrarySongs,
   getNavidromeAlbum,
+  getNavidromeArtist,
   getPlaylistSongs,
   getPlaylists,
   getSongsOfAlbums,
@@ -29,6 +30,7 @@ type Props = {
     library?: string;
     playlist?: string;
     album?: string;
+    artist?: string;
     q?: string;
     page?: string;
     sort?: string;
@@ -45,6 +47,7 @@ type Shown = {
   libraryId?: string;
   playlistId?: string;
   albumId?: string;
+  artistId?: string;
   subtitle?: string;
   query?: string;
   unplayed?: number;
@@ -105,6 +108,22 @@ export default async function MusicPage({ searchParams }: Props) {
           firstNumber: 1,
         };
       }
+    } else if (params.artist) {
+      const artist = await getNavidromeArtist(server, params.artist);
+      if (artist) {
+        const order = songOrder(params.sort);
+        const songs = await getSongsOfAlbums(server, artist.albums);
+        shown = {
+          title: artist.name,
+          songs: await toMusicSongs(order ? sortSongs(songs, order) : songs, { library: params.library }),
+          page: 1,
+          hasMore: false,
+          libraryId: libraries.some((item) => item.id === params.library) ? params.library : undefined,
+          artistId: params.artist,
+          sort: order ?? "",
+          firstNumber: 1,
+        };
+      }
     } else if (params.unplayed) {
       const albums = await unplayedAlbums(userId, server, new Date().toISOString().slice(0, 10));
       const from = (page - 1) * UNPLAYED_PER_PAGE;
@@ -144,7 +163,7 @@ export default async function MusicPage({ searchParams }: Props) {
         });
         shown = {
           title: library?.name ?? "Library",
-          songs: await toMusicSongs(sortSongs(found.slice(0, PAGE_SIZE), order)),
+          songs: await toMusicSongs(sortSongs(found.slice(0, PAGE_SIZE), order), { library: library?.id }),
           page,
           hasMore: found.length > PAGE_SIZE,
           libraryId: library?.id,
@@ -162,7 +181,9 @@ export default async function MusicPage({ searchParams }: Props) {
         });
         shown = {
           title: library?.name ?? "Library",
-          songs: await toMusicSongs(await getSongsOfAlbums(server, albums.slice(0, ALBUMS_PER_PAGE))),
+          songs: await toMusicSongs(await getSongsOfAlbums(server, albums.slice(0, ALBUMS_PER_PAGE)), {
+            library: library?.id,
+          }),
           page,
           hasMore: albums.length > ALBUMS_PER_PAGE,
           libraryId: library?.id,
@@ -236,7 +257,7 @@ export default async function MusicPage({ searchParams }: Props) {
                     ? "You've played something from every album in your Navidrome."
                     : `${shown.unplayed.toLocaleString("en")} ${shown.unplayed === 1 ? "album" : "albums"} in your Navidrome you haven't played a song from yet, in a new order every day.`}
                 </p>
-              ) : shown.albumId ? (
+              ) : shown.albumId || shown.artistId ? (
                 <p className="muted">
                   {shown.subtitle ? `${shown.subtitle} · ` : ""}
                   {shown.songs.length} songs · {hours(shown.songs.reduce((sum, song) => sum + (song.duration ?? 0), 0))}
@@ -261,9 +282,15 @@ export default async function MusicPage({ searchParams }: Props) {
                 <nav className="music-sort" aria-label="Sort by">
                   <span className="muted">Sort by</span>
                   {sortChoices(
-                    shown.albumId ? "album" : shown.playlistId ? "playlist" : shown.query ? "search" : "library",
+                    shown.albumId || shown.artistId
+                      ? "album"
+                      : shown.playlistId
+                        ? "playlist"
+                        : shown.query
+                          ? "search"
+                          : "library",
                   ).map((choice) => {
-                    const library = !shown.playlistId && !shown.albumId && !shown.query;
+                    const library = !shown.playlistId && !shown.albumId && !shown.artistId && !shown.query;
                     const value = library && choice.value === "artist" ? "" : choice.value;
                     return (
                       <Link
@@ -272,6 +299,7 @@ export default async function MusicPage({ searchParams }: Props) {
                           library: shown.playlistId || shown.albumId ? undefined : shown.libraryId,
                           playlist: shown.playlistId,
                           album: shown.albumId,
+                          artist: shown.artistId,
                           q: shown.query,
                           sort: value,
                         })}
@@ -290,7 +318,7 @@ export default async function MusicPage({ searchParams }: Props) {
                   autoplay={params.play === "1" && Boolean(shown.playlistId)}
                   download={shown.albumId || shown.playlistId ? shown.title : undefined}
                   shuffleAll={
-                    shown.libraryId !== undefined && (shown.page > 1 || shown.hasMore)
+                    shown.libraryId !== undefined && !shown.artistId && (shown.page > 1 || shown.hasMore)
                       ? { library: shown.libraryId, ...(shown.query ? { q: shown.query } : {}) }
                       : undefined
                   }

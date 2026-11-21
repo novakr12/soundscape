@@ -13,7 +13,13 @@ export function navidromeCover(coverArt: string | undefined) {
   return coverArt ? `/api/navidrome/cover/${encodeURIComponent(coverArt)}` : undefined;
 }
 
-export async function toMusicSongs(songs: NavidromeSong[]): Promise<MusicSong[]> {
+function musicAddress(params: Record<string, string | undefined>) {
+  const query = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) if (value) query.set(key, value);
+  return `/music?${query}`;
+}
+
+export async function toMusicSongs(songs: NavidromeSong[], from: { library?: string } = {}): Promise<MusicSong[]> {
   if (songs.length === 0) return [];
   const resolved = await resolveTracks(songs);
   const ids = [...new Set(resolved.map((song) => song.trackId))];
@@ -33,7 +39,9 @@ export async function toMusicSongs(songs: NavidromeSong[]): Promise<MusicSong[]>
     const cover = navidromeCover(song.coverArt);
     const artistHref = knownArtists.has(artistId)
       ? `/artist/${encodeURIComponent(artistId)}`
-      : `/music?q=${encodeURIComponent(song.artist)}`;
+      : song.artistId
+        ? musicAddress({ artist: song.artistId, library: from.library })
+        : musicAddress({ q: song.artist, library: from.library });
     const albumHref =
       albumId && knownAlbums.has(albumId)
         ? `/album/${encodeURIComponent(albumId)}`

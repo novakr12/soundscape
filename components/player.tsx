@@ -934,9 +934,14 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
   }
 
   function toggleShuffle() {
-    shuffleRef.current = !shuffleRef.current;
+    const device = away.current.device;
+    shuffleRef.current = !(device?.state.shuffle ?? shuffleRef.current);
     setShuffle(shuffleRef.current);
     remember();
+    if (device) {
+      away.current.send({ do: "shuffle", on: shuffleRef.current });
+      return;
+    }
     if (orderRef.current.length < 2) return;
     if (shuffleRef.current) {
       arrange(tracksRef.current, shuffleAfter(orderRef.current, positionRef.current), positionRef.current);
@@ -1355,9 +1360,10 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
     },
   };
   const radioOn = radio !== null;
+  const shownShuffle = followed?.state.shuffle ?? shuffle;
   const value = useMemo(
-    () => ({ current, queue, position, shuffle, repeat, radio: radioOn, party, ...steady }),
-    [current, queue, position, shuffle, repeat, radioOn, party, steady],
+    () => ({ current, queue, position, shuffle: shownShuffle, repeat, radio: radioOn, party, ...steady }),
+    [current, queue, position, shownShuffle, repeat, radioOn, party, steady],
   );
   const elsewhere = link.devices.find((device) => device.state.playing) ?? null;
   const hasNext = position + 1 < queue.length || (repeat === "all" && queue.length > 1);
