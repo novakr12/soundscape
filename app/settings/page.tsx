@@ -4,6 +4,7 @@ import { isPrivate, setPrivate } from "@/lib/privacy";
 import { pushDeviceCount, vapidKeys } from "@/lib/push";
 import { requireUserId } from "@/lib/session";
 import { INVITE_DAYS, signupMode } from "@/lib/signups";
+import AccentSettings from "./accent-settings";
 import AppSettings from "./app-settings";
 import ChangePasswordForm from "./change-password-form";
 import DeleteAccountForm from "./delete-account-form";
@@ -44,6 +45,11 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
         <form action={togglePrivacy}>
           <button type="submit">{hidden ? "Make profile public" : "Make profile private"}</button>
         </form>
+      </section>
+
+      <section>
+        <h2>Accent color</h2>
+        <AccentSettings />
       </section>
 
       <section>

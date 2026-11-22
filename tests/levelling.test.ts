@@ -68,6 +68,7 @@ describe("volume levelling", () => {
       visualizerStyle: "bars",
       visualizerBounce: "lively",
       visualizerBars: 8,
+      accent: "#1db954",
     });
     assert.deepEqual(
       readOptions({
@@ -78,6 +79,7 @@ describe("volume levelling", () => {
         visualizerStyle: "wave",
         visualizerBounce: "extreme",
         visualizerBars: 12,
+        accent: "#8b5cf6",
       }),
       {
         levelling: false,
@@ -87,6 +89,7 @@ describe("volume levelling", () => {
         visualizerStyle: "wave",
         visualizerBounce: "extreme",
         visualizerBars: 12,
+        accent: "#8b5cf6",
       },
     );
     assert.deepEqual(
@@ -98,6 +101,7 @@ describe("volume levelling", () => {
         visualizerStyle: "unknown",
         visualizerBounce: "wild",
         visualizerBars: 99,
+        accent: "green",
       }),
       {
         levelling: true,
@@ -107,6 +111,7 @@ describe("volume levelling", () => {
         visualizerStyle: "bars",
         visualizerBounce: "lively",
         visualizerBars: 8,
+        accent: "#1db954",
       },
     );
   });

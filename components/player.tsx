@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { paintAccent } from "@/lib/accent";
 import {
   BRIDGE_VERSION,
   bridgeTracks,
@@ -561,6 +562,7 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
   useEffect(
     () =>
       watchOptions((next) => {
+        paintAccent(next.accent, document.documentElement);
         optionsRef.current = next;
         setOptions(next);
       }),

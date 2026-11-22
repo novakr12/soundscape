@@ -16,6 +16,7 @@ import ServiceWorker from "@/components/service-worker";
 import { isAdmin } from "@/lib/admin";
 import { drawsCoversOnCanvas } from "@/lib/cover-canvas";
 import { unreadCount } from "@/lib/notifications";
+import { ACCENT_SCRIPT } from "@/lib/player-options";
 import { currentUserId, logOut } from "@/lib/session";
 import { signupMode } from "@/lib/signups";
 import "./globals.css";
@@ -47,7 +48,10 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   }
 
   return (
-    <html lang="en" className={brandFont.variable}>
+    <html lang="en" className={brandFont.variable} suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: ACCENT_SCRIPT }} />
+      </head>
       <body>
         <CanvasCoversProvider value={canvasCovers}>
           <header>

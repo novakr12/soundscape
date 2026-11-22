@@ -1,3 +1,5 @@
+import { DEFAULT_ACCENT, isAccent, paintAccent } from "./accent";
+
 export const VISUALIZER_STYLES = ["bars", "wave", "dots"] as const;
 export type VisualizerStyle = (typeof VISUALIZER_STYLES)[number];
 
@@ -15,6 +17,7 @@ export type PlayerOptions = {
   visualizerStyle: VisualizerStyle;
   visualizerBounce: VisualizerBounce;
   visualizerBars: VisualizerBarCount;
+  accent: string;
 };
 
 export const CROSSFADE_CHOICES = [0, 2, 4, 6, 8, 12];
@@ -30,6 +33,7 @@ export const DEFAULT_OPTIONS: PlayerOptions = {
   visualizerStyle: "bars",
   visualizerBounce: "lively",
   visualizerBars: 8,
+  accent: DEFAULT_ACCENT,
 };
 
 export function readOptions(raw: unknown): PlayerOptions {
@@ -52,8 +56,11 @@ export function readOptions(raw: unknown): PlayerOptions {
     visualizerBars: (VISUALIZER_BAR_CHOICES as readonly unknown[]).includes(saved.visualizerBars)
       ? (saved.visualizerBars as VisualizerBarCount)
       : DEFAULT_OPTIONS.visualizerBars,
+    accent: isAccent(saved.accent) ? saved.accent.toLowerCase() : DEFAULT_OPTIONS.accent,
   };
 }
+
+export const ACCENT_SCRIPT = `try{(${paintAccent.toString()})(JSON.parse(localStorage.getItem(${JSON.stringify(KEY)})||"null")?.accent,document.documentElement)}catch{}`;
 
 export function loadOptions(): PlayerOptions {
   try {
