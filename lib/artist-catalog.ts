@@ -10,7 +10,6 @@ function titleKey(title: string) {
   return slug(songTitle(title));
 }
 
-/** Build deduplicated Subsonic search queries for an artist name. */
 export function artistSearchQueries(name: string): string[] {
   const trimmed = name.trim();
   const joinedParts = artistParts(name).join(" ").trim();
@@ -26,7 +25,6 @@ export function artistSearchQueries(name: string): string[] {
   return queries;
 }
 
-/** Extract all artist slug IDs credited in a song's raw artist string and title. */
 export function creditedIds(artist: string, title?: string): Set<string> {
   const ids = new Set<string>();
   const cleanArtist = artist.replace(BRACKETED_PROD, "").replace(BARE_PROD, "").trim();
@@ -52,7 +50,6 @@ export function creditedIds(artist: string, title?: string): Set<string> {
   return ids;
 }
 
-/** Match a candidate Navidrome artist record against the Soundscape artist name. */
 export function matchesArtistRecord(targetName: string, candidateName: string): boolean {
   const targetId = artistIdFor(targetName);
   const candidateId = artistIdFor(candidateName);
@@ -66,7 +63,6 @@ export function matchesArtistRecord(targetName: string, candidateName: string): 
   return candidateParts.length === targetParts.length && targetParts.every((part) => candidateParts.includes(part));
 }
 
-/** Match a song's artist and title against the Soundscape artist name. */
 export function matchesSongForArtist(targetName: string, songArtistName: string, songTitleName?: string): boolean {
   const targetId = artistIdFor(targetName);
   if (!targetId) return false;
@@ -81,12 +77,10 @@ export function matchesSongForArtist(targetName: string, songArtistName: string,
   return artistIdFor(mainArtist(songArtistName)) === targetId;
 }
 
-/** Sort Navidrome albums by release year descending, then name ascending. */
 export function sortNavidromeAlbums(albums: readonly NavidromeArtistAlbum[]): NavidromeArtistAlbum[] {
   return [...albums].sort((a, b) => (b.year ?? 0) - (a.year ?? 0) || a.name.localeCompare(b.name));
 }
 
-/** Match Soundscape played albums against Navidrome albums and build album link lookups. */
 export function matchArtistAlbums<T extends { albumId: string; title: string }>(
   played: readonly T[],
   navidromeAlbums: readonly NavidromeArtistAlbum[],
@@ -116,7 +110,6 @@ export function matchArtistAlbums<T extends { albumId: string; title: string }>(
         firstMatch = removed;
       }
     }
-    // Backward scan keeps splices O(1)-safe while leaving the earliest match in firstMatch.
     return firstMatch;
   });
 
@@ -131,7 +124,6 @@ export function matchArtistAlbums<T extends { albumId: string; title: string }>(
   return { matched, extra, albumHrefByTitleSlug, albumHrefByNavId };
 }
 
-/** Match Soundscape played tracks against Navidrome songs and return unplayed extras. */
 export function matchArtistSongs<T extends { title: string; album?: string }>(
   played: readonly T[],
   navidromeSongs: readonly NavidromeSong[],

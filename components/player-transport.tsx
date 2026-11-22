@@ -1,7 +1,18 @@
 "use client";
 
-import { type RefObject, useEffect, useState } from "react";
+import { type RefObject, useEffect, useRef, useState } from "react";
+import { nativePort } from "@/lib/app-bridge";
 import { songLength } from "@/lib/play-queue";
+import { DEFAULT_OPTIONS, type PlayerOptions, watchOptions } from "@/lib/player-options";
+import {
+  BOUNCE_PROFILES,
+  barTransform,
+  MAX_DECIBELS,
+  MIN_DECIBELS,
+  REST,
+  SPECTRUM_BINS,
+  shapeSpectrum,
+} from "@/lib/visualizer";
 import { PauseIcon, PlayIcon } from "./player-icons";
 
 function clock(seconds: number) {
@@ -109,6 +120,185 @@ export function PlayPauseButton({ audio }: { audio: RefObject<HTMLAudioElement |
     >
       {paused ? <PlayIcon size={22} /> : <PauseIcon size={22} />}
     </button>
+  );
+}
+
+const RETAP_MS = 1000;
+
+type Capturable = HTMLAudioElement & { captureStream?: () => MediaStream };
+
+type Tap = {
+  stream: MediaStream;
+  analyser: AnalyserNode;
+  track?: MediaStreamTrack;
+  source?: MediaStreamAudioSourceNode;
+};
+
+let sharedContext: AudioContext | null = null;
+const taps = new WeakMap<HTMLAudioElement, Tap>();
+
+function canTap() {
+  return "captureStream" in HTMLMediaElement.prototype && typeof AudioContext !== "undefined";
+}
+
+function tapFor(element: Capturable, context: AudioContext): Tap | null {
+  const known = taps.get(element);
+  if (known) return known;
+  try {
+    const stream = element.captureStream?.();
+    if (!stream) return null;
+    const analyser = context.createAnalyser();
+    analyser.fftSize = SPECTRUM_BINS * 2;
+    analyser.minDecibels = MIN_DECIBELS;
+    analyser.maxDecibels = MAX_DECIBELS;
+    const tap = { stream, analyser };
+    taps.set(element, tap);
+    return tap;
+  } catch {
+    return null;
+  }
+}
+
+function followNewestTrack(tap: Tap, context: AudioContext) {
+  const tracks = tap.stream.getAudioTracks();
+  const newest = tracks.at(-1);
+  for (const old of tracks.slice(0, -1)) {
+    old.stop();
+    tap.stream.removeTrack(old);
+  }
+  if (newest === tap.track) return;
+  tap.source?.disconnect();
+  tap.track = newest;
+  tap.source = newest ? context.createMediaStreamSource(new MediaStream([newest])) : undefined;
+  tap.source?.connect(tap.analyser);
+}
+
+function watchElement(element: HTMLAudioElement, options: PlayerOptions, paint: (levels: number[]) => void) {
+  sharedContext ??= new AudioContext();
+  const context = sharedContext;
+  const wake = () => context.resume().catch(() => {});
+  wake();
+  document.addEventListener("pointerdown", wake);
+  const bins = new Uint8Array(SPECTRUM_BINS);
+  let tap: Tap | null = null;
+  let triedAt = Number.NEGATIVE_INFINITY;
+  let levels: number[] = [];
+  let last = 0;
+  let frame = requestAnimationFrame(function tick(now) {
+    frame = requestAnimationFrame(tick);
+    if (now - last < 36) return;
+    last = now;
+    if (!tap) {
+      if (now - triedAt < RETAP_MS) return;
+      triedAt = now;
+      tap = tapFor(element, context);
+      if (!tap) return;
+      tap.analyser.smoothingTimeConstant = BOUNCE_PROFILES[options.visualizerBounce].smoothing;
+    }
+    followNewestTrack(tap, context);
+    tap.analyser.getByteFrequencyData(bins);
+    levels = shapeSpectrum(bins, levels, options.visualizerBars, options.visualizerBounce);
+    paint(levels);
+  });
+  return () => {
+    cancelAnimationFrame(frame);
+    document.removeEventListener("pointerdown", wake);
+    context.suspend().catch(() => {});
+  };
+}
+
+function watchApp(options: PlayerOptions, paint: (levels: number[]) => void) {
+  let levels: number[] = [];
+  const onLevels = (event: Event) => {
+    const sent = (event as CustomEvent<unknown>).detail;
+    paint(Array.isArray(sent) ? sent : []);
+  };
+  const onBins = (event: Event) => {
+    const sent = (event as CustomEvent<unknown>).detail;
+    if (!Array.isArray(sent) || sent.length !== SPECTRUM_BINS) return;
+    levels = shapeSpectrum(sent, levels, options.visualizerBars, options.visualizerBounce);
+    paint(levels);
+  };
+  const port = nativePort(window as Window & { soundscapeNative?: unknown });
+  const ask = (on: boolean) => {
+    try {
+      port?.postMessage(JSON.stringify({ do: "visualizer", on }));
+    } catch {}
+  };
+  window.addEventListener("soundscape-spectrum", onLevels);
+  window.addEventListener("soundscape-spectrum-bins", onBins);
+  ask(true);
+  return () => {
+    window.removeEventListener("soundscape-spectrum", onLevels);
+    window.removeEventListener("soundscape-spectrum-bins", onBins);
+    ask(false);
+  };
+}
+
+export function PlayerVisualizer({
+  audio,
+  playing = false,
+}: {
+  audio?: RefObject<HTMLAudioElement | null>;
+  playing?: boolean;
+}) {
+  const [options, setOptions] = useState<PlayerOptions>(DEFAULT_OPTIONS);
+  const [element, setElement] = useState<HTMLAudioElement | null>(null);
+  const [readable, setReadable] = useState(false);
+  const [still, setStill] = useState(false);
+  const holder = useRef<HTMLSpanElement>(null);
+
+  useEffect(() => watchOptions(setOptions), []);
+  useEffect(() => setReadable(!audio || canTap()), [audio]);
+
+  useEffect(() => {
+    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const update = () => setStill(reduced.matches);
+    update();
+    reduced.addEventListener("change", update);
+    return () => reduced.removeEventListener("change", update);
+  }, []);
+
+  useEffect(() => {
+    if (!audio) return;
+    const follow = () => {
+      const now = audio.current;
+      setElement(now && !now.paused && !now.ended && !now.error && !document.hidden ? now : null);
+    };
+    return whilePlaying(audio, follow, PLAY_STATE_EVENTS);
+  }, [audio]);
+
+  const shown = readable && options.visualizer;
+  const active = audio ? element !== null : playing;
+
+  useEffect(() => {
+    if (!shown || !active || still) return;
+    const bars = [...(holder.current?.children ?? [])] as HTMLElement[];
+    const paint = (levels: number[]) => {
+      bars.forEach((bar, at) => {
+        bar.style.transform = barTransform(options.visualizerStyle, levels[at] ?? REST);
+      });
+    };
+    const stop = element ? watchElement(element, options, paint) : watchApp(options, paint);
+    return () => {
+      stop();
+      for (const bar of bars) bar.style.transform = "";
+    };
+  }, [shown, active, still, element, options]);
+
+  if (!shown) return null;
+  return (
+    <span
+      ref={holder}
+      className="player-visualizer"
+      data-playing={active || undefined}
+      data-style={options.visualizerStyle}
+      aria-hidden="true"
+    >
+      {Array.from({ length: options.visualizerBars }, (_, index) => (
+        <span key={index} className="visualizer-bar" />
+      ))}
+    </span>
   );
 }
 

@@ -18,6 +18,7 @@ import {
   scrobblingStatus,
   waitingStatus,
 } from "@/lib/app-settings";
+import { DEFAULT_OPTIONS, loadOptions, saveOptions, watchOptions } from "@/lib/player-options";
 
 import AndroidSettings from "./android-settings";
 
@@ -124,6 +125,9 @@ export default function AppSettings() {
   const [discordId, setDiscordId] = useState("");
   const typing = useRef(false);
   const scrolled = useRef(false);
+  const [visualizer, setVisualizer] = useState(DEFAULT_OPTIONS.visualizer);
+
+  useEffect(() => watchOptions((options) => setVisualizer(options.visualizer)), []);
 
   useEffect(() => {
     const view = window as AppWindow;
@@ -427,6 +431,22 @@ export default function AppSettings() {
                 onChange={option("smooth_scrolling")}
               />
               <p className="muted">Glides with each turn of the mouse wheel instead of jumping.</p>
+            </>
+          )}
+          {settings.visualizer_known && (
+            <>
+              <Toggle
+                label="Audio visualizer"
+                checked={visualizer}
+                onChange={(value) => {
+                  option("visualizer")(value);
+                  saveOptions({ ...loadOptions(), visualizer: value });
+                }}
+              />
+              <p className="muted">
+                Draws live spectrum bars that react to the music in the player and the mini player. Needs the built-in
+                player. Pick the style, bounciness and bands under Player.
+              </p>
             </>
           )}
         </>

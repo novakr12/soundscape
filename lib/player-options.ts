@@ -1,11 +1,36 @@
-export type PlayerOptions = { levelling: boolean; crossfade: number; autoplay: boolean };
+export const VISUALIZER_STYLES = ["bars", "wave", "dots"] as const;
+export type VisualizerStyle = (typeof VISUALIZER_STYLES)[number];
+
+export const VISUALIZER_BOUNCES = ["gentle", "normal", "lively", "extreme"] as const;
+export type VisualizerBounce = (typeof VISUALIZER_BOUNCES)[number];
+
+export const VISUALIZER_BAR_CHOICES = [4, 6, 8, 12] as const;
+export type VisualizerBarCount = (typeof VISUALIZER_BAR_CHOICES)[number];
+
+export type PlayerOptions = {
+  levelling: boolean;
+  crossfade: number;
+  autoplay: boolean;
+  visualizer: boolean;
+  visualizerStyle: VisualizerStyle;
+  visualizerBounce: VisualizerBounce;
+  visualizerBars: VisualizerBarCount;
+};
 
 export const CROSSFADE_CHOICES = [0, 2, 4, 6, 8, 12];
 
 const KEY = "soundscape:player-options";
 export const OPTIONS_CHANGED = "soundscape:player-options";
 
-export const DEFAULT_OPTIONS: PlayerOptions = { levelling: true, crossfade: 0, autoplay: false };
+export const DEFAULT_OPTIONS: PlayerOptions = {
+  levelling: true,
+  crossfade: 0,
+  autoplay: false,
+  visualizer: true,
+  visualizerStyle: "bars",
+  visualizerBounce: "lively",
+  visualizerBars: 8,
+};
 
 export function readOptions(raw: unknown): PlayerOptions {
   if (typeof raw !== "object" || raw === null) return DEFAULT_OPTIONS;
@@ -17,6 +42,16 @@ export function readOptions(raw: unknown): PlayerOptions {
         ? saved.crossfade
         : DEFAULT_OPTIONS.crossfade,
     autoplay: typeof saved.autoplay === "boolean" ? saved.autoplay : DEFAULT_OPTIONS.autoplay,
+    visualizer: typeof saved.visualizer === "boolean" ? saved.visualizer : DEFAULT_OPTIONS.visualizer,
+    visualizerStyle: (VISUALIZER_STYLES as readonly unknown[]).includes(saved.visualizerStyle)
+      ? (saved.visualizerStyle as VisualizerStyle)
+      : DEFAULT_OPTIONS.visualizerStyle,
+    visualizerBounce: (VISUALIZER_BOUNCES as readonly unknown[]).includes(saved.visualizerBounce)
+      ? (saved.visualizerBounce as VisualizerBounce)
+      : DEFAULT_OPTIONS.visualizerBounce,
+    visualizerBars: (VISUALIZER_BAR_CHOICES as readonly unknown[]).includes(saved.visualizerBars)
+      ? (saved.visualizerBars as VisualizerBarCount)
+      : DEFAULT_OPTIONS.visualizerBars,
   };
 }
 

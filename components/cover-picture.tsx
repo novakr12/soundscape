@@ -129,7 +129,6 @@ function CanvasCover({
         watcher.unobserve(canvas);
       }
       stop.abort();
-      // Release backing store immediately on unmount or URL change
       canvas.width = 0;
       canvas.height = 0;
     };

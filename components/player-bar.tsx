@@ -8,7 +8,7 @@ import CoverPicture from "./cover-picture";
 import { SongLink } from "./music-links";
 import type { PlayerTrack } from "./player";
 import { DevicesIcon, LyricsIcon, NextIcon, PreviousIcon, QueueIcon, RepeatIcon, ShuffleIcon } from "./player-icons";
-import { PlayPauseButton, SeekBar } from "./player-transport";
+import { PlayerVisualizer, PlayPauseButton, SeekBar } from "./player-transport";
 import SleepTimer, { type Sleep } from "./sleep-timer";
 import { useBarEntrance } from "./use-bar-entrance";
 import VisibleList from "./visible-list";
@@ -140,6 +140,7 @@ export function PlayerBar({
     <div className={`player${entrance}`} hidden={!current || away}>
       <div className="player-song">
         {current?.cover && <CoverPicture src={current.cover} shown={48} />}
+        {current && <PlayerVisualizer audio={live} />}
         <div className="now-playing">
           {current && (
             <>

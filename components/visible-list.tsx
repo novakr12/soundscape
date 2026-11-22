@@ -37,6 +37,7 @@ export default function VisibleList<T>({
   spare?: number;
 }) {
   const count = items.length;
+  const list = useRef<HTMLOListElement & HTMLUListElement>(null);
   const above = useRef<HTMLLIElement>(null);
   const below = useRef<HTMLLIElement>(null);
   const [view, setView] = useState<RowWindow & { height: number }>({
@@ -46,19 +47,23 @@ export default function VisibleList<T>({
   });
 
   useEffect(() => {
+    if (count <= firstItems) return;
     let frame = 0;
-    const container = findScrollParent(above.current?.parentElement ?? null);
+    const container = findScrollParent(list.current);
     const update = () => {
       frame = 0;
+      const box = list.current;
+      if (!box) return;
       const top = above.current;
       const bottom = below.current;
-      if (!top || !bottom) return;
       setView((current) => {
-        const drawn = bottom.getBoundingClientRect().top - top.getBoundingClientRect().bottom;
+        const topEdge = top ? top.getBoundingClientRect().bottom : box.getBoundingClientRect().top;
+        const bottomEdge = bottom ? bottom.getBoundingClientRect().top : box.getBoundingClientRect().bottom;
+        const drawn = bottomEdge - topEdge;
         const height = measuredHeight(drawn, current.end - current.start, current.height);
         const containerTop = container ? container.getBoundingClientRect().top : 0;
         const viewport = container ? container.clientHeight : window.innerHeight;
-        const listTop = top.getBoundingClientRect().top - containerTop;
+        const listTop = (top ? top.getBoundingClientRect().top : box.getBoundingClientRect().top) - containerTop;
         const next = visibleRows({
           count,
           rowHeight: height,
@@ -82,17 +87,19 @@ export default function VisibleList<T>({
       scrollTarget.removeEventListener("scroll", soon);
       window.removeEventListener("resize", soon);
     };
-  }, [count, spare]);
+  }, [count, firstItems, spare]);
 
   const start = Math.min(view.start, count);
   const end = Math.min(Math.max(view.end, start), count);
   const Tag = as;
 
   return (
-    <Tag className={className} start={as === "ol" ? listStart : undefined}>
-      <li ref={above} className="row-gap" aria-hidden="true" style={{ height: start * view.height }} />
+    <Tag ref={list} className={className} start={as === "ol" ? listStart : undefined}>
+      {start > 0 && <li ref={above} className="row-gap" aria-hidden="true" style={{ height: start * view.height }} />}
       {items.slice(start, end).map((item, offset) => renderItem(item, start + offset))}
-      <li ref={below} className="row-gap" aria-hidden="true" style={{ height: (count - end) * view.height }} />
+      {end < count && (
+        <li ref={below} className="row-gap" aria-hidden="true" style={{ height: (count - end) * view.height }} />
+      )}
     </Tag>
   );
 }

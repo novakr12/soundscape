@@ -26,6 +26,7 @@ import {
   RepeatIcon,
   ShuffleIcon,
 } from "./player-icons";
+import { PlayerVisualizer } from "./player-transport";
 import { useBarEntrance } from "./use-bar-entrance";
 import { useNow } from "./use-now";
 
@@ -151,6 +152,7 @@ export default function RemoteBar({
     >
       <div className="player-song">
         {track?.cover && <CoverPicture src={track.cover} shown={48} />}
+        {here && track && <PlayerVisualizer playing={shown.playing} />}
         <div className="now-playing">
           {track ? (
             <>

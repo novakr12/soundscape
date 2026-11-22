@@ -2,7 +2,6 @@ export type DesktopCopyWindow = Window & {
   soundscapeDesktopCopy?: (text: string) => boolean;
 };
 
-/** Copies text via the desktop bridge when present, falling back to browser clipboard APIs. */
 export async function copyText(text: string): Promise<boolean> {
   if (typeof window === "undefined") return false;
 
@@ -10,18 +9,14 @@ export async function copyText(text: string): Promise<boolean> {
   if (typeof desktop === "function") {
     try {
       if (desktop(text)) return true;
-    } catch {
-      // Try standard browser clipboard fallbacks when the desktop hook fails.
-    }
+    } catch {}
   }
 
   if (typeof navigator !== "undefined" && typeof navigator.clipboard?.writeText === "function") {
     try {
       await navigator.clipboard.writeText(text);
       return true;
-    } catch {
-      // Plain HTTP LAN origins or missing permissions reject clipboard.writeText.
-    }
+    } catch {}
   }
 
   if (typeof document !== "undefined" && typeof document.execCommand === "function") {

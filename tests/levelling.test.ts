@@ -60,16 +60,54 @@ describe("volume levelling", () => {
   });
 
   it("levels by default, crossfades and autoplays only when asked and remembers all three", () => {
-    assert.deepEqual(readOptions(null), { levelling: true, crossfade: 0, autoplay: false });
-    assert.deepEqual(readOptions({ levelling: false, crossfade: 6, autoplay: true }), {
-      levelling: false,
-      crossfade: 6,
-      autoplay: true,
-    });
-    assert.deepEqual(readOptions({ levelling: "no", crossfade: 5, autoplay: "yes" }), {
+    assert.deepEqual(readOptions(null), {
       levelling: true,
       crossfade: 0,
       autoplay: false,
+      visualizer: true,
+      visualizerStyle: "bars",
+      visualizerBounce: "lively",
+      visualizerBars: 8,
     });
+    assert.deepEqual(
+      readOptions({
+        levelling: false,
+        crossfade: 6,
+        autoplay: true,
+        visualizer: false,
+        visualizerStyle: "wave",
+        visualizerBounce: "extreme",
+        visualizerBars: 12,
+      }),
+      {
+        levelling: false,
+        crossfade: 6,
+        autoplay: true,
+        visualizer: false,
+        visualizerStyle: "wave",
+        visualizerBounce: "extreme",
+        visualizerBars: 12,
+      },
+    );
+    assert.deepEqual(
+      readOptions({
+        levelling: "no",
+        crossfade: 5,
+        autoplay: "yes",
+        visualizer: "off",
+        visualizerStyle: "unknown",
+        visualizerBounce: "wild",
+        visualizerBars: 99,
+      }),
+      {
+        levelling: true,
+        crossfade: 0,
+        autoplay: false,
+        visualizer: true,
+        visualizerStyle: "bars",
+        visualizerBounce: "lively",
+        visualizerBars: 8,
+      },
+    );
   });
 });

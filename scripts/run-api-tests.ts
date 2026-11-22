@@ -235,9 +235,7 @@ async function startNextServer(root: string, nextBin: string, env: NodeJS.Proces
       if (response.status > 0) {
         return { baseUrl, child };
       }
-    } catch {
-      // Wait for Next.js server to listen.
-    }
+    } catch {}
     await new Promise((resolve) => setTimeout(resolve, 250));
   }
 
