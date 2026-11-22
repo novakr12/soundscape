@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useEffect, useState } from "react";
+import { copyText } from "@/lib/copy";
 import { createInviteLink, type InviteState } from "./actions";
 
 export default function InviteForm({ days }: { days: number }) {
@@ -13,9 +14,12 @@ export default function InviteForm({ days }: { days: number }) {
     setLink(state.code ? `${window.location.origin}/signup?invite=${state.code}` : "");
   }, [state.code]);
 
-  async function copy() {
-    await navigator.clipboard.writeText(link);
-    setCopied(true);
+  async function copy(event: React.MouseEvent<HTMLButtonElement>) {
+    if (await copyText(link)) {
+      setCopied(true);
+    } else {
+      event.currentTarget.parentElement?.querySelector("input")?.select();
+    }
   }
 
   return (

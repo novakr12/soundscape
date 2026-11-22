@@ -1,10 +1,22 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useEffect, useState } from "react";
+import { copyText } from "@/lib/copy";
 import { createDeviceToken, type TokenFormState } from "./actions";
 
 export default function TokenForm() {
   const [state, action, pending] = useActionState<TokenFormState, FormData>(createDeviceToken, {});
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    if (state.token) setCopied(false);
+  }, [state.token]);
+
+  async function copy() {
+    if (state.token && (await copyText(state.token))) {
+      setCopied(true);
+    }
+  }
 
   return (
     <>
@@ -23,7 +35,12 @@ export default function TokenForm() {
           <p>
             Your token for <strong>{state.name}</strong>:
           </p>
-          <code className="token">{state.token}</code>
+          <div className="new-token-row">
+            <code className="token">{state.token}</code>
+            <button type="button" className="secondary" onClick={copy}>
+              {copied ? "Copied" : "Copy"}
+            </button>
+          </div>
           <p className="muted">Copy it now. It won&apos;t be shown again.</p>
         </div>
       )}

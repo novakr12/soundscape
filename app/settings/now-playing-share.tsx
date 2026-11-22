@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { copyText } from "@/lib/copy";
 
 type Theme = "dark" | "light";
 
@@ -12,10 +13,9 @@ function Snippet({ label, value }: { label: string; value: string }) {
   }, [value]);
 
   async function copy(event: React.MouseEvent<HTMLButtonElement>) {
-    try {
-      await navigator.clipboard.writeText(value);
+    if (await copyText(value)) {
       setCopied(true);
-    } catch {
+    } else {
       event.currentTarget.parentElement?.querySelector("input")?.select();
     }
   }

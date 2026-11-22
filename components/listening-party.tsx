@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { copyText } from "@/lib/copy";
 import type { HandedTrack } from "@/lib/devices";
 import type { PartyView } from "@/lib/parties";
 
@@ -248,10 +249,13 @@ export function PartySection({ controls }: { controls: PartyControls }) {
         <button
           type="button"
           className="secondary"
-          onClick={async () => {
-            await navigator.clipboard?.writeText(link).catch(() => {});
-            setCopied(true);
-            setTimeout(() => setCopied(false), 2000);
+          onClick={async (event) => {
+            if (await copyText(link)) {
+              setCopied(true);
+              setTimeout(() => setCopied(false), 2000);
+            } else {
+              event.currentTarget.parentElement?.querySelector("input")?.select();
+            }
           }}
         >
           {copied ? "Copied" : "Copy"}

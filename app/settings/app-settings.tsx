@@ -294,15 +294,15 @@ export default function AppSettings() {
         onChange={option("discord")}
       />
       <form
-        className="app-row"
+        className="app-row app-field-row"
         onSubmit={(event) => {
           event.preventDefault();
           typing.current = false;
           send({ do: "discord-app", id: discordId });
         }}
       >
-        <label>
-          Discord application ID{" "}
+        <label className="app-field">
+          Discord application ID
           <input
             value={discordId}
             inputMode="numeric"
