@@ -14,9 +14,19 @@ type Options = { message?: string; confirmLabel?: string };
 
 function ConfirmDialog({ request, onClose }: { request: Request; onClose: (answer: boolean) => void }) {
   const ref = useRef<HTMLDialogElement>(null);
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
 
   useEffect(() => {
     ref.current?.showModal();
+    const pressed = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        closeRef.current(false);
+      }
+    };
+    window.addEventListener("keydown", pressed);
+    return () => window.removeEventListener("keydown", pressed);
   }, []);
 
   return (

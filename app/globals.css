@@ -1933,6 +1933,7 @@ tr.selected {
 }
 
 .confirm-dialog {
+  z-index: 100;
   width: min(24rem, calc(100vw - 2rem));
   padding: 1.25rem 1.5rem;
   border: 1px solid color-mix(in srgb, var(--muted) 30%, transparent);
@@ -2822,6 +2823,7 @@ tr.selected {
 }
 
 .finder {
+  z-index: 100;
   width: min(38rem, calc(100vw - 2rem));
   max-height: min(34rem, calc(100vh - 6rem));
   margin: 12vh auto auto;

@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { type FinderResults, finderPages, findPages, NO_RESULTS } from "@/lib/finder";
 import { MIN_QUERY_LENGTH } from "@/lib/search-limits";
 import Cover from "./cover";
@@ -42,6 +42,14 @@ export default function Finder({ username, admin }: { username: string | null; a
   const [active, setActive] = useState(0);
   const pages = useMemo(() => finderPages(username, admin), [username, admin]);
 
+  const close = useCallback(() => {
+    setOpen(false);
+    setQuery("");
+    setResults(NO_RESULTS);
+    setAnswered("");
+    setActive(0);
+  }, []);
+
   useEffect(() => {
     const show = (text: string) => {
       setQuery(text);
@@ -51,8 +59,11 @@ export default function Finder({ username, admin }: { username: string | null; a
     const pressed = (event: KeyboardEvent) => {
       if ((event.ctrlKey || event.metaKey) && !event.altKey && event.key.toLowerCase() === "k") {
         event.preventDefault();
-        if (dialog.current?.open) dialog.current.close();
+        if (dialog.current?.open) close();
         else show("");
+      } else if (event.key === "Escape" && dialog.current?.open) {
+        event.preventDefault();
+        close();
       } else if (event.key === "/" && !event.ctrlKey && !event.metaKey && !event.altKey && !typing(event.target)) {
         event.preventDefault();
         show("");
@@ -65,7 +76,7 @@ export default function Finder({ username, admin }: { username: string | null; a
       window.removeEventListener("keydown", pressed);
       window.removeEventListener(OPEN_FINDER, asked);
     };
-  }, []);
+  }, [close]);
 
   useEffect(() => {
     const element = dialog.current;
@@ -167,14 +178,6 @@ export default function Finder({ username, admin }: { username: string | null; a
 
   const chosen = Math.min(active, Math.max(items.length - 1, 0));
 
-  function close() {
-    setOpen(false);
-    setQuery("");
-    setResults(NO_RESULTS);
-    setAnswered("");
-    setActive(0);
-  }
-
   function choose(item: Item | undefined, playIt: boolean) {
     if (!item) return;
     if (playIt && item.track) {
@@ -200,6 +203,9 @@ export default function Finder({ username, admin }: { username: string | null; a
     } else if (event.key === "Enter") {
       event.preventDefault();
       choose(items[chosen], event.shiftKey);
+    } else if (event.key === "Escape") {
+      event.preventDefault();
+      close();
     }
   }
 

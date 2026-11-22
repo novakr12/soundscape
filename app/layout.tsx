@@ -97,11 +97,11 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           <ServiceWorker />
           <CoverRetry />
           <PlayerProvider username={username ?? null}>
-            <Finder username={username ?? null} admin={Boolean(username && isAdmin(username))} />
             <main>
               {children}
               <Credit />
             </main>
+            <Finder username={username ?? null} admin={Boolean(username && isAdmin(username))} />
           </PlayerProvider>
         </CanvasCoversProvider>
       </body>
