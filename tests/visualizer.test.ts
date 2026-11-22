@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { VISUALIZER_BAR_CHOICES, VISUALIZER_BOUNCES } from "../lib/player-options";
-import { bandEdges, barTransform, REST, SPECTRUM_BINS, shapeSpectrum } from "../lib/visualizer";
+import { bandEdges, barTransform, glide, REST, SPECTRUM_BINS, shapeSpectrum } from "../lib/visualizer";
 
 describe("visualizer", () => {
   it("covers every bin once for each band choice", () => {
@@ -41,6 +41,18 @@ describe("visualizer", () => {
     const loud = new Uint8Array(SPECTRUM_BINS);
     loud.fill(225, 0, bandEdges(8)[1]);
     for (const bounce of VISUALIZER_BOUNCES) assert.ok(shapeSpectrum(loud, [], 8, bounce)[0] < 0.97, bounce);
+  });
+
+  it("glides toward the levels, rising faster than it falls, and settles", () => {
+    const up = [REST];
+    assert.equal(glide(up, [1], 16), true);
+    const down = [1];
+    glide(down, [REST], 16);
+    assert.ok(up[0] - REST > 1 - down[0]);
+    const settled = [0.5];
+    for (let i = 0; i < 60 && glide(settled, [0.8], 8); i++);
+    assert.deepEqual(settled, [0.8]);
+    assert.equal(glide(settled, [0.8], 8), false);
   });
 
   it("moves dots, stretches the others and never passes on a bad number", () => {

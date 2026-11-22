@@ -7,6 +7,7 @@ import { DEFAULT_OPTIONS, type PlayerOptions, watchOptions } from "@/lib/player-
 import {
   BOUNCE_PROFILES,
   barTransform,
+  glide,
   MAX_DECIBELS,
   MIN_DECIBELS,
   REST,
@@ -274,14 +275,27 @@ export function PlayerVisualizer({
   useEffect(() => {
     if (!shown || !active || still) return;
     const bars = [...(holder.current?.children ?? [])] as HTMLElement[];
-    const paint = (levels: number[]) => {
+    const shownLevels = bars.map(() => REST);
+    let target: number[] = [];
+    let frame = 0;
+    let last = 0;
+    const draw = (now: number) => {
+      const moving = glide(shownLevels, target, last ? Math.min(now - last, 100) : 16);
       bars.forEach((bar, at) => {
-        bar.style.transform = barTransform(options.visualizerStyle, levels[at] ?? REST);
+        bar.style.transform = barTransform(options.visualizerStyle, shownLevels[at]);
       });
+      last = now;
+      frame = moving ? requestAnimationFrame(draw) : 0;
+      if (!moving) last = 0;
+    };
+    const paint = (levels: number[]) => {
+      target = levels;
+      if (!frame) frame = requestAnimationFrame(draw);
     };
     const stop = element ? watchElement(element, options, paint) : watchApp(options, paint);
     return () => {
       stop();
+      cancelAnimationFrame(frame);
       for (const bar of bars) bar.style.transform = "";
     };
   }, [shown, active, still, element, options]);

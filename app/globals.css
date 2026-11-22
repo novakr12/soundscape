@@ -350,7 +350,7 @@ main {
   background: color-mix(in srgb, var(--muted) 45%, transparent);
   transform: scaleY(0.15);
   transform-origin: bottom;
-  transition: transform 0.04s ease-out, background-color 0.2s ease;
+  transition: background-color 0.2s ease;
 }
 
 .player-visualizer[data-playing="true"] .visualizer-bar {

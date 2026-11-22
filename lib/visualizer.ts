@@ -49,6 +49,25 @@ export function shapeSpectrum(
   });
 }
 
+const RISE_MS = 32;
+const FALL_MS = 48;
+
+export function glide(shown: number[], target: readonly number[], elapsedMs: number): boolean {
+  let moving = false;
+  for (let at = 0; at < shown.length; at++) {
+    const goal = target[at] ?? REST;
+    const now = shown[at];
+    const pull = 1 - Math.exp(-elapsedMs / (goal > now ? RISE_MS : FALL_MS));
+    const next = now + (goal - now) * pull;
+    if (Math.abs(goal - next) < 0.002) shown[at] = goal;
+    else {
+      shown[at] = next;
+      moving = true;
+    }
+  }
+  return moving;
+}
+
 export function barTransform(style: VisualizerStyle, level: number) {
   const value = Number.isFinite(level) ? Math.min(1, Math.max(REST, level)) : REST;
   if (style !== "dots") return `scaleY(${value})`;
