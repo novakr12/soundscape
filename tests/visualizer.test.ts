@@ -16,7 +16,7 @@ describe("visualizer", () => {
   it("rests in silence and raises only the band that is heard", () => {
     const bins = new Uint8Array(SPECTRUM_BINS);
     assert.deepEqual(shapeSpectrum(bins, [], 8, "lively"), Array(8).fill(REST));
-    bins[0] = 255;
+    bins.fill(255, 0, bandEdges(8)[1]);
     const bars = shapeSpectrum(bins, [], 8, "lively");
     assert.ok(bars[0] > 0.85);
     assert.deepEqual(bars.slice(1), Array(7).fill(REST));
@@ -35,6 +35,12 @@ describe("visualizer", () => {
       falls,
       [...new Set(falls)].sort((a, b) => b - a),
     );
+  });
+
+  it("leaves headroom above loud bass", () => {
+    const loud = new Uint8Array(SPECTRUM_BINS);
+    loud.fill(225, 0, bandEdges(8)[1]);
+    for (const bounce of VISUALIZER_BOUNCES) assert.ok(shapeSpectrum(loud, [], 8, bounce)[0] < 0.97, bounce);
   });
 
   it("moves dots, stretches the others and never passes on a bad number", () => {
