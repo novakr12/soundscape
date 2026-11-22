@@ -3,7 +3,7 @@ import { artistIdFor } from "@/lib/catalog";
 
 export function SongLink({ trackId, children }: { trackId: string; children: React.ReactNode }) {
   return (
-    <Link className="music-link" href={`/track/${encodeURIComponent(trackId)}`}>
+    <Link className="music-link" href={`/track/${encodeURIComponent(trackId)}`} prefetch={false}>
       {children}
     </Link>
   );
@@ -11,7 +11,7 @@ export function SongLink({ trackId, children }: { trackId: string; children: Rea
 
 export function ArtistLink({ name }: { name: string }) {
   return (
-    <Link className="music-link" href={`/artist/${encodeURIComponent(artistIdFor(name))}`}>
+    <Link className="music-link" href={`/artist/${encodeURIComponent(artistIdFor(name))}`} prefetch={false}>
       {name}
     </Link>
   );

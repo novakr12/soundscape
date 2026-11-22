@@ -10,6 +10,46 @@ const PAUSE_MS = 16;
 let line: Promise<unknown> = Promise.resolve();
 let sliceStart = 0;
 
+const lazyCallbacks = new WeakMap<Element, () => void>();
+let sharedObserver: IntersectionObserver | null = null;
+const inFlightFetches = new Map<string, Promise<Blob>>();
+
+function getSharedObserver() {
+  if (!sharedObserver && typeof IntersectionObserver === "function") {
+    sharedObserver = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (!entry.isIntersecting) continue;
+          const callback = lazyCallbacks.get(entry.target);
+          if (callback) {
+            lazyCallbacks.delete(entry.target);
+            sharedObserver?.unobserve(entry.target);
+            callback();
+          }
+        }
+      },
+      { rootMargin: "200px" },
+    );
+  }
+  return sharedObserver;
+}
+
+function fetchCoverBlob(url: string): Promise<Blob> {
+  let pending = inFlightFetches.get(url);
+  if (!pending) {
+    pending = fetch(url)
+      .then((response) => {
+        if (!response.ok) throw new Error(`cover ${response.status}`);
+        return response.blob();
+      })
+      .finally(() => {
+        if (inFlightFetches.get(url) === pending) inFlightFetches.delete(url);
+      });
+    inFlightFetches.set(url, pending);
+  }
+  return pending;
+}
+
 function inTurn<T>(work: () => Promise<T>): Promise<T> {
   const turn = line.then(async () => {
     if (performance.now() - sliceStart > SLICE_MS) {
@@ -23,9 +63,8 @@ function inTurn<T>(work: () => Promise<T>): Promise<T> {
 }
 
 async function draw(canvas: HTMLCanvasElement, url: string, shown: number, signal: AbortSignal) {
-  const response = await fetch(url, { signal });
-  if (!response.ok) throw new Error(`cover ${response.status}`);
-  const blob = await response.blob();
+  const blob = await fetchCoverBlob(url);
+  if (signal.aborted) return;
   await inTurn(() => paint(canvas, blob, shown, signal));
 }
 
@@ -77,23 +116,22 @@ function CanvasCover({
         if (!stop.signal.aborted) onFail(url);
       });
     };
-    let watcher: IntersectionObserver | null = null;
-    if (lazy && typeof IntersectionObserver === "function") {
-      watcher = new IntersectionObserver(
-        (entries) => {
-          if (!entries.some((entry) => entry.isIntersecting)) return;
-          watcher?.disconnect();
-          start();
-        },
-        { rootMargin: "300px" },
-      );
+    const watcher = lazy ? getSharedObserver() : null;
+    if (watcher) {
+      lazyCallbacks.set(canvas, start);
       watcher.observe(canvas);
     } else {
       start();
     }
     return () => {
-      watcher?.disconnect();
+      if (watcher) {
+        lazyCallbacks.delete(canvas);
+        watcher.unobserve(canvas);
+      }
       stop.abort();
+      // Release backing store immediately on unmount or URL change
+      canvas.width = 0;
+      canvas.height = 0;
     };
   }, [url, shown, lazy, onFail]);
 
@@ -101,8 +139,8 @@ function CanvasCover({
     <canvas
       ref={ref}
       className={`${className ? `${className} ` : ""}cover-canvas`}
-      width={shown}
-      height={shown}
+      width={0}
+      height={0}
       style={{ width: shown, height: shown }}
     />
   );
@@ -127,6 +165,14 @@ export default function CoverPicture({
     return <CanvasCover key={url} url={url} shown={shown} className={className} lazy={lazy} onFail={setFailed} />;
   }
   return (
-    <img className={className} src={url} alt="" width={shown} height={shown} loading={lazy ? "lazy" : undefined} />
+    <img
+      className={className}
+      src={url}
+      alt=""
+      width={shown}
+      height={shown}
+      loading={lazy ? "lazy" : undefined}
+      decoding="async"
+    />
   );
 }

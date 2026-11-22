@@ -25,9 +25,12 @@ export async function GET(request: Request, { params }: Context) {
         { status: 404, headers: { "cache-control": "private, max-age=3600" } },
       );
     }
-    return new Response(new Uint8Array(cover.data), {
-      headers: { "content-type": cover.type, "cache-control": "private, max-age=86400" },
-    });
+    return new Response(
+      new Uint8Array(cover.data.buffer as ArrayBuffer, cover.data.byteOffset, cover.data.byteLength),
+      {
+        headers: { "content-type": cover.type, "cache-control": "private, max-age=86400" },
+      },
+    );
   } catch (error) {
     if (!(error instanceof NavidromeBusy)) throw error;
     return Response.json(

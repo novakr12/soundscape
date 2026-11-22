@@ -185,6 +185,22 @@ th, td {
   border: 0;
 }
 
+li.row-gap {
+  display: block;
+  min-height: 0;
+  padding: 0;
+  margin: 0;
+  border: 0;
+}
+
+.music-songs > li:not(.row-gap),
+.feed > li:not(.row-gap),
+.ranked-list > li:not(.row-gap),
+table tbody tr:not(.row-gap) {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 56px;
+}
+
 .columns {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
@@ -571,7 +587,7 @@ main {
   list-style: none;
 }
 
-.queue-panel li {
+.queue-panel li:not(.row-gap) {
   display: flex;
   align-items: center;
   gap: 0.25rem;
@@ -1622,7 +1638,12 @@ header .search {
 }
 
 .page {
-  animation: rise-in 0.25s ease-out;
+  animation: fade-in 0.2s ease-out;
+}
+
+body.page-hidden .live .dot.on::after,
+body.page-hidden .equalizer span {
+  animation-play-state: paused;
 }
 
 button, header nav a, .account a {
@@ -2380,7 +2401,7 @@ tr.selected {
   list-style: none;
 }
 
-.music-songs li {
+.music-songs li:not(.row-gap) {
   display: flex;
   align-items: center;
   gap: 0.75rem;

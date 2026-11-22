@@ -82,7 +82,9 @@ export default async function SearchPage({ searchParams }: Props) {
             <section>
               <div className="section-head">
                 <h2>In your Navidrome</h2>
-                <Link href={`/music?q=${encodeURIComponent(query)}`}>More in Music</Link>
+                <Link href={`/music?q=${encodeURIComponent(query)}`} prefetch={false}>
+                  More in Music
+                </Link>
               </div>
               <MusicList songs={library} />
             </section>
@@ -116,7 +118,11 @@ export default async function SearchPage({ searchParams }: Props) {
                     <Cover src={album.cover} />
                     <span className="listening-info">
                       <span>
-                        <Link className="music-link" href={`/album/${encodeURIComponent(album.albumId)}`}>
+                        <Link
+                          className="music-link"
+                          href={`/album/${encodeURIComponent(album.albumId)}`}
+                          prefetch={false}
+                        >
                           {album.title}
                         </Link>{" "}
                         <span className="muted">
@@ -137,7 +143,9 @@ export default async function SearchPage({ searchParams }: Props) {
               <ul>
                 {users.map((username) => (
                   <li key={username}>
-                    <Link href={`/u/${encodeURIComponent(username)}`}>{username}</Link>
+                    <Link href={`/u/${encodeURIComponent(username)}`} prefetch={false}>
+                      {username}
+                    </Link>
                   </li>
                 ))}
               </ul>

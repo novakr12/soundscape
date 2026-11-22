@@ -17,9 +17,9 @@ export async function GET(request: Request, { params }: Context) {
     const host = await canStream(userId, shared.partyId, shared.songId);
     const hostServer = host ? await getNavidrome(host) : null;
     if (!hostServer) return Response.json({ error: "That song isn't part of a party you're in." }, { status: 404 });
-    return streamSong(hostServer, shared.songId, request.headers.get("range"));
+    return streamSong(hostServer, shared.songId, request.headers.get("range"), request.signal);
   }
   const server = await getNavidrome(userId);
   if (!server) return Response.json({ error: "Connect Navidrome on the Connect page first." }, { status: 404 });
-  return streamSong(server, songId, request.headers.get("range"));
+  return streamSong(server, songId, request.headers.get("range"), request.signal);
 }

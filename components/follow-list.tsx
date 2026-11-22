@@ -17,7 +17,9 @@ export default async function FollowList({ username, kind }: Props) {
 
   const back = (
     <p className="muted">
-      <Link href={`/u/${encodeURIComponent(username)}`}>← {username}</Link>
+      <Link href={`/u/${encodeURIComponent(username)}`} prefetch={false}>
+        ← {username}
+      </Link>
     </p>
   );
   if (hidden && viewer !== username) {
@@ -48,7 +50,9 @@ export default async function FollowList({ username, kind }: Props) {
           <ul>
             {visible.map((user) => (
               <li key={user}>
-                <Link href={`/u/${encodeURIComponent(user)}`}>{user}</Link>
+                <Link href={`/u/${encodeURIComponent(user)}`} prefetch={false}>
+                  {user}
+                </Link>
               </li>
             ))}
           </ul>

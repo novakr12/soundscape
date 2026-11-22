@@ -1,6 +1,6 @@
 import { getValue, keys, setValue } from "./kv";
 import { sql } from "./postgres";
-import { addDays, localDay } from "./time";
+import { addDays, localDay, TIME_ZONE } from "./time";
 
 export const MILESTONES = [
   1, 100, 500, 1_000, 2_500, 5_000, 10_000, 25_000, 50_000, 100_000, 250_000, 500_000, 1_000_000,
@@ -37,31 +37,49 @@ function streaks(days: string[], today: string) {
 }
 
 export async function computeListeningRecord(userId: string, now = new Date()): Promise<ListeningRecord> {
-  const days = new Set<string>();
-  const milestones: Milestone[] = [];
+  const dayRows = await sql`
+    SELECT to_char((played_at AT TIME ZONE ${TIME_ZONE})::date, 'YYYY-MM-DD') AS day,
+           count(*)::int AS plays
+    FROM plays
+    WHERE user_id = ${userId}
+    GROUP BY 1
+    ORDER BY 1 ASC`;
+
+  const days: string[] = [];
   let plays = 0;
-  const cursor = sql`
-    SELECT p.played_at, p.track_id, t.title AS track_title, a.name AS artist_name
-    FROM plays p JOIN tracks t ON t.id = p.track_id JOIN artists a ON a.id = t.artist_id
-    WHERE p.user_id = ${userId}
-    ORDER BY p.played_at, p.id`.cursor(5000);
-  for await (const rows of cursor) {
-    for (const row of rows) {
-      plays++;
-      days.add(localDay(row.played_at));
-      if (MILESTONES.includes(plays)) {
-        milestones.push({
-          count: plays,
-          playedAt: row.played_at.toISOString(),
-          trackId: row.track_id,
-          title: row.track_title,
-          artist: row.artist_name,
-        });
-      }
-    }
+  for (const row of dayRows) {
+    days.push(row.day);
+    plays += row.plays;
   }
 
-  const { longest, current, playedToday } = streaks([...days].sort(), localDay(now));
+  const reached = MILESTONES.filter((count) => count <= plays);
+  const milestoneRows =
+    reached.length > 0
+      ? await sql`
+          WITH numbered AS (
+            SELECT p.played_at,
+                   p.track_id,
+                   row_number() OVER (ORDER BY p.played_at ASC, p.id ASC) AS rn
+            FROM plays p
+            WHERE p.user_id = ${userId}
+          )
+          SELECT n.rn::int AS count, n.played_at, n.track_id, t.title AS track_title, a.name AS artist_name
+          FROM numbered n
+          JOIN tracks t ON t.id = n.track_id
+          JOIN artists a ON a.id = t.artist_id
+          WHERE n.rn = ANY(${reached}::bigint[])
+          ORDER BY n.rn ASC`
+      : [];
+
+  const milestones: Milestone[] = milestoneRows.map((row) => ({
+    count: row.count,
+    playedAt: (row.played_at as Date).toISOString(),
+    trackId: row.track_id,
+    title: row.track_title,
+    artist: row.artist_name,
+  }));
+
+  const { longest, current, playedToday } = streaks(days, localDay(now));
   return {
     plays,
     milestones,

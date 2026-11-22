@@ -21,7 +21,13 @@ export default function LiveUpdates({ fallbackSeconds = 30 }: { fallbackSeconds?
 
   useEffect(() => {
     let pending: ReturnType<typeof setTimeout> | undefined;
+    let missed = false;
     const refreshSoon = () => {
+      if (document.hidden) {
+        missed = true;
+        return;
+      }
+      missed = false;
       if (pending) return;
       pending = setTimeout(() => {
         pending = undefined;
@@ -38,12 +44,22 @@ export default function LiveUpdates({ fallbackSeconds = 30 }: { fallbackSeconds?
     };
     source.addEventListener("listening", refreshSoon);
 
-    const fallback = setInterval(() => router.refresh(), fallbackSeconds * 1000);
+    const onVisibility = () => {
+      if (!document.hidden && (missed || source.readyState !== EventSource.OPEN)) {
+        refreshSoon();
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+
+    const fallback = setInterval(() => {
+      if (!document.hidden && source.readyState !== EventSource.OPEN) router.refresh();
+    }, fallbackSeconds * 1000);
 
     return () => {
       source.close();
       clearInterval(fallback);
       clearTimeout(pending);
+      document.removeEventListener("visibilitychange", onVisibility);
     };
   }, [router, fallbackSeconds]);
 

@@ -51,7 +51,7 @@ export default async function YearscapePage({ searchParams }: Props) {
                 {other}
               </strong>
             ) : (
-              <Link key={other} href={`/yearscape?year=${other}`}>
+              <Link key={other} href={`/yearscape?year=${other}`} prefetch={false}>
                 {other}
               </Link>
             ),
@@ -96,7 +96,9 @@ export default async function YearscapePage({ searchParams }: Props) {
                     <tr key={month.month}>
                       <td>
                         {month.plays > 0 ? (
-                          <Link href={`/yearscape/${month.month}`}>{monthLabel(month.month)}</Link>
+                          <Link href={`/yearscape/${month.month}`} prefetch={false}>
+                            {monthLabel(month.month)}
+                          </Link>
                         ) : (
                           monthLabel(month.month)
                         )}
@@ -162,7 +164,7 @@ export default async function YearscapePage({ searchParams }: Props) {
               <h2>Compare with a friend</h2>
               <nav className="year-links" aria-label="Compare with">
                 {friends.map((friend) => (
-                  <Link key={friend} href={`/u/${encodeURIComponent(friend)}/compare?year=${year}`}>
+                  <Link key={friend} href={`/u/${encodeURIComponent(friend)}/compare?year=${year}`} prefetch={false}>
                     {friend}
                   </Link>
                 ))}

@@ -183,7 +183,7 @@ export function useDeviceLink(local: RefObject<LocalPlayer>, username: string | 
     };
   }, [local, username]);
 
-  const now = useNow(15_000);
+  const now = useNow(15_000, devices.size > 0);
 
   const online = [...devices.values()].filter((device) => isOnline(device, now + offset));
 
@@ -443,7 +443,10 @@ export function DevicesPanel({
   onFollow: (id: string) => void;
 }) {
   const [message, setMessage] = useState<string | null>(null);
-  const now = useNow(1000);
+  const now = useNow(
+    1000,
+    link.devices.some((d) => d.state.playing),
+  );
 
   async function run(work: Promise<string | null>) {
     setMessage(await work);

@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { type FinderResults, finderPages, findPages, NO_RESULTS } from "@/lib/finder";
 import { MIN_QUERY_LENGTH } from "@/lib/search-limits";
 import Cover from "./cover";
-import { type PlayerTrack, usePlayer } from "./player";
+import { type PlayerTrack, usePlayerActions } from "./player";
 
 export const OPEN_FINDER = "soundscape-open-finder";
 const WAIT_MS = 120;
@@ -32,7 +32,7 @@ function typing(target: EventTarget | null) {
 
 export default function Finder({ username, admin }: { username: string | null; admin: boolean }) {
   const router = useRouter();
-  const { play } = usePlayer();
+  const { play } = usePlayerActions();
   const dialog = useRef<HTMLDialogElement>(null);
   const input = useRef<HTMLInputElement>(null);
   const [open, setOpen] = useState(false);
@@ -104,6 +104,7 @@ export default function Finder({ username, admin }: { username: string | null; a
   }, [wanted, open]);
 
   const items = useMemo(() => {
+    if (!open) return [];
     const matchingPages = wanted ? findPages(wanted, pages) : pages.slice(0, PAGES_WITHOUT_QUERY);
     const pageItems: Item[] = matchingPages.map((page) => ({
       key: `page:${page.href}`,
@@ -162,12 +163,16 @@ export default function Finder({ username, admin }: { username: string | null; a
       });
     }
     return everything;
-  }, [wanted, pages, results, answered]);
+  }, [open, wanted, pages, results, answered]);
 
   const chosen = Math.min(active, Math.max(items.length - 1, 0));
 
   function close() {
     setOpen(false);
+    setQuery("");
+    setResults(NO_RESULTS);
+    setAnswered("");
+    setActive(0);
   }
 
   function choose(item: Item | undefined, playIt: boolean) {
@@ -212,90 +217,94 @@ export default function Finder({ username, admin }: { username: string | null; a
         if (event.target === event.currentTarget) close();
       }}
     >
-      <input
-        ref={input}
-        type="search"
-        className="finder-input"
-        value={query}
-        placeholder="Find songs, artists, albums or pages"
-        aria-label="Find songs, artists, albums or pages"
-        role="combobox"
-        aria-expanded={items.length > 0}
-        aria-controls="finder-results"
-        aria-activedescendant={items.length > 0 ? `finder-${chosen}` : undefined}
-        autoComplete="off"
-        spellCheck={false}
-        onChange={(event) => {
-          setQuery(event.target.value);
-          setActive(0);
-        }}
-        onKeyDown={keys}
-      />
-      <div id="finder-results" className="finder-results" role="listbox" aria-label="Results">
-        {items.map((item, at) => (
-          <div
-            key={item.key}
-            id={`finder-${at}`}
-            role="option"
-            tabIndex={-1}
-            aria-selected={at === chosen}
-            className={at === chosen ? "active" : undefined}
-            onMouseMove={() => at !== chosen && setActive(at)}
-            onMouseDown={(event) => event.preventDefault()}
-            onClick={(event) => choose(item, event.shiftKey)}
-          >
-            {item.icon ? (
-              <span className="finder-icon" aria-hidden="true">
-                <svg
-                  viewBox="0 0 24 24"
-                  width="20"
-                  height="20"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  aria-hidden="true"
-                >
-                  {item.icon === "search" ? (
-                    <path d="M10.5 18a7.5 7.5 0 1 0 0-15 7.5 7.5 0 0 0 0 15zM16 16l5 5" strokeLinecap="round" />
-                  ) : (
-                    <path d="M5 12h14M13 6l6 6-6 6" strokeLinecap="round" strokeLinejoin="round" />
-                  )}
-                </svg>
-              </span>
-            ) : (
-              <Cover src={item.cover} round={item.round} />
-            )}
-            <span className="finder-text">
-              <span>{item.title}</span>
-              {item.detail && <span className="muted">{item.detail}</span>}
-            </span>
-            <span className="finder-kind muted">{item.kind}</span>
-            {item.track && (
-              <button
-                type="button"
-                className="icon-button finder-play"
-                aria-label={`Play ${item.title}`}
+      {open && (
+        <>
+          <input
+            ref={input}
+            type="search"
+            className="finder-input"
+            value={query}
+            placeholder="Find songs, artists, albums or pages"
+            aria-label="Find songs, artists, albums or pages"
+            role="combobox"
+            aria-expanded={items.length > 0}
+            aria-controls="finder-results"
+            aria-activedescendant={items.length > 0 ? `finder-${chosen}` : undefined}
+            autoComplete="off"
+            spellCheck={false}
+            onChange={(event) => {
+              setQuery(event.target.value);
+              setActive(0);
+            }}
+            onKeyDown={keys}
+          />
+          <div id="finder-results" className="finder-results" role="listbox" aria-label="Results">
+            {items.map((item, at) => (
+              <div
+                key={item.key}
+                id={`finder-${at}`}
+                role="option"
                 tabIndex={-1}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  choose(item, true);
-                }}
+                aria-selected={at === chosen}
+                className={at === chosen ? "active" : undefined}
+                onMouseMove={() => at !== chosen && setActive(at)}
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={(event) => choose(item, event.shiftKey)}
               >
-                <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true">
-                  <path d="M8 5v14l11-7z" />
-                </svg>
-              </button>
+                {item.icon ? (
+                  <span className="finder-icon" aria-hidden="true">
+                    <svg
+                      viewBox="0 0 24 24"
+                      width="20"
+                      height="20"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      aria-hidden="true"
+                    >
+                      {item.icon === "search" ? (
+                        <path d="M10.5 18a7.5 7.5 0 1 0 0-15 7.5 7.5 0 0 0 0 15zM16 16l5 5" strokeLinecap="round" />
+                      ) : (
+                        <path d="M5 12h14M13 6l6 6-6 6" strokeLinecap="round" strokeLinejoin="round" />
+                      )}
+                    </svg>
+                  </span>
+                ) : (
+                  <Cover src={item.cover} round={item.round} />
+                )}
+                <span className="finder-text">
+                  <span>{item.title}</span>
+                  {item.detail && <span className="muted">{item.detail}</span>}
+                </span>
+                <span className="finder-kind muted">{item.kind}</span>
+                {item.track && (
+                  <button
+                    type="button"
+                    className="icon-button finder-play"
+                    aria-label={`Play ${item.title}`}
+                    tabIndex={-1}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      choose(item, true);
+                    }}
+                  >
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true">
+                      <path d="M8 5v14l11-7z" />
+                    </svg>
+                  </button>
+                )}
+              </div>
+            ))}
+            {wanted.length >= MIN_QUERY_LENGTH && answered === wanted && items.length <= 1 && (
+              <p className="finder-empty muted">Nothing found yet. Press Enter to search everywhere.</p>
             )}
           </div>
-        ))}
-        {wanted.length >= MIN_QUERY_LENGTH && answered === wanted && items.length <= 1 && (
-          <p className="finder-empty muted">Nothing found yet. Press Enter to search everywhere.</p>
-        )}
-      </div>
-      <p className="finder-help muted">
-        <kbd>↑</kbd> <kbd>↓</kbd> move · <kbd>Enter</kbd> open · <kbd>Shift</kbd>+<kbd>Enter</kbd> play · <kbd>Esc</kbd>{" "}
-        close
-      </p>
+          <p className="finder-help muted">
+            <kbd>↑</kbd> <kbd>↓</kbd> move · <kbd>Enter</kbd> open · <kbd>Shift</kbd>+<kbd>Enter</kbd> play ·{" "}
+            <kbd>Esc</kbd> close
+          </p>
+        </>
+      )}
     </dialog>
   );
 }

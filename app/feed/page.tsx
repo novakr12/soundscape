@@ -17,7 +17,7 @@ export const metadata: Metadata = { title: "Feed · Soundscape" };
 
 function UserLink({ userId }: { userId: string }) {
   return (
-    <Link href={`/u/${encodeURIComponent(userId)}`}>
+    <Link href={`/u/${encodeURIComponent(userId)}`} prefetch={false}>
       <strong>{userId}</strong>
     </Link>
   );

@@ -20,26 +20,36 @@ export async function usersWithPlays(): Promise<string[]> {
 }
 
 export async function findDuplicatePlays(userId: string): Promise<DuplicatePlay[]> {
-  const rows = await sql`
+  const cursor = sql`
     SELECT p.id, p.played_at, p.track_id, t.title, a.name AS artist
-    FROM plays p JOIN tracks t ON t.id = p.track_id JOIN artists a ON a.id = t.artist_id
-    WHERE p.user_id = ${userId}
-    ORDER BY p.track_id, p.played_at, p.id`;
+    FROM user_track_plays utp
+    JOIN plays p ON p.user_id = utp.user_id AND p.track_id = utp.track_id
+    JOIN tracks t ON t.id = p.track_id
+    JOIN artists a ON a.id = t.artist_id
+    WHERE utp.user_id = ${userId} AND utp.plays > 1
+    ORDER BY p.track_id, p.played_at, p.id`.cursor(2000);
 
   const duplicates: DuplicatePlay[] = [];
-  let kept = rows[0];
-  for (const play of rows.slice(1)) {
-    if (play.track_id === kept.track_id && play.played_at.getTime() - kept.played_at.getTime() <= SAME_PLAY_MS) {
-      duplicates.push({
-        playId: play.id,
-        playedAt: play.played_at,
-        keptAt: kept.played_at,
-        trackId: play.track_id,
-        title: play.title,
-        artist: play.artist,
-      });
-    } else {
-      kept = play;
+  let kept: { id: string; played_at: Date; track_id: string; title: string; artist: string } | null = null;
+  for await (const batch of cursor) {
+    for (const row of batch) {
+      const play = row as { id: string; played_at: Date; track_id: string; title: string; artist: string };
+      if (
+        kept &&
+        play.track_id === kept.track_id &&
+        play.played_at.getTime() - kept.played_at.getTime() <= SAME_PLAY_MS
+      ) {
+        duplicates.push({
+          playId: play.id,
+          playedAt: play.played_at,
+          keptAt: kept.played_at,
+          trackId: play.track_id,
+          title: play.title,
+          artist: play.artist,
+        });
+      } else {
+        kept = play;
+      }
     }
   }
   return duplicates.sort((a, b) => a.playedAt.getTime() - b.playedAt.getTime());
@@ -58,11 +68,16 @@ export async function withoutKnownPlays(userId: string, listens: Listen[]): Prom
   if (times.length === 0) return listens;
   const from = new Date(Math.min(...times) - SAME_PLAY_MS);
   const to = new Date(Math.max(...times) + SAME_PLAY_MS);
+  const resolved = await resolveTracks(listens);
+  const trackIds = [...new Set(resolved.map((track) => track.trackId))];
 
   const known = new Map<string, number[]>();
-  const rows = await sql`
-    SELECT played_at, track_id FROM plays
-    WHERE user_id = ${userId} AND played_at >= ${from} AND played_at <= ${to}`;
+  const rows =
+    trackIds.length > 0
+      ? await sql`
+          SELECT played_at, track_id FROM plays
+          WHERE user_id = ${userId} AND played_at >= ${from} AND played_at <= ${to} AND track_id = ANY(${trackIds})`
+      : [];
   for (const row of rows) {
     let seen = known.get(row.track_id);
     if (!seen) {
@@ -71,7 +86,6 @@ export async function withoutKnownPlays(userId: string, listens: Listen[]): Prom
     }
     seen.push(row.played_at.getTime());
   }
-  const resolved = await resolveTracks(listens);
   return listens.filter((listen, i) => {
     const trackId = resolved[i].trackId;
     const at = listen.playedAt.getTime();

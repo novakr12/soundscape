@@ -1,6 +1,5 @@
 import type { Sql } from "postgres";
 import { sql } from "./postgres";
-import { privateUsers } from "./privacy";
 
 import { MIN_QUERY_LENGTH } from "./search-limits";
 
@@ -157,11 +156,12 @@ export async function searchSongs(text: string, limit = 8): Promise<SongResult[]
 export async function searchUsers(text: string, viewer: string | null, limit = 8): Promise<string[]> {
   const needle = text.toLowerCase().replace(/\s+/g, "");
   if (needle.length < MIN_QUERY_LENGTH) return [];
-  const rows = await sql`SELECT username FROM users WHERE strpos(username, ${needle}) > 0`;
-  const matches = rows.map((row) => row.username as string);
-  const hidden = await privateUsers(matches);
-  return matches
-    .filter((username) => !hidden.has(username) || username === viewer)
-    .sort((a, b) => Number(b.startsWith(needle)) - Number(a.startsWith(needle)) || a.localeCompare(b))
-    .slice(0, limit);
+  const rows = await sql`
+    SELECT username
+    FROM users
+    WHERE strpos(username, ${needle}) > 0
+      AND (NOT is_private OR username = ${viewer})
+    ORDER BY starts_with(username, ${needle}) DESC, username ASC
+    LIMIT ${limit}`;
+  return rows.map((row) => row.username as string);
 }

@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { type RefObject, useEffect, useRef, useState } from "react";
 import { currentLine, type Lyrics } from "@/lib/lyrics-text";
 import type { PlayerTrack } from "./player";
 
 const REFRESH_MS = 250;
+const PLAY_EVENTS = ["play", "playing", "pause", "ended", "emptied"];
 
 type State = { key: string; lyrics: Lyrics | null } | { key: string; loading: true } | { key: string; failed: true };
 
@@ -15,11 +16,15 @@ function keyOf(track: PlayerTrack) {
 export default function LyricsPanel({
   track,
   time,
+  playing,
+  audio,
   onSeek,
   onClose,
 }: {
   track: PlayerTrack;
   time: () => number;
+  playing?: boolean;
+  audio?: RefObject<HTMLAudioElement | null>;
   onSeek: (seconds: number) => void;
   onClose: () => void;
 }) {
@@ -34,15 +39,19 @@ export default function LyricsPanel({
     const params = new URLSearchParams({ trackId: track.trackId, title: track.title, artist: track.artist });
     if (track.songId) params.set("songId", track.songId);
     if (track.album) params.set("album", track.album);
-    let live = true;
+    const stop = new AbortController();
     setState({ key, loading: true });
     setAt(-1);
-    fetch(`/api/lyrics?${params}`)
+    fetch(`/api/lyrics?${params}`, { signal: stop.signal })
       .then((response) => (response.ok ? response.json() : Promise.reject(new Error(String(response.status)))))
-      .then((answer: { lyrics: Lyrics | null }) => live && setState({ key, lyrics: answer.lyrics }))
-      .catch(() => live && setState({ key, failed: true }));
+      .then((answer: { lyrics: Lyrics | null }) => {
+        if (!stop.signal.aborted) setState({ key, lyrics: answer.lyrics });
+      })
+      .catch(() => {
+        if (!stop.signal.aborted) setState({ key, failed: true });
+      });
     return () => {
-      live = false;
+      stop.abort();
     };
   }, [key, track.trackId, track.songId, track.title, track.artist, track.album]);
 
@@ -65,11 +74,37 @@ export default function LyricsPanel({
 
   useEffect(() => {
     if (!lyrics?.synced) return;
+    let timer: ReturnType<typeof setInterval> | undefined;
+    const isPlaying = () => {
+      if (playing !== undefined) return playing;
+      const element = audio?.current;
+      return element ? !element.paused && !element.ended : true;
+    };
     const tick = () => setAt(currentLine(lyrics.lines, clock.current()));
+    const arm = () => {
+      const wanted = !document.hidden && isPlaying();
+      if (wanted && timer === undefined) {
+        tick();
+        timer = setInterval(tick, REFRESH_MS);
+      } else if (!wanted && timer !== undefined) {
+        clearInterval(timer);
+        timer = undefined;
+      }
+    };
     tick();
-    const timer = setInterval(tick, REFRESH_MS);
-    return () => clearInterval(timer);
-  }, [lyrics]);
+    arm();
+    document.addEventListener("visibilitychange", arm);
+    if (audio) {
+      for (const event of PLAY_EVENTS) document.addEventListener(event, arm, true);
+    }
+    return () => {
+      if (timer !== undefined) clearInterval(timer);
+      document.removeEventListener("visibilitychange", arm);
+      if (audio) {
+        for (const event of PLAY_EVENTS) document.removeEventListener(event, arm, true);
+      }
+    };
+  }, [lyrics, playing, audio]);
 
   useEffect(() => {
     const box = list.current?.parentElement;

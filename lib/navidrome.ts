@@ -231,10 +231,19 @@ export async function checkFullSong(userId: string, trackId: string, now = Date.
   };
 }
 
-export async function streamSong(server: Navidrome, songId: string, range: string | null): Promise<Response> {
+const MAX_COVER_BYTES = 5 * 1024 * 1024;
+
+export async function streamSong(
+  server: Navidrome,
+  songId: string,
+  range: string | null,
+  signal?: AbortSignal,
+): Promise<Response> {
   if (!isSongId(songId)) return Response.json({ error: "Unknown song." }, { status: 404 });
+  if (signal?.aborted) return new Response(null, { status: 499 });
   const waiting = new AbortController();
   const timer = setTimeout(() => waiting.abort(), 10_000);
+  const stop = signal ? AbortSignal.any([waiting.signal, signal]) : waiting.signal;
   let upstream: Response;
   try {
     upstream = await request(
@@ -242,7 +251,7 @@ export async function streamSong(server: Navidrome, songId: string, range: strin
         ["id", songId],
         ["format", "raw"],
       ]),
-      { headers: range ? { range } : {}, signal: waiting.signal },
+      { headers: range ? { range } : {}, signal: stop },
     );
   } catch {
     return Response.json({ error: "Navidrome is unreachable." }, { status: 502 });
@@ -312,11 +321,18 @@ async function askForCover(server: Navidrome, coverArtId: string, size: number):
     throw new NavidromeBusy("Navidrome is busy.");
   }
   const type = response.headers.get("content-type") ?? "";
-  if (!response.ok || !type.startsWith("image/")) {
+  const contentLength = Number(response.headers.get("content-length"));
+  if (
+    !response.ok ||
+    !type.startsWith("image/") ||
+    (Number.isFinite(contentLength) && contentLength > MAX_COVER_BYTES)
+  ) {
     await response.body?.cancel().catch(() => {});
     return null;
   }
-  return { type, data: Buffer.from(await response.arrayBuffer()) };
+  const bytes = await response.arrayBuffer();
+  if (bytes.byteLength > MAX_COVER_BYTES) return null;
+  return { type, data: Buffer.from(bytes) };
 }
 
 export function fetchCoverArt(server: Navidrome, coverArtId: string, size = 300): Promise<CoverImage | null> {

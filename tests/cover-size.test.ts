@@ -14,6 +14,7 @@ describe("cover sizes", () => {
   it("asks our own cover routes for a smaller picture", () => {
     assert.equal(sizedCover("/api/cover/abc", 40), "/api/cover/abc?size=96");
     assert.equal(sizedCover("/api/navidrome/cover/al-1", 128), "/api/navidrome/cover/al-1?size=256");
+    assert.equal(sizedCover("/api/party/p1/cover/c1", 40), "/api/party/p1/cover/c1?size=96");
     assert.equal(sizedCover("/api/cover/abc?x=1", 40), "/api/cover/abc?x=1&size=96");
     assert.equal(sizedCover("/api/cover/abc", 300), "/api/cover/abc");
   });

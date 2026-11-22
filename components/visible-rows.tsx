@@ -7,9 +7,13 @@ const FIRST_ROWS = 30;
 const SPARE_ROWS = 12;
 const GUESSED_HEIGHT = 56;
 
-export default function VisibleRows({ columns, children }: { columns: number; children: ReactNode }) {
-  const rows = Children.toArray(children);
-  const count = rows.length;
+type Props<T> =
+  | { columns: number; items: readonly T[]; renderRow: (item: T, index: number) => ReactNode; children?: never }
+  | { columns: number; children: ReactNode; items?: never; renderRow?: never };
+
+export default function VisibleRows<T>({ columns, items, renderRow, children }: Props<T>) {
+  const rows = items ? null : Children.toArray(children);
+  const count = items ? items.length : rows!.length;
   const above = useRef<HTMLTableRowElement>(null);
   const below = useRef<HTMLTableRowElement>(null);
   const [view, setView] = useState<RowWindow & { height: number }>({
@@ -55,12 +59,17 @@ export default function VisibleRows({ columns, children }: { columns: number; ch
 
   const start = Math.min(view.start, count);
   const end = Math.min(Math.max(view.end, start), count);
+  const visible =
+    items && renderRow
+      ? items.slice(start, end).map((item, offset) => renderRow(item, start + offset))
+      : rows!.slice(start, end);
+
   return (
     <>
       <tr ref={above} className="row-gap">
         <td colSpan={columns} style={{ height: start * view.height }} />
       </tr>
-      {rows.slice(start, end)}
+      {visible}
       <tr ref={below} className="row-gap">
         <td colSpan={columns} style={{ height: (count - end) * view.height }} />
       </tr>

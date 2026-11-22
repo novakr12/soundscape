@@ -24,10 +24,11 @@ export async function toMusicSongs(songs: NavidromeSong[], from: { library?: str
   const resolved = await resolveTracks(songs);
   const ids = [...new Set(resolved.map((song) => song.trackId))];
   const albumIds = songs.map((song, i) => (song.album ? albumKey(resolved[i].artistId, song.album) : null));
+  const uniqueAlbumIds = [...new Set(albumIds.filter((id): id is string => Boolean(id)))];
   const [tracks, artists, albums] = await Promise.all([
     sql`SELECT id FROM tracks WHERE id = ANY(${ids})`,
     sql`SELECT id FROM artists WHERE id = ANY(${[...new Set(resolved.map((song) => song.artistId))]})`,
-    sql`SELECT id FROM albums WHERE id = ANY(${albumIds.filter((id): id is string => Boolean(id))})`,
+    sql`SELECT id FROM albums WHERE id = ANY(${uniqueAlbumIds})`,
   ]);
   const known = new Set(tracks.map((row) => row.id as string));
   const knownArtists = new Set(artists.map((row) => row.id as string));

@@ -8,7 +8,7 @@ export default function NavLink({ href, children }: { href: string; children: Re
   const active = pathname === href || pathname.startsWith(`${href}/`);
 
   return (
-    <Link href={href} aria-current={active ? "page" : undefined}>
+    <Link href={href} aria-current={active ? "page" : undefined} prefetch={false}>
       {children}
     </Link>
   );

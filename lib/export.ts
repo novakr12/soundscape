@@ -4,7 +4,7 @@ export type ExportedPlay = { playedAt: string; artist: string; title: string; tr
 
 export type ExportFormat = "json" | "csv";
 
-const EXPORT_BATCH = 5000;
+const EXPORT_BATCH = 1000;
 
 export async function* exportPlays(userId: string): AsyncGenerator<ExportedPlay> {
   const cursor = sql`

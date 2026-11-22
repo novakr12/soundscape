@@ -2,10 +2,10 @@
 
 import { useState } from "react";
 import type { RadioSeed } from "@/lib/radio";
-import { usePlayer } from "./player";
+import { usePlayerActions } from "./player";
 
 export default function RadioButton({ seed, label }: { seed: RadioSeed; label: string }) {
-  const { startRadio } = usePlayer();
+  const { startRadio } = usePlayerActions();
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
 

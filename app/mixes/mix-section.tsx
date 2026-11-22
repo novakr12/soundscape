@@ -78,7 +78,9 @@ export default function MixSection({ kind, title, description, empty, playlist, 
               {pending ? "Saving…" : "Save to Navidrome"}
             </button>
           ) : (
-            <Link href="/connect#navidrome-library">Connect Navidrome to save this mix</Link>
+            <Link href="/connect#navidrome-library" prefetch={false}>
+              Connect Navidrome to save this mix
+            </Link>
           ))}
       </div>
       <p className="muted">{description}</p>

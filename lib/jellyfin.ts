@@ -15,6 +15,7 @@ import { decrypt, encrypt, serverUrl } from "./servers";
 
 const TICKS_PER_MS = 10_000;
 const POLL_MS = 5_000;
+const IDLE_POLL_MS = 5 * 60 * 1000;
 const LISTENING_TTL_SECONDS = 30;
 const SEEK_TOLERANCE_MS = 3_000;
 const WARN_EVERY_MS = 10 * 60 * 1000;
@@ -86,6 +87,7 @@ export async function saveJellyfin(userId: string, address: string, apiKey: stri
     VALUES (${userId}, ${url}, ${encrypt(apiKey, "jellyfin")}, ${user.Name}, ${user.Id})
     ON CONFLICT (user_id) DO UPDATE SET server_url = excluded.server_url, api_key = excluded.api_key,
       jellyfin_user = excluded.jellyfin_user, jellyfin_user_id = excluded.jellyfin_user_id, created_at = now()`;
+  wakeJellyfinPolling();
   return { url, apiKey, username: user.Name, jellyfinUserId: user.Id };
 }
 
@@ -180,9 +182,10 @@ function warn(source: string, message: string) {
 
 type ServerUsers = { url: string; apiKey: string; users: { userId: string; jellyfinUserId: string }[] };
 
-export async function pollJellyfin() {
+async function pollConfigured(): Promise<boolean> {
   const servers = new Map<string, ServerUsers>();
   const rows = await sql`SELECT user_id, server_url, api_key, jellyfin_user_id FROM jellyfin_settings`;
+  if (rows.length === 0) return false;
   for (const row of rows) {
     let apiKey: string;
     try {
@@ -215,23 +218,42 @@ export async function pollJellyfin() {
       }
     }),
   );
+  return true;
 }
 
-const globalForPolling = globalThis as unknown as { jellyfinPolling?: boolean };
+export async function pollJellyfin() {
+  await pollConfigured();
+}
+
+const globalForPolling = globalThis as unknown as {
+  jellyfinPolling?: boolean;
+  jellyfinTimer?: ReturnType<typeof setTimeout>;
+  jellyfinRun?: () => void;
+};
+
+function wakeJellyfinPolling() {
+  if (!globalForPolling.jellyfinPolling || !globalForPolling.jellyfinRun) return;
+  clearTimeout(globalForPolling.jellyfinTimer);
+  globalForPolling.jellyfinRun();
+}
 
 export function startJellyfinPolling() {
   if (globalForPolling.jellyfinPolling) return;
   globalForPolling.jellyfinPolling = true;
   let running = false;
-  setInterval(async () => {
+  const run = async () => {
     if (running) return;
     running = true;
+    let active = true;
     try {
-      await pollJellyfin();
+      active = await pollConfigured();
     } catch (error) {
       warn("polling", error instanceof Error ? error.message : String(error));
     } finally {
       running = false;
+      globalForPolling.jellyfinTimer = setTimeout(run, active ? POLL_MS : IDLE_POLL_MS);
     }
-  }, POLL_MS);
+  };
+  globalForPolling.jellyfinRun = run;
+  globalForPolling.jellyfinTimer = setTimeout(run, POLL_MS);
 }

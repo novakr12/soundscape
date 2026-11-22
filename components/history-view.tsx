@@ -1,12 +1,8 @@
 import Link from "next/link";
 import HistoryTable from "@/components/history-table";
-import { ArtistLink } from "@/components/music-links";
-import TrackCell from "@/components/track-cell";
 import { albumsFor } from "@/lib/albums";
 import { coversFor, getHistory, monthLabel, shiftMonth } from "@/lib/history";
 import { formatDateTime, monthBucket } from "@/lib/time";
-import PlayAllButton from "./play-all-button";
-import VisibleRows from "./visible-rows";
 
 const PAGE_SIZE = 200;
 
@@ -39,12 +35,12 @@ export default async function HistoryView({
   return (
     <>
       <nav className="pager">
-        <Link href={link(shiftMonth(month, -1))} scroll={false}>
+        <Link href={link(shiftMonth(month, -1))} scroll={false} prefetch={false}>
           ← Previous
         </Link>
         <strong>{monthLabel(month)}</strong>
         {month < currentMonth ? (
-          <Link href={link(shiftMonth(month, 1))} scroll={false}>
+          <Link href={link(shiftMonth(month, 1))} scroll={false} prefetch={false}>
             Next →
           </Link>
         ) : (
@@ -56,68 +52,27 @@ export default async function HistoryView({
         <p className="muted">
           {page > 1 ? "No more plays" : "No plays"} in {monthLabel(month)}.
         </p>
-      ) : editable ? (
-        <>
-          <div className="history-play">
-            <PlayAllButton
-              tracks={plays.map((play) => ({
-                trackId: play.trackId,
-                title: play.title,
-                artist: play.artist,
-                cover: covers.get(play.trackId),
-              }))}
-            />
-          </div>
-          <HistoryTable
-            key={`${month}-${page}`}
-            plays={plays.map((play) => ({
-              playId: play.playId,
-              trackId: play.trackId,
-              playedAt: play.playedAt.toISOString(),
-              when: formatDateTime(play.playedAt),
-              title: play.title,
-              artist: play.artist,
-              cover: covers.get(play.trackId),
-              album: albums.get(play.trackId),
-            }))}
-          />
-        </>
       ) : (
-        <table>
-          <thead>
-            <tr>
-              <th>Played</th>
-              <th>Track</th>
-              <th>Artist</th>
-            </tr>
-          </thead>
-          <tbody>
-            <VisibleRows columns={3}>
-              {plays.map((play) => (
-                <tr key={play.playId}>
-                  <td className="muted">{formatDateTime(play.playedAt)}</td>
-                  <td>
-                    <TrackCell
-                      trackId={play.trackId}
-                      title={play.title}
-                      cover={covers.get(play.trackId)}
-                      album={albums.get(play.trackId)}
-                    />
-                  </td>
-                  <td>
-                    <ArtistLink name={play.artist} />
-                  </td>
-                </tr>
-              ))}
-            </VisibleRows>
-          </tbody>
-        </table>
+        <HistoryTable
+          key={`${month}-${page}`}
+          editable={editable}
+          plays={plays.map((play) => ({
+            playId: play.playId,
+            trackId: play.trackId,
+            playedAt: play.playedAt.toISOString(),
+            when: formatDateTime(play.playedAt),
+            title: play.title,
+            artist: play.artist,
+            cover: covers.get(play.trackId),
+            album: albums.get(play.trackId),
+          }))}
+        />
       )}
 
       {(page > 1 || more) && (
         <nav className="pager pages" aria-label="Pages">
           {page > 1 ? (
-            <Link href={link(month, page - 1)} scroll={false}>
+            <Link href={link(month, page - 1)} scroll={false} prefetch={false}>
               ← Newer
             </Link>
           ) : (
@@ -128,7 +83,7 @@ export default async function HistoryView({
             {((page - 1) * PAGE_SIZE + plays.length).toLocaleString("en")}
           </span>
           {more ? (
-            <Link href={link(month, page + 1)} scroll={false}>
+            <Link href={link(month, page + 1)} scroll={false} prefetch={false}>
               Older →
             </Link>
           ) : (

@@ -125,7 +125,9 @@ export default async function AlbumPage({ params }: Props) {
           <p className="muted">Album</p>
           <h1>{album.title}</h1>
           <p>
-            <Link href={`/artist/${encodeURIComponent(album.artistId)}`}>{album.artist}</Link>
+            <Link href={`/artist/${encodeURIComponent(album.artistId)}`} prefetch={false}>
+              {album.artist}
+            </Link>
           </p>
         </div>
       </div>

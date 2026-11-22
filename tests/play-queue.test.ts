@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+  compactTracks,
   countsAsPlay,
   heardStep,
   inOrder,
@@ -18,6 +19,7 @@ import {
   shuffleAll,
   songLength,
   startingWith,
+  trimPlayed,
   unshuffle,
 } from "../lib/play-queue";
 
@@ -72,6 +74,13 @@ describe("play queue", () => {
     assert.deepEqual(removeAt([0, 1, 2, 3], 1, 3), { order: [0, 1, 2], position: 1 });
     assert.deepEqual(removeAt([0, 1, 2], 1, 1), { order: [0, 1, 2], position: 1 });
     assert.deepEqual(unshuffle([4, 0, 7, 2], 2), { order: [0, 2, 4, 7], position: 3 });
+    assert.deepEqual(compactTracks(["a", "b", "c", "d"], [3, 1]), { tracks: ["b", "d"], order: [1, 0] });
+    const list = Array.from({ length: 12 }, (_, i) => `t${i}`);
+    const trimmed = trimPlayed(list, inOrder(12), 8, 3, 10);
+    assert.equal(trimmed.position, 3);
+    assert.deepEqual(trimmed.dropped, ["t0", "t1", "t2", "t3", "t4"]);
+    assert.deepEqual(trimmed.tracks, ["t5", "t6", "t7", "t8", "t9", "t10", "t11"]);
+    assert.deepEqual(trimmed.order, [0, 1, 2, 3, 4, 5, 6]);
   });
 
   it("only trusts a saved queue that makes sense", () => {

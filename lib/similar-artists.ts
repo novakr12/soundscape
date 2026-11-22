@@ -6,6 +6,7 @@ import { sql } from "./postgres";
 
 const listenBrainz = () => process.env.LISTENBRAINZ_API_URL ?? "https://api.listenbrainz.org/1";
 const KEPT_MS = 24 * 60 * 60 * 1000;
+const MAX_KEPT = 500;
 const kept = new Map<string, { names: string[]; at: number }>();
 
 type RadioPick = { similar_artist_name?: string };
@@ -41,7 +42,10 @@ export async function listenBrainzSimilar(mbid: string, limit: number): Promise<
 export async function similarArtists(name: string, limit: number): Promise<string[]> {
   const artistId = artistIdFor(name);
   const known = kept.get(artistId);
-  if (known && Date.now() - known.at < KEPT_MS) return known.names;
+  if (known) {
+    if (Date.now() - known.at < KEPT_MS) return known.names;
+    kept.delete(artistId);
+  }
   const [fromListenBrainz, fromDeezer] = await Promise.all([
     mbidFor(artistId, name)
       .then((mbid) => (mbid ? listenBrainzSimilar(mbid, limit) : []))
@@ -55,6 +59,10 @@ export async function similarArtists(name: string, limit: number): Promise<strin
     seen.add(id);
     return true;
   });
+  if (!kept.has(artistId) && kept.size >= MAX_KEPT) {
+    const oldest = kept.keys().next().value;
+    if (oldest !== undefined) kept.delete(oldest);
+  }
   kept.set(artistId, { names, at: Date.now() });
   return names;
 }

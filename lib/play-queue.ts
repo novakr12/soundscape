@@ -36,6 +36,36 @@ export function removeAt(order: number[], position: number, at: number) {
   return { order: order.filter((_, i) => i !== at), position: at < position ? position - 1 : position };
 }
 
+export function compactTracks<T>(tracks: readonly T[], order: readonly number[]) {
+  const used = new Set(order);
+  const remap = new Map<number, number>();
+  const kept: T[] = [];
+  tracks.forEach((track, index) => {
+    if (!used.has(index)) return;
+    remap.set(index, kept.length);
+    kept.push(track);
+  });
+  return { tracks: kept, order: order.map((index) => remap.get(index)!) };
+}
+
+export function trimPlayed<T>(
+  tracks: readonly T[],
+  order: readonly number[],
+  position: number,
+  keepBefore = 25,
+  fromLength = 100,
+) {
+  if (order.length <= fromLength || position <= keepBefore) {
+    return { tracks: [...tracks], order: [...order], position, dropped: [] as T[] };
+  }
+  const cut = position - keepBefore;
+  const keptOrder = order.slice(cut);
+  const used = new Set(keptOrder);
+  const dropped = tracks.filter((_, index) => !used.has(index));
+  const compacted = compactTracks(tracks, keptOrder);
+  return { ...compacted, position: keepBefore, dropped };
+}
+
 export const LONGEST_QUEUE = 500;
 
 export function queueWindow(length: number, chosen: number, longest = LONGEST_QUEUE) {

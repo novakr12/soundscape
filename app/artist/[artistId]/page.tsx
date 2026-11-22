@@ -128,7 +128,9 @@ export default async function ArtistPage({ params }: Props) {
               <li key={song.trackId}>
                 <span className="muted">{index + 1}</span>
                 <span>
-                  <Link href={`/track/${encodeURIComponent(song.trackId)}`}>{song.title}</Link>
+                  <Link href={`/track/${encodeURIComponent(song.trackId)}`} prefetch={false}>
+                    {song.title}
+                  </Link>
                   <small className="muted stats">
                     {plural(song.plays, "play")} · {plural(song.listeners, "listener")}
                   </small>
@@ -152,7 +154,9 @@ export default async function ArtistPage({ params }: Props) {
               <li key={album.albumId}>
                 <Cover src={album.cover} />
                 <span className="listening-info">
-                  <Link href={`/album/${encodeURIComponent(album.albumId)}`}>{album.title}</Link>
+                  <Link href={`/album/${encodeURIComponent(album.albumId)}`} prefetch={false}>
+                    {album.title}
+                  </Link>
                   <small className="muted">
                     {plural(album.plays, "play")} · {plural(album.tracks, "song")} played
                   </small>
@@ -173,7 +177,9 @@ export default async function ArtistPage({ params }: Props) {
               <li key={other.artistId}>
                 <Cover src={other.cover} round={other.photo} />
                 <span className="listening-info">
-                  <Link href={`/artist/${encodeURIComponent(other.artistId)}`}>{other.name}</Link>
+                  <Link href={`/artist/${encodeURIComponent(other.artistId)}`} prefetch={false}>
+                    {other.name}
+                  </Link>
                   <small className="muted">{plural(other.listeners, "listener")} in common</small>
                 </span>
               </li>

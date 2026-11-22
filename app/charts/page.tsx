@@ -94,7 +94,7 @@ export default async function ChartsPage() {
                 <Cover src={l.cover} />
                 <span className="listening-info">
                   <span>
-                    <Link href={`/u/${l.userId}`}>
+                    <Link href={`/u/${l.userId}`} prefetch={false}>
                       <strong>{l.userId}</strong>
                     </Link>{" "}
                     {following.has(l.userId) && <span className="tag">following</span>}{" "}

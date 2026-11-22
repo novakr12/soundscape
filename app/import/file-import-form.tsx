@@ -99,13 +99,19 @@ export default function FileImportForm({ source }: { source: Source }) {
       setStatus({ phase: "error", message: error instanceof Error ? error.message : String(error) });
       return;
     }
+    const leftOut = result.leftOut;
     const listens = result.listens.sort((a, b) => a.playedAt - b.playedAt);
+    result.listens = [];
+    const total = listens.length;
 
     let imported = 0;
     let skipped = 0;
-    for (let start = 0; start < listens.length; start += FILE_BATCH) {
-      setStatus({ phase: "importing", done: start, total: listens.length, imported });
-      const batch = await importFileBatch(listens.slice(start, start + FILE_BATCH));
+    for (let start = 0; start < total; start += FILE_BATCH) {
+      const end = Math.min(start + FILE_BATCH, total);
+      setStatus({ phase: "importing", done: start, total, imported });
+      const chunk = listens.slice(start, end);
+      for (let i = start; i < end; i++) listens[i] = undefined as never;
+      const batch = await importFileBatch(chunk);
       if (batch.error) {
         setStatus({ phase: "error", message: `${batch.error} ${count(imported, "play")} were imported before that.` });
         return;
@@ -113,8 +119,9 @@ export default function FileImportForm({ source }: { source: Source }) {
       imported += batch.imported;
       skipped += batch.skipped;
     }
+    listens.length = 0;
     await finishFileImport();
-    setStatus({ phase: "done", imported, skipped, leftOut: result.leftOut });
+    setStatus({ phase: "done", imported, skipped, leftOut });
   }
 
   return (

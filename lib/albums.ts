@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { artistIdFor, slug, songTitle } from "./catalog";
 import { sql } from "./postgres";
 
@@ -129,7 +130,7 @@ function orderTracks(
   return [...ordered, ...(tracklist.length > 0 ? rest.map((track) => ({ ...track, number: undefined })) : rest)];
 }
 
-export async function getAlbum(albumId: string, viewer: string | null): Promise<Album | null> {
+export const getAlbum = cache(async (albumId: string, viewer: string | null): Promise<Album | null> => {
   const [album] = await sql`
     SELECT al.title, al.artist_id, a.name AS artist, al.tracklist,
            (SELECT count(DISTINCT p.user_id) FROM user_track_plays p JOIN tracks t ON t.id = p.track_id
@@ -167,7 +168,7 @@ export async function getAlbum(albumId: string, viewer: string | null): Promise<
     played: played.length,
     tracks: orderTracks(played, album.artist_id, tracklist),
   };
-}
+});
 
 export async function albumOf(trackId: string): Promise<{ albumId: string; title: string } | null> {
   const [row] = await sql`

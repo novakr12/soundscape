@@ -11,13 +11,19 @@ export type ListeningTime = { ms: number; knownShare: number };
 const DEFAULT_SONG_MS = 210_000;
 
 export async function getPlaysPerDay(userId: string, days = 30, now = new Date()): Promise<DailyPlays[]> {
+  if (days <= 0) return [];
   const dayList = Array.from({ length: days }, (_, i) => addDays(localDay(now), i - days + 1));
-  const rows =
-    await sql`SELECT played_at FROM plays WHERE user_id = ${userId} AND played_at >= ${startOfDay(dayList[0])}`;
+  const rows = await sql`
+    SELECT to_char((played_at AT TIME ZONE ${TIME_ZONE})::date, 'YYYY-MM-DD') AS day,
+           count(*)::int AS plays
+    FROM plays
+    WHERE user_id = ${userId}
+      AND played_at >= ${startOfDay(dayList[0])}
+      AND played_at < ${startOfDay(addDays(dayList[dayList.length - 1], 1))}
+    GROUP BY 1`;
   const counts = new Map(dayList.map((day) => [day, 0]));
   for (const row of rows) {
-    const day = localDay(row.played_at);
-    if (counts.has(day)) counts.set(day, counts.get(day)! + 1);
+    if (counts.has(row.day)) counts.set(row.day, row.plays);
   }
   return dayList.map((day) => ({ day, plays: counts.get(day)! }));
 }

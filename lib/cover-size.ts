@@ -1,7 +1,7 @@
 export const FULL_COVER = 300;
 export const COVER_SIZES = [96, 160, 256] as const;
 
-const OWN_COVERS = ["/api/cover/", "/api/navidrome/cover/"];
+const OWN_COVERS = ["/api/cover/", "/api/navidrome/cover/", "/api/party/"];
 const DEEZER = /^(https:\/\/[a-z0-9.-]*dzcdn\.net\/images\/(?:cover|artist)\/[0-9a-f]+\/)(\d+)x\2(-[^/]*)$/;
 
 export function coverSize(shown: number) {

@@ -21,7 +21,7 @@ export default function TrackCell({
         <SongLink trackId={trackId}>{title}</SongLink>
         {album && (
           <small className="muted">
-            <Link className="music-link" href={`/album/${encodeURIComponent(album.albumId)}`}>
+            <Link className="music-link" href={`/album/${encodeURIComponent(album.albumId)}`} prefetch={false}>
               {album.title}
             </Link>
           </small>

@@ -45,7 +45,9 @@ export default async function RecommendationsPage() {
                   </span>
                   <small className="muted">
                     {release.kind} · {release.released} ·{" "}
-                    <Link href={`/music?q=${encodeURIComponent(release.title)}`}>Look in your Navidrome</Link>
+                    <Link href={`/music?q=${encodeURIComponent(release.title)}`} prefetch={false}>
+                      Look in your Navidrome
+                    </Link>
                   </small>
                 </span>
               </li>
@@ -65,7 +67,7 @@ export default async function RecommendationsPage() {
                 {hidden.has(s.userId) ? (
                   <strong>A listener with similar taste</strong>
                 ) : (
-                  <Link href={`/u/${s.userId}`}>
+                  <Link href={`/u/${s.userId}`} prefetch={false}>
                     <strong>{s.userId}</strong>
                   </Link>
                 )}{" "}

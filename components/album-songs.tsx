@@ -5,7 +5,7 @@ import { downloadTracks } from "@/lib/app-downloads";
 import DownloadButton from "./download-button";
 import PlayAllButton from "./play-all-button";
 import PlayButton from "./play-button";
-import { type PlayerTrack, usePlayer } from "./player";
+import { type PlayerTrack, usePlayerActions } from "./player";
 
 export type AlbumSongRow = {
   key: string;
@@ -17,7 +17,7 @@ export type AlbumSongRow = {
 };
 
 export default function AlbumSongs({ rows, canPlay, name }: { rows: AlbumSongRow[]; canPlay: boolean; name?: string }) {
-  const { playFrom } = usePlayer();
+  const { playFrom } = usePlayerActions();
   const discs = rows.some((row) => row.position.includes("."));
   const playable = rows.flatMap((row) => (row.track ? [row.track] : []));
   const at = new Map(rows.flatMap((row) => (row.track ? [[row.key, playable.indexOf(row.track)] as const] : [])));

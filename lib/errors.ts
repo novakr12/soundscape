@@ -32,24 +32,26 @@ export function requestSource(method: string, path: string) {
 
 export async function recentErrors(limit = 30): Promise<ErrorGroup[]> {
   const rows = await sql`
-    SELECT DISTINCT ON (source, message) source, message, stack, digest,
-           count(*) OVER (PARTITION BY source, message) AS count,
-           min(at) OVER (PARTITION BY source, message) AS first_at,
-           at AS last_at
-    FROM server_errors
-    ORDER BY source, message, at DESC`;
-  return rows
-    .map((row) => ({
-      source: row.source as string,
-      message: row.message as string,
-      count: Number(row.count),
-      firstAt: row.first_at as Date,
-      lastAt: row.last_at as Date,
-      ...(row.stack ? { stack: row.stack as string } : {}),
-      ...(row.digest ? { digest: row.digest as string } : {}),
-    }))
-    .sort((a, b) => b.lastAt.getTime() - a.lastAt.getTime())
-    .slice(0, limit);
+    SELECT source, message, stack, digest, count, first_at, last_at
+    FROM (
+      SELECT DISTINCT ON (source, message) source, message, stack, digest,
+             count(*) OVER (PARTITION BY source, message) AS count,
+             min(at) OVER (PARTITION BY source, message) AS first_at,
+             at AS last_at
+      FROM server_errors
+      ORDER BY source, message, at DESC
+    ) groups
+    ORDER BY last_at DESC, source ASC, message ASC
+    LIMIT ${limit}`;
+  return rows.map((row) => ({
+    source: row.source as string,
+    message: row.message as string,
+    count: Number(row.count),
+    firstAt: row.first_at as Date,
+    lastAt: row.last_at as Date,
+    ...(row.stack ? { stack: row.stack as string } : {}),
+    ...(row.digest ? { digest: row.digest as string } : {}),
+  }));
 }
 
 export async function errorsSince(since: Date): Promise<number> {

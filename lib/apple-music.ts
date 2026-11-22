@@ -178,7 +178,10 @@ export async function readAppleMusicFiles(files: AppleFile[]): Promise<AppleHist
   }
 
   const seen = new Set<string>();
-  for (const { title, album, playedAt, ...rest } of candidates) {
+  for (let i = 0; i < candidates.length; i++) {
+    const candidate = candidates[i];
+    candidates[i] = undefined as unknown as Candidate;
+    const { title, album, playedAt, ...rest } = candidate;
     const artist = rest.artist || finder.find(title, album);
     if (!artist) {
       history.noArtist++;
@@ -189,6 +192,7 @@ export async function readAppleMusicFiles(files: AppleFile[]): Promise<AppleHist
     seen.add(key);
     history.listens.push({ artist, title, playedAt, ...(album ? { album } : {}) });
   }
+  candidates.length = 0;
   return history;
 }
 

@@ -41,6 +41,10 @@ export function every(name: string, intervalMs: number, work: () => Promise<JobR
       running = false;
     }
   };
-  setTimeout(tick, Math.min(FIRST_RUN_DELAY_MS, intervalMs));
-  setInterval(tick, intervalMs);
+  const stagger = (globalForJobs.soundscapeJobs.size - 1) * 15_000;
+  const delay = Math.min(FIRST_RUN_DELAY_MS + stagger, intervalMs);
+  setTimeout(() => {
+    void tick();
+    setInterval(tick, intervalMs);
+  }, delay);
 }

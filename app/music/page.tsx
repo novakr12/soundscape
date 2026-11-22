@@ -22,6 +22,7 @@ import { unplayedAlbums } from "@/lib/unplayed";
 export const metadata = { title: "Music" };
 
 const PAGE_SIZE = 100;
+const COLLECTION_PAGE_SIZE = 200;
 const ALBUMS_PER_PAGE = 20;
 const UNPLAYED_PER_PAGE = 5;
 
@@ -53,6 +54,8 @@ type Shown = {
   unplayed?: number;
   sort: string;
   firstNumber: number;
+  totalSongs?: number;
+  totalDuration?: number;
 };
 
 function address(params: Record<string, string | number | undefined>) {
@@ -112,16 +115,20 @@ export default async function MusicPage({ searchParams }: Props) {
       const artist = await getNavidromeArtist(server, params.artist);
       if (artist) {
         const order = songOrder(params.sort);
-        const songs = await getSongsOfAlbums(server, artist.albums);
+        const raw = await getSongsOfAlbums(server, artist.albums);
+        const all = order ? sortSongs(raw, order) : raw;
+        const from = (page - 1) * COLLECTION_PAGE_SIZE;
         shown = {
           title: artist.name,
-          songs: await toMusicSongs(order ? sortSongs(songs, order) : songs, { library: params.library }),
-          page: 1,
-          hasMore: false,
+          songs: await toMusicSongs(all.slice(from, from + COLLECTION_PAGE_SIZE), { library: params.library }),
+          page,
+          hasMore: all.length > from + COLLECTION_PAGE_SIZE,
           libraryId: libraries.some((item) => item.id === params.library) ? params.library : undefined,
           artistId: params.artist,
           sort: order ?? "",
-          firstNumber: 1,
+          firstNumber: from + 1,
+          totalSongs: all.length,
+          totalDuration: all.reduce((sum, song) => sum + (song.duration ?? 0), 0),
         };
       }
     } else if (params.unplayed) {
@@ -140,14 +147,18 @@ export default async function MusicPage({ searchParams }: Props) {
       const playlist = await getPlaylistSongs(server, params.playlist);
       if (playlist) {
         const order = songOrder(params.sort);
+        const all = sortSongs(playlist.songs, order);
+        const from = (page - 1) * COLLECTION_PAGE_SIZE;
         shown = {
           title: playlist.name,
-          songs: await toMusicSongs(sortSongs(playlist.songs, order)),
-          page: 1,
-          hasMore: false,
+          songs: await toMusicSongs(all.slice(from, from + COLLECTION_PAGE_SIZE)),
+          page,
+          hasMore: all.length > from + COLLECTION_PAGE_SIZE,
           playlistId: params.playlist,
           sort: order ?? "",
-          firstNumber: 1,
+          firstNumber: from + 1,
+          totalSongs: all.length,
+          totalDuration: all.reduce((sum, song) => sum + (song.duration ?? 0), 0),
         };
       }
     } else {
@@ -212,6 +223,7 @@ export default async function MusicPage({ searchParams }: Props) {
                     <Link
                       href={address({ library: library.id })}
                       aria-current={shown?.libraryId === library.id ? "page" : undefined}
+                      prefetch={false}
                     >
                       {library.name}
                     </Link>
@@ -223,7 +235,11 @@ export default async function MusicPage({ searchParams }: Props) {
           <h2>Discover</h2>
           <ul>
             <li>
-              <Link href={address({ unplayed: 1 })} aria-current={shown?.unplayed !== undefined ? "page" : undefined}>
+              <Link
+                href={address({ unplayed: 1 })}
+                aria-current={shown?.unplayed !== undefined ? "page" : undefined}
+                prefetch={false}
+              >
                 Never played
               </Link>
             </li>
@@ -238,6 +254,7 @@ export default async function MusicPage({ searchParams }: Props) {
                   <Link
                     href={address({ playlist: playlist.id })}
                     aria-current={shown?.playlistId === playlist.id ? "page" : undefined}
+                    prefetch={false}
                   >
                     {playlist.name}
                     <span className="muted"> · {playlist.songCount}</span>
@@ -260,11 +277,13 @@ export default async function MusicPage({ searchParams }: Props) {
               ) : shown.albumId || shown.artistId ? (
                 <p className="muted">
                   {shown.subtitle ? `${shown.subtitle} · ` : ""}
-                  {shown.songs.length} songs · {hours(shown.songs.reduce((sum, song) => sum + (song.duration ?? 0), 0))}
+                  {shown.totalSongs ?? shown.songs.length} songs ·{" "}
+                  {hours(shown.totalDuration ?? shown.songs.reduce((sum, song) => sum + (song.duration ?? 0), 0))}
                 </p>
               ) : shown.playlistId ? (
                 <p className="muted">
-                  {shown.songs.length} songs · {hours(shown.songs.reduce((sum, song) => sum + (song.duration ?? 0), 0))}
+                  {shown.totalSongs ?? shown.songs.length} songs ·{" "}
+                  {hours(shown.totalDuration ?? shown.songs.reduce((sum, song) => sum + (song.duration ?? 0), 0))}
                 </p>
               ) : (
                 <Form action="/music" className="music-search" role="search">
@@ -304,6 +323,7 @@ export default async function MusicPage({ searchParams }: Props) {
                           sort: value,
                         })}
                         aria-current={shown.sort === value ? "true" : undefined}
+                        prefetch={false}
                       >
                         {choice.label}
                       </Link>
@@ -322,6 +342,16 @@ export default async function MusicPage({ searchParams }: Props) {
                       ? { library: shown.libraryId, ...(shown.query ? { q: shown.query } : {}) }
                       : undefined
                   }
+                  fullList={
+                    (shown.playlistId || shown.artistId) && (shown.page > 1 || shown.hasMore)
+                      ? {
+                          ...(shown.playlistId ? { playlist: shown.playlistId } : {}),
+                          ...(shown.artistId ? { artist: shown.artistId } : {}),
+                          ...(shown.libraryId ? { library: shown.libraryId } : {}),
+                          ...(shown.sort ? { sort: shown.sort } : {}),
+                        }
+                      : undefined
+                  }
                 />
               )}
               {(shown.page > 1 || shown.hasMore) && (
@@ -330,11 +360,14 @@ export default async function MusicPage({ searchParams }: Props) {
                     <Link
                       href={address({
                         library: shown.libraryId,
+                        playlist: shown.playlistId,
+                        artist: shown.artistId,
                         q: shown.query,
                         sort: shown.sort,
                         unplayed: shown.unplayed === undefined ? undefined : 1,
                         page: shown.page - 1,
                       })}
+                      prefetch={false}
                     >
                       ← Previous
                     </Link>
@@ -346,11 +379,14 @@ export default async function MusicPage({ searchParams }: Props) {
                     <Link
                       href={address({
                         library: shown.libraryId,
+                        playlist: shown.playlistId,
+                        artist: shown.artistId,
                         q: shown.query,
                         sort: shown.sort,
                         unplayed: shown.unplayed === undefined ? undefined : 1,
                         page: shown.page + 1,
                       })}
+                      prefetch={false}
                     >
                       Next →
                     </Link>

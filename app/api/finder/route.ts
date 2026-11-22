@@ -10,7 +10,15 @@ const LIBRARY_WAIT_MS = 1500;
 const LIBRARY_SONGS = 6;
 
 function within<T>(work: Promise<T>, ms: number): Promise<T | null> {
-  return Promise.race([work, new Promise<null>((resolve) => setTimeout(() => resolve(null), ms))]);
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  return Promise.race([
+    work,
+    new Promise<null>((resolve) => {
+      timer = setTimeout(() => resolve(null), ms);
+    }),
+  ]).finally(() => {
+    if (timer !== undefined) clearTimeout(timer);
+  });
 }
 
 export async function GET(request: Request) {

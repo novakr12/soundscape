@@ -17,7 +17,7 @@ export async function GET(request: Request, { params }: Context) {
       },
     });
   }
-  return new Response(new Uint8Array(cover.data), {
+  return new Response(new Uint8Array(cover.data.buffer as ArrayBuffer, cover.data.byteOffset, cover.data.byteLength), {
     headers: { "content-type": cover.type, "cache-control": "public, max-age=86400" },
   });
 }

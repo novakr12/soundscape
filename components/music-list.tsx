@@ -10,10 +10,24 @@ import { SongLink } from "./music-links";
 import PlayButton from "./play-button";
 import { usePlayer } from "./player";
 import { PlayIcon, ShuffleIcon } from "./player-icons";
+import VisibleList from "./visible-list";
 
 function length(seconds: number | undefined) {
   if (!seconds) return "";
   return `${Math.floor(seconds / 60)}:${String(Math.floor(seconds % 60)).padStart(2, "0")}`;
+}
+
+type FullList = { playlist?: string; artist?: string; library?: string; sort?: string };
+
+async function fetchFullList(fullList: FullList): Promise<MusicSong[]> {
+  const query = new URLSearchParams();
+  if (fullList.playlist) query.set("playlist", fullList.playlist);
+  if (fullList.artist) query.set("artist", fullList.artist);
+  if (fullList.library) query.set("library", fullList.library);
+  if (fullList.sort) query.set("sort", fullList.sort);
+  const response = await fetch(`/api/music/list?${query}`);
+  const answer = (await response.json().catch(() => null)) as { songs?: MusicSong[] } | null;
+  return response.ok ? (answer?.songs ?? []) : [];
 }
 
 export default function MusicList({
@@ -21,6 +35,7 @@ export default function MusicList({
   firstNumber = 1,
   autoplay = false,
   shuffleAll,
+  fullList,
   download,
 }: {
   songs: MusicSong[];
@@ -28,11 +43,23 @@ export default function MusicList({
   firstNumber?: number;
   autoplay?: boolean;
   shuffleAll?: { library?: string; q?: string };
+  fullList?: FullList;
 }) {
   const { playAll, playFrom, shuffle, toggleShuffle } = usePlayer();
   const [busy, setBusy] = useState(false);
 
   async function play() {
+    if (fullList) {
+      setBusy(true);
+      try {
+        const everything = await fetchFullList(fullList);
+        const list = everything.length > 0 ? everything : songs;
+        playFrom(list, shuffle ? Math.floor(Math.random() * list.length) : 0);
+      } finally {
+        setBusy(false);
+      }
+      return;
+    }
     if (!shuffle || !shuffleAll) {
       playFrom(songs, shuffle ? Math.floor(Math.random() * songs.length) : 0);
       return;
@@ -52,8 +79,8 @@ export default function MusicList({
     }
   }
   const started = useRef(false);
-  const latest = useRef({ playFrom, shuffle, songs });
-  latest.current = { playFrom, shuffle, songs };
+  const latest = useRef({ playFrom, shuffle, songs, fullList });
+  latest.current = { playFrom, shuffle, songs, fullList };
 
   useEffect(() => {
     if (!autoplay || started.current) return;
@@ -61,9 +88,11 @@ export default function MusicList({
     const address = new URL(window.location.href);
     address.searchParams.delete("play");
     window.history.replaceState(window.history.state, "", address);
-    const timer = setTimeout(() => {
-      const { playFrom, shuffle, songs } = latest.current;
-      if (songs.length > 0) playFrom(songs, shuffle ? Math.floor(Math.random() * songs.length) : 0);
+    const timer = setTimeout(async () => {
+      const { playFrom, shuffle, songs, fullList } = latest.current;
+      const everything = fullList ? await fetchFullList(fullList).catch(() => []) : [];
+      const list = everything.length > 0 ? everything : songs;
+      if (list.length > 0) playFrom(list, shuffle ? Math.floor(Math.random() * list.length) : 0);
     }, 0);
     return () => {
       clearTimeout(timer);
@@ -94,10 +123,20 @@ export default function MusicList({
         >
           <ShuffleIcon size={18} />
         </button>
-        {download && <DownloadButton tracks={downloadTracks(songs)} name={download} />}
+        {download && (
+          <DownloadButton
+            tracks={downloadTracks(songs)}
+            name={download}
+            loadTracks={fullList ? async () => downloadTracks(await fetchFullList(fullList)) : undefined}
+          />
+        )}
       </div>
-      <ol className="music-songs" start={firstNumber}>
-        {songs.map((song, i) => (
+      <VisibleList
+        className="music-songs"
+        start={firstNumber}
+        items={songs}
+        guessedHeight={54}
+        renderItem={(song, i) => (
           <li key={`${song.songId ?? song.trackId}-${i}`}>
             <span className="music-number">{firstNumber + i}</span>
             {song.cover ? (
@@ -109,7 +148,7 @@ export default function MusicList({
               <strong>{song.newSong ? song.title : <SongLink trackId={song.trackId}>{song.title}</SongLink>}</strong>
               <span className="muted">
                 {song.artistHref ? (
-                  <Link className="music-link" href={song.artistHref}>
+                  <Link className="music-link" href={song.artistHref} prefetch={false}>
                     {song.artist}
                   </Link>
                 ) : (
@@ -118,7 +157,7 @@ export default function MusicList({
                 {song.album && " · "}
                 {song.album &&
                   (song.albumHref ? (
-                    <Link className="music-link" href={song.albumHref}>
+                    <Link className="music-link" href={song.albumHref} prefetch={false}>
                       {song.album}
                     </Link>
                   ) : (
@@ -129,8 +168,8 @@ export default function MusicList({
             <span className="music-length muted">{length(song.duration)}</span>
             <PlayButton track={song} onPlay={() => playFrom(songs, i)} />
           </li>
-        ))}
-      </ol>
+        )}
+      />
     </>
   );
 }

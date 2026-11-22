@@ -4,10 +4,11 @@ import { request } from "./http";
 export const FALLBACK = `data:image/svg+xml;base64,${Buffer.from(FALLBACK_COVER).toString("base64")}`;
 const IMAGE_TYPES = ["image/jpeg", "image/png"];
 const MAX_IMAGE_BYTES = 5_000_000;
+const OG_CONCURRENCY = 2;
 
 export type Font = { name: string; data: ArrayBuffer; weight: 400 | 700; style: "normal" };
 
-const loaded = new Map<string, Promise<Font[] | undefined>>();
+const loadedFonts = new Map<string, Promise<Font>>();
 
 async function googleFont(family: string, weight: 400 | 700, text?: string): Promise<Font> {
   const query = `family=${family.replaceAll(" ", "+")}:wght@${weight}${text ? `&text=${encodeURIComponent(text)}` : ""}`;
@@ -21,28 +22,50 @@ async function googleFont(family: string, weight: 400 | 700, text?: string): Pro
   return { name: family, data: await response.arrayBuffer(), weight, style: "normal" };
 }
 
-function fontSet(name: string, load: () => Promise<Font>[]) {
-  let fonts = loaded.get(name);
-  if (!fonts) {
-    fonts = Promise.all(load()).catch(() => {
-      loaded.delete(name);
-      return undefined;
+function cachedFont(family: string, weight: 400 | 700, text?: string): Promise<Font> {
+  const key = `${family}:${weight}:${text ?? ""}`;
+  let pending = loadedFonts.get(key);
+  if (!pending) {
+    pending = googleFont(family, weight, text).catch((error) => {
+      loadedFonts.delete(key);
+      throw error;
     });
-    loaded.set(name, fonts);
+    loadedFonts.set(key, pending);
   }
-  return fonts;
+  return pending;
+}
+
+async function fontSet(fonts: Promise<Font>[]): Promise<Font[] | undefined> {
+  try {
+    return await Promise.all(fonts);
+  } catch {
+    return undefined;
+  }
 }
 
 export function loadFonts() {
-  return fontSet("regular", () => [googleFont("Geist", 400), googleFont("Space Grotesk", 700, "Soundscape")]);
+  return fontSet([cachedFont("Geist", 400), cachedFont("Space Grotesk", 700, "Soundscape")]);
 }
 
 export function loadFontsWithBold() {
-  return fontSet("bold", () => [
-    googleFont("Geist", 400),
-    googleFont("Geist", 700),
-    googleFont("Space Grotesk", 700, "Soundscape"),
-  ]);
+  return fontSet([cachedFont("Geist", 400), cachedFont("Geist", 700), cachedFont("Space Grotesk", 700, "Soundscape")]);
+}
+
+const ogGate = { active: 0, waiting: [] as (() => void)[] };
+
+export async function renderOg<T>(work: () => Promise<T>): Promise<T> {
+  if (ogGate.active >= OG_CONCURRENCY) {
+    await new Promise<void>((resolve) => ogGate.waiting.push(resolve));
+  } else {
+    ogGate.active++;
+  }
+  try {
+    return await work();
+  } finally {
+    const next = ogGate.waiting.shift();
+    if (next) next();
+    else ogGate.active--;
+  }
 }
 
 async function coverImage(cover: string): Promise<string | undefined> {
@@ -54,8 +77,14 @@ async function coverImage(cover: string): Promise<string | undefined> {
   if (!/^https:\/\//.test(cover)) return undefined;
   const response = await request(cover, { timeoutMs: 5000 });
   const type = response.headers.get("content-type")?.split(";")[0] ?? "";
-  if (!response.ok || !IMAGE_TYPES.includes(type)) return undefined;
-  if (Number(response.headers.get("content-length") ?? 0) > MAX_IMAGE_BYTES) return undefined;
+  if (
+    !response.ok ||
+    !IMAGE_TYPES.includes(type) ||
+    Number(response.headers.get("content-length") ?? 0) > MAX_IMAGE_BYTES
+  ) {
+    await response.body?.cancel().catch(() => {});
+    return undefined;
+  }
   const data = Buffer.from(await response.arrayBuffer());
   return data.length <= MAX_IMAGE_BYTES ? `data:${type};base64,${data.toString("base64")}` : undefined;
 }

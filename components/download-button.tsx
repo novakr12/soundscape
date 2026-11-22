@@ -18,9 +18,18 @@ function send(request: DownloadRequest) {
   view.soundscapeDownloadRequests.push(request);
 }
 
-export default function DownloadButton({ tracks, name }: { tracks: DownloadTrack[]; name: string }) {
+export default function DownloadButton({
+  tracks,
+  name,
+  loadTracks,
+}: {
+  tracks: DownloadTrack[];
+  name: string;
+  loadTracks?: () => Promise<DownloadTrack[]>;
+}) {
   const [app, setApp] = useState<AndroidApp | null>(null);
   const [asked, setAsked] = useState(false);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     const view = window as AppWindow;
@@ -39,8 +48,24 @@ export default function DownloadButton({ tracks, name }: { tracks: DownloadTrack
     tracks.map((track) => track.trackId),
     app.downloads,
   );
-  const all = summary.done === summary.total;
-  const busy = summary.waiting > 0 || (asked && !all && summary.failed === 0);
+  const all = summary.done === summary.total && !loadTracks;
+  const busy = loading || summary.waiting > 0 || (asked && !all && summary.failed === 0);
+
+  async function download() {
+    if (!loadTracks) {
+      send({ do: "download", tracks });
+      setAsked(true);
+      return;
+    }
+    setLoading(true);
+    try {
+      const everything = await loadTracks();
+      send({ do: "download", tracks: everything.length > 0 ? everything : tracks });
+      setAsked(true);
+    } finally {
+      setLoading(false);
+    }
+  }
 
   if (all) {
     return (
@@ -66,10 +91,7 @@ export default function DownloadButton({ tracks, name }: { tracks: DownloadTrack
       className="secondary"
       disabled={busy}
       aria-label={`Download ${name} to this phone`}
-      onClick={() => {
-        send({ do: "download", tracks });
-        setAsked(true);
-      }}
+      onClick={download}
     >
       {busy
         ? `Downloading ${summary.done} of ${summary.total}…`

@@ -1,11 +1,14 @@
 import { sql } from "./postgres";
 
+const ENCODER = new TextEncoder();
+const PING_BYTES = ENCODER.encode(": ping\n\n");
+const CONNECTED_BYTES = ENCODER.encode(": connected\n\n");
+
 export function eventStream(
   request: Request,
   channels: string[],
   toEvent: (channel: string, message: string) => string | null,
 ) {
-  const encoder = new TextEncoder();
   let cleanup = () => {};
 
   const stream = new ReadableStream({
@@ -31,13 +34,22 @@ export function eventStream(
       const onAbort = () => close(false);
       cleanup = () => close(true);
 
-      const send = (text: string | null) => {
-        if (closed || !text) return;
+      const enqueue = (chunk: Uint8Array) => {
+        if (closed) return;
+        if (controller.desiredSize !== null && controller.desiredSize <= -10) {
+          close(false);
+          return;
+        }
         try {
-          controller.enqueue(encoder.encode(text));
+          controller.enqueue(chunk);
         } catch {
           close(true);
         }
+      };
+
+      const send = (text: string | null) => {
+        if (closed || !text) return;
+        enqueue(ENCODER.encode(text));
       };
 
       if (request.signal.aborted) {
@@ -46,7 +58,9 @@ export function eventStream(
       }
 
       request.signal.addEventListener("abort", onAbort, { once: true });
-      heartbeat = setInterval(() => send(": ping\n\n"), 25_000);
+      heartbeat = setInterval(() => {
+        if (controller.desiredSize === null || controller.desiredSize > 0) enqueue(PING_BYTES);
+      }, 25_000);
       try {
         for (const channel of channels) {
           if (closed) return;
@@ -58,7 +72,7 @@ export function eventStream(
         close(false);
         return;
       }
-      send(": connected\n\n");
+      enqueue(CONNECTED_BYTES);
     },
     cancel() {
       cleanup();

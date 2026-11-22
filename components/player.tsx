@@ -29,6 +29,7 @@ import {
 import { HAND_BACK_STEP_MS, HAND_BACK_WITHIN_MS, handBackStep, phoneTime } from "@/lib/hand-back";
 import { type Gain, gainLevel, playingAnAlbum } from "@/lib/levelling";
 import {
+  compactTracks,
   countsAsPlay,
   heardStep,
   inOrder,
@@ -45,6 +46,7 @@ import {
   shuffleAll,
   songLength,
   startingWith,
+  trimPlayed,
   unshuffle,
 } from "@/lib/play-queue";
 import { DEFAULT_OPTIONS, type PlayerOptions, watchOptions } from "@/lib/player-options";
@@ -102,13 +104,14 @@ const FADE_OUT_MS = 10_000;
 const FADE_STEPS = 40;
 const FADE_TICK_MS = 100;
 const QUEUE_KEY = "soundscape:queue";
+const TIME_KEY = "soundscape:player-time";
 const RESUME_KEY = "soundscape:resume";
 const SAVE_TIME_EVERY_MS = 5000;
 
 const RESTART_AFTER_SECONDS = 3;
 const SKIP_BROKEN_AFTER_MS = 1500;
 const GIVE_UP_LOADING_AFTER_MS = 12_000;
-const PREPARE_NEXT_SECONDS = 30;
+const PREPARE_NEXT_SECONDS = 10;
 const WATCH_END_SECONDS = 1.5;
 const START_NEXT_EARLY_MS = 13;
 const ANNOUNCE_AGAIN_AFTER_MS = 60_000;
@@ -119,11 +122,23 @@ const MOST_HANDED = 500;
 type Actions = Omit<PlayerContextValue, "current" | "queue" | "position" | "shuffle" | "repeat" | "radio" | "party">;
 
 const PlayerContext = createContext<PlayerContextValue | null>(null);
+const PlayerActionsContext = createContext<Actions | null>(null);
+const PlayerTrackIdContext = createContext<string | null>(null);
 
 export function usePlayer() {
   const player = useContext(PlayerContext);
   if (!player) throw new Error("usePlayer must be used inside PlayerProvider");
   return player;
+}
+
+export function usePlayerActions() {
+  const actions = useContext(PlayerActionsContext);
+  if (!actions) throw new Error("usePlayerActions must be used inside PlayerProvider");
+  return actions;
+}
+
+export function useCurrentTrackId() {
+  return useContext(PlayerTrackIdContext);
 }
 
 function artistPage(track: PlayerTrack) {
@@ -176,6 +191,13 @@ function idleState(): DeviceState {
   };
 }
 
+function unloadAudio(audio: HTMLAudioElement) {
+  audio.pause();
+  audio.preload = "none";
+  audio.removeAttribute("src");
+  audio.load();
+}
+
 export function PlayerProvider({ children, username }: { children: React.ReactNode; username: string | null }) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const standbyRef = useRef<HTMLAudioElement | null>(null);
@@ -197,6 +219,7 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
   const radioLoading = useRef(false);
   const gaveUpOn = useRef<string | null>(null);
   const radioNow = useRef<RadioSeed | null>(null);
+  const radioHistoryRef = useRef<Array<{ trackId: string; songId?: string }>>([]);
   radioNow.current = radio;
   const [sleep, setSleep] = useState<Sleep>(null);
   const [fadeIn, setFadeIn] = useState(1);
@@ -379,7 +402,8 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
     if (!holder) return null;
     const first = document.createElement("audio");
     const second = document.createElement("audio");
-    second.preload = "auto";
+    first.preload = "none";
+    second.preload = "none";
     bind(first);
     bind(second);
     holder.appendChild(first);
@@ -409,6 +433,8 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
       if (loadTimer.current) clearTimeout(loadTimer.current);
       if (skipTimer.current) clearTimeout(skipTimer.current);
       if (radioRetryTimer.current) clearTimeout(radioRetryTimer.current);
+      if (audioRef.current) unloadAudio(audioRef.current);
+      if (standbyRef.current) unloadAudio(standbyRef.current);
     },
     [],
   );
@@ -548,42 +574,54 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
     try {
       const saved = restoreQueue(JSON.parse(localStorage.getItem(QUEUE_KEY) ?? "null"));
       if (!saved) return;
+      const savedTime = Number(localStorage.getItem(TIME_KEY));
+      const time = Number.isFinite(savedTime) && savedTime > 0 ? savedTime : saved.time;
       const resume = sessionStorage.getItem(RESUME_KEY) === "1";
       sessionStorage.removeItem(RESUME_KEY);
       arrange(saved.tracks, saved.order, saved.position);
-      start(saved.tracks[saved.order[saved.position]], resume, saved.time);
+      start(saved.tracks[saved.order[saved.position]], resume, time);
     } catch {}
   }
 
   useEffect(() => {
     if (order.length === 0) return;
-    const save = () => {
+    try {
+      const keep = tracks.slice(0, LONGEST_QUEUE);
+      const kept = order.filter((index) => index < keep.length);
+      localStorage.setItem(
+        QUEUE_KEY,
+        JSON.stringify({ tracks: keep, order: kept, position: Math.min(position, kept.length - 1), time: 0 }),
+      );
+    } catch {}
+  }, [tracks, order, position]);
+
+  useEffect(() => {
+    if (order.length === 0) return;
+    const saveTime = () => {
       try {
         const audio = audioRef.current;
         const time = pendingTime.current || audio?.currentTime || 0;
-        const keep = tracks.slice(0, LONGEST_QUEUE);
-        const kept = order.filter((index) => index < keep.length);
-        localStorage.setItem(
-          QUEUE_KEY,
-          JSON.stringify({ tracks: keep, order: kept, position: Math.min(position, kept.length - 1), time }),
-        );
+        if (time > 0) localStorage.setItem(TIME_KEY, String(time));
       } catch {}
     };
+    const tick = () => {
+      const audio = audioRef.current;
+      if (audio && !audio.paused) saveTime();
+    };
     const leave = () => {
-      save();
+      saveTime();
       try {
         if (audioRef.current && !audioRef.current.paused) sessionStorage.setItem(RESUME_KEY, "1");
         else sessionStorage.removeItem(RESUME_KEY);
       } catch {}
     };
-    save();
-    const timer = setInterval(save, SAVE_TIME_EVERY_MS);
+    const timer = setInterval(tick, SAVE_TIME_EVERY_MS);
     window.addEventListener("pagehide", leave);
     return () => {
       clearInterval(timer);
       window.removeEventListener("pagehide", leave);
     };
-  }, [tracks, order, position]);
+  }, [order.length]);
 
   function remember() {
     try {
@@ -633,6 +671,7 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
     const key = preparedKey(index);
     if (!key || key === prepared.current) return;
     prepared.current = key;
+    standby.preload = "auto";
     standby.src = sourceFor(tracksRef.current[orderRef.current[index]]);
     standby.load();
   }
@@ -707,11 +746,7 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
     return true;
   }
 
-  function unload(audio: HTMLAudioElement) {
-    audio.pause();
-    audio.removeAttribute("src");
-    audio.load();
-  }
+  const unload = unloadAudio;
 
   function crossfade(old: HTMLAudioElement, seconds: number) {
     stopCrossfade();
@@ -792,6 +827,7 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
 
   function stopRadio() {
     clearRadioRetry();
+    radioHistoryRef.current = [];
     setRadio(null);
   }
 
@@ -1044,9 +1080,15 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
   }
 
   async function moreRadio(seed: RadioSeed) {
-    const queued = tracksRef.current.slice(-RADIO_REMEMBERS);
-    const exclude = queued.flatMap((track) => (track.songId ? [track.songId] : []));
-    const skipTracks = queued.map((track) => track.trackId);
+    const queued = [...radioHistoryRef.current, ...tracksRef.current].slice(-RADIO_REMEMBERS);
+    const excludeSet = new Set<string>();
+    const skipSet = new Set<string>();
+    for (const track of queued) {
+      if (track.songId) excludeSet.add(track.songId);
+      skipSet.add(track.trackId);
+    }
+    const exclude = [...excludeSet];
+    const skipTracks = [...skipSet];
     const songs = await radioBatch(seed, exclude, { continuing: true, skipTracks });
     if (songs.length > 0) return songs;
     const now = tracksRef.current[orderRef.current[positionRef.current]];
@@ -1070,11 +1112,18 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
         }
         gaveUpOn.current = null;
         const from = tracksRef.current.length;
-        arrange(
+        const trimmed = trimPlayed(
           [...tracksRef.current, ...songs],
           [...orderRef.current, ...songs.map((_, i) => from + i)],
           positionRef.current,
         );
+        if (trimmed.dropped.length > 0) {
+          radioHistoryRef.current = [
+            ...radioHistoryRef.current,
+            ...trimmed.dropped.map(({ trackId, songId }) => ({ trackId, ...(songId ? { songId } : {}) })),
+          ].slice(-RADIO_REMEMBERS);
+        }
+        arrange(trimmed.tracks, trimmed.order, trimmed.position);
       })
       .catch(() => {
         clearRadioRetry();
@@ -1119,7 +1168,8 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
 
   function remove(at: number) {
     const left = removeAt(orderRef.current, positionRef.current, at);
-    arrange(tracksRef.current, left.order, left.position);
+    const compacted = compactTracks(tracksRef.current, left.order);
+    arrange(compacted.tracks, compacted.order, left.position);
   }
 
   function jumpTo(at: number) {
@@ -1422,6 +1472,14 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
     listen.current = { full: false, heard: 0, last: null, counted: false };
     setError(null);
     describe(track, Boolean(track.songId));
+    if (at === 0) {
+      try {
+        localStorage.removeItem(TIME_KEY);
+      } catch {}
+    }
+    prepared.current = null;
+    if (standbyRef.current) unload(standbyRef.current);
+    audio.preload = play || at > 0 ? "auto" : "none";
     audio.src = sourceFor(track);
     pendingTime.current = at;
     if (at > 0) {
@@ -1513,115 +1571,121 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
   }
 
   return (
-    <PlayerContext.Provider value={value}>
-      {children}
-      {showDevices && (
-        <DevicesPanel
-          link={link}
-          party={party}
-          hasQueue={queue.length > 0}
-          alone={!current && !followed}
-          following={followed?.id ?? null}
-          onClose={() => setShowDevices(false)}
-          onMoveTo={moveMusicTo}
-          onFollow={(id) => {
-            setFollowing(id);
-            setShowDevices(false);
-          }}
-        />
-      )}
-      {!current && !followed && !showDevices && elsewhere && (
-        <PlayingElsewhere device={elsewhere} onOpen={() => setFollowing(elsewhere.id)} />
-      )}
-      {followed && (!here || followed.state.track) && (
-        <RemoteBar
-          device={followed}
-          here={here}
-          offset={here ? 0 : link.offset}
-          send={(command) => {
-            sendTo(followed, command);
-          }}
-          onPlayHere={() => pullHere(followed.id)}
-          keys={remoteKeys}
-          showQueue={showQueue}
-          showLyrics={showLyrics}
-          onQueue={() => togglePanel("queue")}
-          onLyrics={() => togglePanel("lyrics")}
-          showDevices={showDevices}
-          onDevices={() => togglePanel("devices")}
-        />
-      )}
-      {!followed && current && showLyrics && (
-        <LyricsPanel
-          track={current}
-          time={() => audioRef.current?.currentTime ?? 0}
-          onSeek={(seconds) => {
-            if (audioRef.current) audioRef.current.currentTime = seconds;
-          }}
-          onClose={() => setShowLyrics(false)}
-        />
-      )}
-      {followed?.state.track && showLyrics && (
-        <LyricsPanel
-          track={remoteTrack(followed.state.track)}
-          time={() => {
-            const device = away.current.device;
-            return device ? timeNow(device.state, device.at, Date.now() + away.current.offset) : 0;
-          }}
-          onSeek={(seconds) => away.current.send({ do: "seek", time: seconds })}
-          onClose={() => setShowLyrics(false)}
-        />
-      )}
-      {followed?.state.track && showQueue && (
-        <QueuePanel
-          title={here ? "Up next" : `Queue on ${followed.name}`}
-          queue={[remoteTrack(followed.state.track), ...followed.state.upNext]}
-          keys={[followed.state.track, ...followed.state.upNext].map((each, at) => `${at}:${each.trackId}`)}
-          position={0}
-          onClose={() => setShowQueue(false)}
-          onJump={(at) => {
-            if (at > 0 && !onlyHost()) away.current.send({ do: "jump", ahead: at });
-          }}
-        />
-      )}
-      {!followed && current && showQueue && (
-        <QueuePanel
-          queue={queue}
-          keys={order}
-          position={position}
-          onClose={() => setShowQueue(false)}
-          onJump={jumpToGuarded}
-          onRemove={remove}
-        />
-      )}
-      <PlayerBar
-        away={followed !== null}
-        current={current}
-        position={position}
-        length={queue.length}
-        full={full}
-        error={error}
-        shuffle={shuffle}
-        repeat={repeat}
-        hasNext={hasNext}
-        showQueue={showQueue}
-        audio={activeAudio}
-        level={(full ? level : 1) * fadeIn}
-        sleep={sleep}
-        onSleep={chooseSleep}
-        live={audioRef}
-        holder={holderRef}
-        onShuffle={toggleShuffle}
-        onPrevious={previousGuarded}
-        onNext={nextGuarded}
-        onRepeat={cycleRepeat}
-        onQueue={() => togglePanel("queue")}
-        showLyrics={showLyrics}
-        onLyrics={() => togglePanel("lyrics")}
-        showDevices={showDevices}
-        elsewhere={elsewhere !== null}
-        onDevices={() => togglePanel("devices")}
-      />
-    </PlayerContext.Provider>
+    <PlayerActionsContext.Provider value={steady}>
+      <PlayerTrackIdContext.Provider value={current?.trackId ?? null}>
+        <PlayerContext.Provider value={value}>
+          {children}
+          {showDevices && (
+            <DevicesPanel
+              link={link}
+              party={party}
+              hasQueue={queue.length > 0}
+              alone={!current && !followed}
+              following={followed?.id ?? null}
+              onClose={() => setShowDevices(false)}
+              onMoveTo={moveMusicTo}
+              onFollow={(id) => {
+                setFollowing(id);
+                setShowDevices(false);
+              }}
+            />
+          )}
+          {!current && !followed && !showDevices && elsewhere && (
+            <PlayingElsewhere device={elsewhere} onOpen={() => setFollowing(elsewhere.id)} />
+          )}
+          {followed && (!here || followed.state.track) && (
+            <RemoteBar
+              device={followed}
+              here={here}
+              offset={here ? 0 : link.offset}
+              send={(command) => {
+                sendTo(followed, command);
+              }}
+              onPlayHere={() => pullHere(followed.id)}
+              keys={remoteKeys}
+              showQueue={showQueue}
+              showLyrics={showLyrics}
+              onQueue={() => togglePanel("queue")}
+              onLyrics={() => togglePanel("lyrics")}
+              showDevices={showDevices}
+              onDevices={() => togglePanel("devices")}
+            />
+          )}
+          {!followed && current && showLyrics && (
+            <LyricsPanel
+              track={current}
+              audio={activeAudio}
+              time={() => audioRef.current?.currentTime ?? 0}
+              onSeek={(seconds) => {
+                if (audioRef.current) audioRef.current.currentTime = seconds;
+              }}
+              onClose={() => setShowLyrics(false)}
+            />
+          )}
+          {followed?.state.track && showLyrics && (
+            <LyricsPanel
+              track={remoteTrack(followed.state.track)}
+              playing={followed.state.playing}
+              time={() => {
+                const device = away.current.device;
+                return device ? timeNow(device.state, device.at, Date.now() + away.current.offset) : 0;
+              }}
+              onSeek={(seconds) => away.current.send({ do: "seek", time: seconds })}
+              onClose={() => setShowLyrics(false)}
+            />
+          )}
+          {followed?.state.track && showQueue && (
+            <QueuePanel
+              title={here ? "Up next" : `Queue on ${followed.name}`}
+              queue={[remoteTrack(followed.state.track), ...followed.state.upNext]}
+              keys={[followed.state.track, ...followed.state.upNext].map((each, at) => `${at}:${each.trackId}`)}
+              position={0}
+              onClose={() => setShowQueue(false)}
+              onJump={(at) => {
+                if (at > 0 && !onlyHost()) away.current.send({ do: "jump", ahead: at });
+              }}
+            />
+          )}
+          {!followed && current && showQueue && (
+            <QueuePanel
+              queue={queue}
+              keys={order}
+              position={position}
+              onClose={() => setShowQueue(false)}
+              onJump={jumpToGuarded}
+              onRemove={remove}
+            />
+          )}
+          <PlayerBar
+            away={followed !== null}
+            current={current}
+            position={position}
+            length={queue.length}
+            full={full}
+            error={error}
+            shuffle={shuffle}
+            repeat={repeat}
+            hasNext={hasNext}
+            showQueue={showQueue}
+            audio={activeAudio}
+            level={(full ? level : 1) * fadeIn}
+            sleep={sleep}
+            onSleep={chooseSleep}
+            live={audioRef}
+            holder={holderRef}
+            onShuffle={toggleShuffle}
+            onPrevious={previousGuarded}
+            onNext={nextGuarded}
+            onRepeat={cycleRepeat}
+            onQueue={() => togglePanel("queue")}
+            showLyrics={showLyrics}
+            onLyrics={() => togglePanel("lyrics")}
+            showDevices={showDevices}
+            elsewhere={elsewhere !== null}
+            onDevices={() => togglePanel("devices")}
+          />
+        </PlayerContext.Provider>
+      </PlayerTrackIdContext.Provider>
+    </PlayerActionsContext.Provider>
   );
 }

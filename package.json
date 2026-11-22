@@ -11,7 +11,7 @@
     "lint": "biome check .",
     "format": "biome check --write .",
     "test": "node --import tsx --test --test-reporter=spec tests/*.test.ts",
-    "test:api": "node --import tsx --test --test-reporter=spec tests/api/*.test.ts",
+    "test:api": "tsx scripts/run-api-tests.ts",
     "test:e2e": "node --import tsx --test --test-reporter=spec --test-concurrency=1 tests/e2e/*.test.ts",
     "db:init": "tsx scripts/init-postgres.ts",
     "db:deezer": "tsx scripts/deezer.ts",

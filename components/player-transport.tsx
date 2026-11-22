@@ -43,42 +43,27 @@ function whilePlaying(audio: RefObject<HTMLAudioElement | null>, follow: () => v
   };
 }
 
-function useAudio(
-  audio: RefObject<HTMLAudioElement | null>,
-  events: string[],
-  read: (element: HTMLAudioElement) => number,
-  missing = 0,
-) {
-  const [value, setValue] = useState(missing);
-  useEffect(() => {
-    const follow = () => {
-      const element = audio.current;
-      setValue(element ? read(element) : missing);
-    };
-    return whilePlaying(audio, follow, events);
-  }, [audio, events, read, missing]);
-  return value;
-}
-
-const PLAY_EVENTS = ["play", "pause", "playing", "ended", "emptied"];
-const readPaused = (element: HTMLAudioElement) => (element.paused ? 1 : 0);
-const LOAD_EVENTS = [
+const PLAY_STATE_EVENTS = [
+  "play",
+  "pause",
+  "playing",
+  "ended",
+  "emptied",
   "loadstart",
   "waiting",
   "stalled",
   "canplay",
-  "playing",
-  "pause",
-  "emptied",
   "loadeddata",
   "error",
   "timeupdate",
 ];
 
+const SEEK_EVENTS = ["timeupdate", "seeking", "emptied", "loadedmetadata", "durationchange"];
 const STILL_AFTER_MS = 600;
 
-function useLoading(audio: RefObject<HTMLAudioElement | null>) {
-  const [loading, setLoading] = useState(false);
+export function PlayPauseButton({ audio }: { audio: RefObject<HTMLAudioElement | null> }) {
+  const [{ paused, loading }, setState] = useState({ paused: true, loading: false });
+
   useEffect(() => {
     let last: { element: HTMLAudioElement | null; time: number; movedAt: number } = {
       element: null,
@@ -87,30 +72,26 @@ function useLoading(audio: RefObject<HTMLAudioElement | null>) {
     };
     const follow = () => {
       const element = audio.current;
-      const now = performance.now();
+      const nextPaused = element ? element.paused : true;
+      let nextLoading = false;
       if (!element || element.paused || element.error) {
         last = { element, time: -1, movedAt: 0 };
-        setLoading(false);
-        return;
+      } else {
+        const now = performance.now();
+        if (last.element !== element) last = { element, time: element.currentTime, movedAt: 0 };
+        else if (element.currentTime !== last.time) last = { element, time: element.currentTime, movedAt: now };
+        const moving = now - last.movedAt < STILL_AFTER_MS;
+        nextLoading = !moving && element.readyState < HTMLMediaElement.HAVE_FUTURE_DATA;
       }
-      if (last.element !== element) last = { element, time: element.currentTime, movedAt: 0 };
-      else if (element.currentTime !== last.time) last = { element, time: element.currentTime, movedAt: now };
-      const moving = now - last.movedAt < STILL_AFTER_MS;
-      setLoading(!moving && element.readyState < HTMLMediaElement.HAVE_FUTURE_DATA);
+      setState((current) =>
+        current.paused === nextPaused && current.loading === nextLoading
+          ? current
+          : { paused: nextPaused, loading: nextLoading },
+      );
     };
-    return whilePlaying(audio, follow, LOAD_EVENTS);
+    return whilePlaying(audio, follow, PLAY_STATE_EVENTS);
   }, [audio]);
-  return loading;
-}
 
-const TIME_EVENTS = ["timeupdate", "seeking", "emptied", "loadedmetadata"];
-const readTime = (element: HTMLAudioElement) => element.currentTime;
-const LENGTH_EVENTS = ["durationchange", "loadedmetadata", "emptied"];
-const readLength = (element: HTMLAudioElement) => (Number.isFinite(element.duration) ? element.duration : 0);
-
-export function PlayPauseButton({ audio }: { audio: RefObject<HTMLAudioElement | null> }) {
-  const paused = useAudio(audio, PLAY_EVENTS, readPaused, 1) === 1;
-  const loading = useLoading(audio);
   return (
     <button
       type="button"
@@ -132,8 +113,23 @@ export function PlayPauseButton({ audio }: { audio: RefObject<HTMLAudioElement |
 }
 
 export function SeekBar({ audio, known }: { audio: RefObject<HTMLAudioElement | null>; known?: number }) {
-  const time = useAudio(audio, TIME_EVENTS, readTime);
-  const length = songLength(useAudio(audio, LENGTH_EVENTS, readLength), known) || 0;
+  const [{ time, rawLength }, setState] = useState({ time: 0, rawLength: 0 });
+
+  useEffect(() => {
+    const follow = () => {
+      const element = audio.current;
+      const nextTime = element ? element.currentTime : 0;
+      const nextRawLength = element && Number.isFinite(element.duration) ? element.duration : 0;
+      setState((current) =>
+        current.time === nextTime && current.rawLength === nextRawLength
+          ? current
+          : { time: nextTime, rawLength: nextRawLength },
+      );
+    };
+    return whilePlaying(audio, follow, SEEK_EVENTS);
+  }, [audio]);
+
+  const length = songLength(rawLength, known) || 0;
   const at = length > 0 ? Math.min(time, length) : time;
   return (
     <div className="player-seek">

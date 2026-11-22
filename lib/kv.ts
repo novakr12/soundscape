@@ -59,5 +59,13 @@ export async function removeExpired() {
   await sql`DELETE FROM kv WHERE expires_at <= now()`;
   await sql`DELETE FROM listening WHERE expires_at <= now()`;
   await sql`DELETE FROM cover_cache WHERE expires_at <= now()`;
+  await sql`
+    DELETE FROM cover_cache WHERE ctid IN (
+      SELECT ctid FROM cover_cache ORDER BY expires_at DESC OFFSET 5000
+    )`;
   await sql`DELETE FROM sessions WHERE expires_at <= now()`;
+  await sql`DELETE FROM player_devices WHERE seen_at < now() - interval '1 day'`;
+  await sql`DELETE FROM player_commands WHERE created_at < now() - interval '1 hour'`;
+  await sql`DELETE FROM parties WHERE ended_at IS NOT NULL AND ended_at < now() - interval '7 days'`;
+  await sql`DELETE FROM invites WHERE used_by IS NULL AND expires_at < now() - interval '7 days'`;
 }

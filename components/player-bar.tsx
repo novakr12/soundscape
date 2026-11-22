@@ -10,6 +10,7 @@ import { DevicesIcon, LyricsIcon, NextIcon, PreviousIcon, QueueIcon, RepeatIcon,
 import { PlayPauseButton, SeekBar } from "./player-transport";
 import SleepTimer, { type Sleep } from "./sleep-timer";
 import { useBarEntrance } from "./use-bar-entrance";
+import VisibleList from "./visible-list";
 import VolumeControl from "./volume-control";
 
 const REPEAT_LABELS: Record<Repeat, string> = {
@@ -37,8 +38,10 @@ export function QueuePanel({ queue, keys, position, onClose, onJump, onRemove, t
           Close
         </button>
       </div>
-      <ol>
-        {queue.map((track, at) => (
+      <VisibleList
+        items={queue}
+        guessedHeight={34}
+        renderItem={(track, at) => (
           <li key={`${keys[at]}`} className={at === position ? "current" : at < position ? "played" : undefined}>
             <button type="button" className="queue-song" onClick={() => onJump(at)}>
               <span>{track.title}</span> <span className="muted">· {track.artist}</span>
@@ -54,8 +57,8 @@ export function QueuePanel({ queue, keys, position, onClose, onJump, onRemove, t
               </button>
             )}
           </li>
-        ))}
-      </ol>
+        )}
+      />
     </section>
   );
 }
@@ -130,11 +133,11 @@ export function PlayerBar({
               </strong>
               <span className="muted" title={[current.artist, current.album].filter(Boolean).join(" · ")}>
                 {current.artistHref ? (
-                  <Link className="music-link" href={current.artistHref}>
+                  <Link className="music-link" href={current.artistHref} prefetch={false}>
                     {current.artist}
                   </Link>
                 ) : current.newSong ? (
-                  <Link className="music-link" href={`/music?q=${encodeURIComponent(current.artist)}`}>
+                  <Link className="music-link" href={`/music?q=${encodeURIComponent(current.artist)}`} prefetch={false}>
                     {current.artist}
                   </Link>
                 ) : (
@@ -143,7 +146,7 @@ export function PlayerBar({
                 {current.album && " · "}
                 {current.album &&
                   (current.albumHref ? (
-                    <Link className="music-link" href={current.albumHref}>
+                    <Link className="music-link" href={current.albumHref} prefetch={false}>
                       {current.album}
                     </Link>
                   ) : (

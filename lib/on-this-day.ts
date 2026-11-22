@@ -12,47 +12,63 @@ function sameDay(year: number, today: string) {
   return addDays(day, 0) === day ? day : null;
 }
 
-async function playsOn(userId: string, day: string) {
-  return sql`
-    SELECT p.played_at, p.track_id, t.title AS track_title, a.name AS artist_name
-    FROM plays p JOIN tracks t ON t.id = p.track_id JOIN artists a ON a.id = t.artist_id
-    WHERE p.user_id = ${userId} AND p.played_at >= ${startOfDay(day)} AND p.played_at < ${startOfDay(addDays(day, 1))}`;
-}
-
 export async function onThisDay(userId: string, now = new Date()): Promise<ThatDay[]> {
   const today = localDay(now);
   const thisYear = Number(today.slice(0, 4));
-  const years = Array.from({ length: YEARS_BACK }, (_, i) => thisYear - i - 1);
+  const ranges: { year: number; from: Date; to: Date }[] = [];
+  for (let i = 0; i < YEARS_BACK; i++) {
+    const year = thisYear - i - 1;
+    const day = sameDay(year, today);
+    if (day) ranges.push({ year, from: startOfDay(day), to: startOfDay(addDays(day, 1)) });
+  }
+  if (ranges.length === 0) return [];
 
-  const days = await Promise.all(
-    years.map(async (year): Promise<ThatDay | null> => {
-      const day = sameDay(year, today);
-      if (!day) return null;
-      const rows = await playsOn(userId, day);
-      if (rows.length === 0) return null;
-      const songs = new Map<string, ThatDaySong & { first: number }>();
-      for (const row of rows) {
-        const song = songs.get(row.track_id) ?? {
-          trackId: row.track_id,
-          title: row.track_title,
-          artist: row.artist_name,
-          plays: 0,
-          first: row.played_at.getTime(),
-        };
-        song.plays++;
-        song.first = Math.min(song.first, row.played_at.getTime());
-        songs.set(row.track_id, song);
-      }
-      return {
-        year,
-        yearsAgo: thisYear - year,
-        plays: rows.length,
-        songs: [...songs.values()]
-          .sort((a, b) => b.plays - a.plays || a.first - b.first)
-          .slice(0, SONGS)
-          .map(({ trackId, title, artist, plays }) => ({ trackId, title, artist, plays })),
+  const years = ranges.map((range) => range.year);
+  const froms = ranges.map((range) => range.from);
+  const tos = ranges.map((range) => range.to);
+  const rows = await sql`
+    WITH ranges AS (
+      SELECT *
+      FROM unnest(${years}::int[], ${froms}::timestamptz[], ${tos}::timestamptz[]) AS r(year, from_at, to_at)
+    ),
+    grouped AS (
+      SELECT r.year,
+             p.track_id,
+             t.title AS track_title,
+             a.name AS artist_name,
+             count(*)::int AS plays,
+             min(p.played_at) AS first_at,
+             sum(count(*)) OVER (PARTITION BY r.year)::int AS day_plays,
+             row_number() OVER (PARTITION BY r.year ORDER BY count(*) DESC, min(p.played_at) ASC) AS rank
+      FROM ranges r
+      JOIN plays p ON p.user_id = ${userId} AND p.played_at >= r.from_at AND p.played_at < r.to_at
+      JOIN tracks t ON t.id = p.track_id
+      JOIN artists a ON a.id = t.artist_id
+      GROUP BY r.year, p.track_id, t.title, a.name
+    )
+    SELECT year, day_plays, track_id, track_title, artist_name, plays
+    FROM grouped
+    WHERE rank <= ${SONGS}
+    ORDER BY year DESC, rank ASC`;
+
+  const byYear = new Map<number, ThatDay>();
+  for (const row of rows) {
+    let entry = byYear.get(row.year);
+    if (!entry) {
+      entry = {
+        year: row.year,
+        yearsAgo: thisYear - row.year,
+        plays: row.day_plays,
+        songs: [],
       };
-    }),
-  );
-  return days.filter((day): day is ThatDay => day !== null);
+      byYear.set(row.year, entry);
+    }
+    entry.songs.push({
+      trackId: row.track_id,
+      title: row.track_title,
+      artist: row.artist_name,
+      plays: row.plays,
+    });
+  }
+  return [...byYear.values()];
 }

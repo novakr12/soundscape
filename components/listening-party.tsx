@@ -32,7 +32,8 @@ export function useParty(username: string | null, deviceId: () => string | null)
   const refresh = useCallback(async () => {
     const response = await fetch("/api/party", { cache: "no-store" }).catch(() => null);
     if (!response?.ok) return;
-    setParty((await answer(response)).party);
+    const next = (await answer(response)).party;
+    setParty((prev) => (JSON.stringify(prev) === JSON.stringify(next) ? prev : next));
   }, []);
 
   const inParty = party !== null;

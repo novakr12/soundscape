@@ -54,32 +54,37 @@ export async function getDiscoverMix(userId: string): Promise<MixSong[]> {
 }
 
 export async function getRediscoverMix(userId: string, now = new Date()): Promise<MixSong[]> {
+  const cutoff = new Date(now.getTime() - REDISCOVER_AFTER_DAYS * 86_400_000);
   const rows = await sql`
-    SELECT p.track_id, t.title, a.name AS artist, count(*) AS plays, max(p.played_at) AS last_played
-    FROM plays p JOIN tracks t ON t.id = p.track_id JOIN artists a ON a.id = t.artist_id
-    WHERE p.user_id = ${userId}
-    GROUP BY p.track_id, t.id, a.id
-    HAVING count(*) >= 2 AND max(p.played_at) < ${new Date(now.getTime() - REDISCOVER_AFTER_DAYS * 86_400_000)}`;
-  const songs = rows.map((row) => ({
+    WITH candidates AS (
+      SELECT p.track_id, t.title, t.cover, t.deezer_id,
+             a.name AS artist, count(*)::int AS plays, max(p.played_at) AS last_played
+      FROM plays p
+      JOIN tracks t ON t.id = p.track_id
+      JOIN artists a ON a.id = t.artist_id
+      WHERE p.user_id = ${userId}
+      GROUP BY p.track_id, t.id, a.id
+      HAVING count(*) >= 2 AND max(p.played_at) < ${cutoff}
+    ),
+    per_artist AS (
+      SELECT *,
+             row_number() OVER (PARTITION BY artist ORDER BY plays DESC, last_played ASC) AS artist_rank
+      FROM candidates
+    )
+    SELECT track_id, title, cover, deezer_id, artist, plays, last_played
+    FROM per_artist
+    WHERE artist_rank <= ${SONGS_PER_ARTIST}
+    ORDER BY plays DESC, last_played ASC
+    LIMIT ${MIX_SIZE}`;
+  return rows.map((row) => ({
     trackId: row.track_id as string,
     title: row.title as string,
     artist: row.artist as string,
     plays: row.plays as number,
     lastPlayed: row.last_played as Date,
+    cover: (row.cover as string | null) ?? undefined,
+    deezerId: (row.deezer_id as number | null) ?? undefined,
   }));
-
-  const perArtist = new Map<string, number>();
-  const picked = songs
-    .sort((a, b) => b.plays - a.plays || a.lastPlayed.getTime() - b.lastPlayed.getTime())
-    .filter((song) => {
-      const count = perArtist.get(song.artist) ?? 0;
-      perArtist.set(song.artist, count + 1);
-      return count < SONGS_PER_ARTIST;
-    })
-    .slice(0, MIX_SIZE);
-
-  const details = await trackDetails(picked.map((song) => song.trackId));
-  return picked.map((song) => ({ ...song, ...details.get(song.trackId) }));
 }
 
 function getMix(userId: string, kind: MixKind, now = new Date()) {

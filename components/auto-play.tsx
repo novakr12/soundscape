@@ -1,10 +1,10 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { type PlayerTrack, usePlayer } from "./player";
+import { type PlayerTrack, usePlayerActions } from "./player";
 
 export default function AutoPlay({ track }: { track: PlayerTrack }) {
-  const { play } = usePlayer();
+  const { play } = usePlayerActions();
   const started = useRef(false);
 
   useEffect(() => {

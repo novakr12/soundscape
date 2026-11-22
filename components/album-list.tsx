@@ -16,7 +16,7 @@ export default function AlbumList({ albums }: { albums: TopAlbum[] }) {
           <Cover src={album.cover} />
           <span className="listening-info">
             <span>
-              <Link className="music-link" href={`/album/${encodeURIComponent(album.albumId)}`}>
+              <Link className="music-link" href={`/album/${encodeURIComponent(album.albumId)}`} prefetch={false}>
                 {album.title}
               </Link>{" "}
               <span className="muted">
