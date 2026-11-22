@@ -28,7 +28,8 @@ describe("accent", () => {
     paintAccent("#3B82F6", page);
     assert.deepEqual([...page.set.keys()], ["--accent", "--accent-fg", "--brand-green", "--logo-start", "--logo-end"]);
     assert.equal(page.set.get("--accent"), "#3b82f6");
-    assert.equal(page.set.get("--logo-end"), "color-mix(in oklab, #3b82f6 70%, #ffffff)");
+    assert.equal(page.set.get("--logo-end"), "#76a8f9");
+    assert.equal(page.set.get("--logo-start"), "#2f68c5");
     assert.equal(paintAccent("#1db954", page), "#000000");
     assert.equal(page.set.size, 0);
     paintAccent("#3b82f6", page);

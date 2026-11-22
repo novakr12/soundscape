@@ -34,7 +34,13 @@ export function paintAccent(
   root.style.setProperty("--accent", color);
   root.style.setProperty("--accent-fg", foreground);
   root.style.setProperty("--brand-green", color);
-  root.style.setProperty("--logo-start", `color-mix(in oklab, ${color} 80%, #000000)`);
-  root.style.setProperty("--logo-end", `color-mix(in oklab, ${color} 70%, #ffffff)`);
+  const toward = (target: number, share: number) =>
+    `#${[1, 3, 5]
+      .map((at) => Number.parseInt(color.slice(at, at + 2), 16))
+      .map((channel) => Math.round(channel + (target - channel) * share))
+      .map((channel) => channel.toString(16).padStart(2, "0"))
+      .join("")}`;
+  root.style.setProperty("--logo-start", toward(0, 0.2));
+  root.style.setProperty("--logo-end", toward(255, 0.3));
   return foreground;
 }
