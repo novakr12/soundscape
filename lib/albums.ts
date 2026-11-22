@@ -1,6 +1,8 @@
 import { cache } from "react";
-import { artistIdFor, slug, songTitle } from "./catalog";
+import { albumIdFor, slug, songTitle } from "./catalog";
 import { sql } from "./postgres";
+
+export { albumIdFor };
 
 export type AlbumLink = { trackId: string; album: string; number?: number };
 export type AlbumSource = "listen" | "deezer";
@@ -38,11 +40,6 @@ export function cleanAlbum(album: unknown) {
 export function trackNumber(value: unknown) {
   const number = Number.parseInt(String(value ?? ""), 10);
   return number >= 1 && number <= 999 ? number : undefined;
-}
-
-export function albumIdFor(artist: string, album: string) {
-  const title = slug(cleanAlbum(album));
-  return title ? `${artistIdFor(artist)}-${title}` : null;
 }
 
 export async function linkAlbums(links: AlbumLink[], source: AlbumSource = "listen"): Promise<number> {

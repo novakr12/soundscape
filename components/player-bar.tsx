@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import type { Ref, RefObject } from "react";
-import { artistIdFor } from "@/lib/catalog";
+import { albumIdFor, artistIdFor } from "@/lib/catalog";
 import type { Repeat } from "@/lib/play-queue";
 import CoverPicture from "./cover-picture";
 import { SongLink } from "./music-links";
@@ -129,6 +129,13 @@ export function PlayerBar({
         ? `/artist/${encodeURIComponent(fallbackArtistId)}?name=${encodeURIComponent(current.artist)}`
         : `/music?q=${encodeURIComponent(current.artist)}`))
     : "";
+  const fallbackAlbumId = current?.album ? albumIdFor(current.artist, current.album) : null;
+  const albumHref = current?.album
+    ? (current.albumHref ??
+      (fallbackAlbumId
+        ? `/album/${encodeURIComponent(fallbackAlbumId)}?artist=${encodeURIComponent(current.artist)}&title=${encodeURIComponent(current.album)}`
+        : `/music?q=${encodeURIComponent(current.album)}`))
+    : undefined;
   return (
     <div className={`player${entrance}`} hidden={!current || away}>
       <div className="player-song">
@@ -155,15 +162,14 @@ export function PlayerBar({
                 <Link className="music-link" href={artistHref} prefetch={false}>
                   {current.artist}
                 </Link>
-                {current.album && " · "}
-                {current.album &&
-                  (current.albumHref ? (
-                    <Link className="music-link" href={current.albumHref} prefetch={false}>
+                {current.album && albumHref && (
+                  <>
+                    {" · "}
+                    <Link className="music-link" href={albumHref} prefetch={false}>
                       {current.album}
                     </Link>
-                  ) : (
-                    current.album
-                  ))}
+                  </>
+                )}
                 {!full && " · 30-second preview"}
                 {length > 1 && ` · ${position + 1} of ${length}`}
               </span>

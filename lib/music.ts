@@ -1,7 +1,7 @@
 import type { PlayerTrack } from "@/components/player";
 import { cleanAlbum, linkAlbums } from "./albums";
 import { resolveTracks } from "./aliases";
-import { slug, songArtist, songTitle } from "./catalog";
+import { artistIdFor, mainArtist, slug, songArtist, songTitle } from "./catalog";
 import { saveTracks } from "./imports";
 import { getNavidrome } from "./navidrome";
 import {
@@ -30,7 +30,12 @@ export async function toMusicSongs(songs: NavidromeSong[], from: { library?: str
   const resolved = await resolveTracks(songs);
   const ids = [...new Set(resolved.map((song) => song.trackId))];
   const albumIds = songs.map((song, i) => (song.album ? albumKey(resolved[i].artistId, song.album) : null));
-  const uniqueAlbumIds = [...new Set(albumIds.filter((id): id is string => Boolean(id)))];
+  const primaryAlbumIds = songs.map((song, i) => {
+    if (!song.album) return null;
+    const primaryArtistId = artistIdFor(mainArtist(song.artist));
+    return primaryArtistId && primaryArtistId !== resolved[i].artistId ? albumKey(primaryArtistId, song.album) : null;
+  });
+  const uniqueAlbumIds = [...new Set([...albumIds, ...primaryAlbumIds].filter((id): id is string => Boolean(id)))];
   const [tracks, artists, albums] = await Promise.all([
     sql`SELECT id FROM tracks WHERE id = ANY(${ids})`,
     sql`SELECT id FROM artists WHERE id = ANY(${[...new Set(resolved.map((song) => song.artistId))]})`,
@@ -43,18 +48,24 @@ export async function toMusicSongs(songs: NavidromeSong[], from: { library?: str
     const trackId = resolved[i].trackId;
     const artistId = resolved[i].artistId;
     const albumId = albumIds[i];
+    const primaryAlbumId = primaryAlbumIds[i];
+    const resolvedAlbumId =
+      albumId && knownAlbums.has(albumId)
+        ? albumId
+        : primaryAlbumId && knownAlbums.has(primaryAlbumId)
+          ? primaryAlbumId
+          : null;
     const cover = navidromeCover(song.coverArt);
     const artistHref = knownArtists.has(artistId)
       ? `/artist/${encodeURIComponent(artistId)}`
       : song.artistId
         ? musicAddress({ artist: song.artistId, library: from.library })
         : musicAddress({ q: song.artist, library: from.library });
-    const albumHref =
-      albumId && knownAlbums.has(albumId)
-        ? `/album/${encodeURIComponent(albumId)}`
-        : song.albumId
-          ? `/music?album=${encodeURIComponent(song.albumId)}`
-          : undefined;
+    const albumHref = resolvedAlbumId
+      ? `/album/${encodeURIComponent(resolvedAlbumId)}`
+      : song.albumId
+        ? `/music?album=${encodeURIComponent(song.albumId)}`
+        : undefined;
     return {
       trackId,
       songId: song.id,

@@ -27,7 +27,14 @@ export default function HistoryTable({ plays, editable = true }: { plays: Histor
   const [pending, startTransition] = useTransition();
   const [confirm, dialog] = useConfirm();
   const playableTracks = useMemo(
-    () => plays.map(({ trackId, title, artist, cover }) => ({ trackId, title, artist, cover })),
+    () =>
+      plays.map(({ trackId, title, artist, cover, album }) => ({
+        trackId,
+        title,
+        artist,
+        cover,
+        ...(album ? { album: album.title, albumHref: `/album/${encodeURIComponent(album.albumId)}` } : {}),
+      })),
     [plays],
   );
 

@@ -1,30 +1,52 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import AlbumSongs, { type AlbumSongRow } from "@/components/album-songs";
 import Cover from "@/components/cover";
 import { getAlbum } from "@/lib/albums";
 import { guessTrackId, matchAlbumSongs, navidromeAlbumFor, navidromeCover } from "@/lib/music";
 import { routeParam } from "@/lib/route-param";
 import { currentUserId } from "@/lib/session";
+import { findKnownAlbum } from "@/lib/track-album";
 import { ensureTracklist } from "@/lib/tracklists";
 
-type Props = { params: Promise<{ albumId: string }> };
+type Props = { params: Promise<{ albumId: string }>; searchParams?: Promise<{ artist?: string; title?: string }> };
 
 function plural(count: number, word: string) {
   return `${count.toLocaleString("en")} ${word}${count === 1 ? "" : "s"}`;
 }
 
-export async function generateMetadata({ params }: Props): Promise<Metadata> {
+export async function generateMetadata({ params, searchParams }: Props): Promise<Metadata> {
   const album = await getAlbum(routeParam((await params).albumId), null);
-  return { title: album ? `${album.title} · ${album.artist} · Soundscape` : "Soundscape" };
+  if (album) return { title: `${album.title} · ${album.artist} · Soundscape` };
+  const query = searchParams ? await searchParams : undefined;
+  const title = query?.title?.trim();
+  const artist = query?.artist?.trim();
+  return { title: title ? `${[title, artist].filter(Boolean).join(" · ")} · Soundscape` : "Soundscape" };
 }
 
-export default async function AlbumPage({ params }: Props) {
+export default async function AlbumPage({ params, searchParams }: Props) {
   const albumId = routeParam((await params).albumId);
   const [viewer] = await Promise.all([currentUserId(), ensureTracklist(albumId)]);
   const album = await getAlbum(albumId, viewer);
-  if (!album) notFound();
+  if (!album) {
+    const query = searchParams ? await searchParams : undefined;
+    const artistParam = query?.artist?.trim().slice(0, 300);
+    const titleParam = query?.title?.trim().slice(0, 300);
+    if (artistParam && titleParam) {
+      const known = await findKnownAlbum(artistParam, titleParam);
+      if (known?.albumHref && known.albumHref !== `/album/${encodeURIComponent(albumId)}`) {
+        redirect(known.albumHref);
+      }
+      if (viewer) {
+        const navAlbum = await navidromeAlbumFor(viewer, artistParam, titleParam);
+        if (navAlbum?.id) {
+          redirect(`/music?album=${encodeURIComponent(navAlbum.id)}`);
+        }
+      }
+    }
+    notFound();
+  }
   const discs = new Set(album.tracks.map((track) => track.disc ?? 1)).size;
   const numbered = album.tracks.some((track) => track.number);
   const position = (track: (typeof album.tracks)[number], index: number) =>

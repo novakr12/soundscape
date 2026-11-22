@@ -16,7 +16,7 @@ import {
   savedVolume,
   wantsRemote,
 } from "@/lib/app-bridge";
-import { artistIdFor } from "@/lib/catalog";
+import { albumIdFor, artistIdFor } from "@/lib/catalog";
 import {
   type AppView,
   type Device,
@@ -149,11 +149,22 @@ function artistPage(track: PlayerTrack) {
     : `/music?q=${encodeURIComponent(track.artist)}`;
 }
 
+function albumPage(track: PlayerTrack) {
+  if (track.albumHref) return track.albumHref;
+  if (!track.album) return null;
+  const id = albumIdFor(track.artist, track.album);
+  return id
+    ? `/album/${encodeURIComponent(id)}?artist=${encodeURIComponent(track.artist)}&title=${encodeURIComponent(track.album)}`
+    : `/music?q=${encodeURIComponent(track.album)}`;
+}
+
 function remoteTrack(track: {
   trackId: string;
   title: string;
   artist: string;
   album?: string | null;
+  albumHref?: string | null;
+  artistHref?: string | null;
   songId?: string | null;
 }): PlayerTrack {
   return {
@@ -161,6 +172,8 @@ function remoteTrack(track: {
     title: track.title,
     artist: track.artist,
     ...(track.album ? { album: track.album } : {}),
+    ...(track.albumHref ? { albumHref: track.albumHref } : {}),
+    ...(track.artistHref ? { artistHref: track.artistHref } : {}),
     ...(track.songId ? { songId: track.songId } : {}),
   };
 }
@@ -1291,7 +1304,7 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
         album: track.album ?? null,
         cover: track.cover ?? null,
         songId: track.songId ?? null,
-        albumHref: track.albumHref ?? null,
+        albumHref: albumPage(track),
         artistHref: artistPage(track),
       },
       playing: Boolean(audio.currentSrc) && !audio.paused && !audio.ended,
@@ -1509,7 +1522,7 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
 
   function learn(track: PlayerTrack, id: number) {
     if (track.songId) {
-      if (!track.album) learnAlbum(track, id);
+      if (!track.album || !track.albumHref) learnAlbum(track, id);
       return;
     }
     fetch(`${sourceFor(track)}?info`)
@@ -1542,10 +1555,14 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
       const refreshArtist =
         savedArtistHref &&
         (!each.artistHref || each.artistHref.startsWith("/music") || each.artistHref.includes("?name="));
+      const savedAlbumId = each.album ? albumIdFor(savedArtist ?? each.artist, each.album) : null;
+      const refreshAlbum =
+        savedAlbumId && (!each.albumHref || each.albumHref.startsWith("/music") || each.albumHref.includes("?"));
       return {
         ...rest,
         trackId: savedTrackId,
         ...(refreshArtist ? { artistHref: savedArtistHref } : {}),
+        ...(refreshAlbum ? { albumHref: `/album/${encodeURIComponent(savedAlbumId)}` } : {}),
       };
     });
     tracksRef.current = nextTracks;
@@ -1553,14 +1570,24 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
   }
 
   function withAlbum(track: PlayerTrack, album: string, albumHref?: string) {
-    if (track.album) return track;
-    const found = { album, ...(albumHref ? { albumHref } : {}) };
-    const nextTracks = tracksRef.current.map((each) =>
-      each.trackId === track.trackId && !each.album ? { ...each, ...found } : each,
-    );
+    const needsAlbum = !track.album;
+    const needsHref = Boolean(albumHref && !track.albumHref);
+    if (!needsAlbum && !needsHref) return track;
+    const nextTracks = tracksRef.current.map((each) => {
+      if (each.trackId !== track.trackId) return each;
+      const addAlbum = !each.album ? { album } : {};
+      const addHref = albumHref && !each.albumHref ? { albumHref } : {};
+      return Object.keys(addAlbum).length > 0 || Object.keys(addHref).length > 0
+        ? { ...each, ...addAlbum, ...addHref }
+        : each;
+    });
     tracksRef.current = nextTracks;
     setTracks(nextTracks);
-    return { ...track, ...found };
+    return {
+      ...track,
+      ...(needsAlbum ? { album } : {}),
+      ...(needsHref ? { albumHref } : {}),
+    };
   }
 
   function watchLoading(id: number) {

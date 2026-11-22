@@ -107,7 +107,7 @@ function savedDuration(value: unknown) {
     : undefined;
 }
 
-const ALBUM_HREF = /^\/(album\/[^/?#]+|music\?album=[A-Za-z0-9_-]+)$/;
+const ALBUM_HREF = /^\/(album\/[^/?#]+(\?[^#]+)?|music\?(album|q)=[^#]+)$/;
 const ARTIST_HREF = /^\/(artist\/[^/?#]+(\?name=[^#]+)?|music\?(artist|q)=[^#]+)$/;
 
 function isTrack(value: unknown): value is SavedTrack {
@@ -121,7 +121,8 @@ function isTrack(value: unknown): value is SavedTrack {
     (track.songId === undefined || (typeof track.songId === "string" && isSongId(track.songId))) &&
     (track.newSong === undefined || typeof track.newSong === "boolean") &&
     (track.album === undefined || (typeof track.album === "string" && track.album.length <= 300)) &&
-    (track.albumHref === undefined || (typeof track.albumHref === "string" && ALBUM_HREF.test(track.albumHref))) &&
+    (track.albumHref === undefined ||
+      (typeof track.albumHref === "string" && track.albumHref.length <= 1000 && ALBUM_HREF.test(track.albumHref))) &&
     (track.artistHref === undefined ||
       (typeof track.artistHref === "string" && track.artistHref.length <= 1000 && ARTIST_HREF.test(track.artistHref)))
   );

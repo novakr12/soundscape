@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { type RefObject, useEffect, useState } from "react";
-import { artistIdFor } from "@/lib/catalog";
+import { albumIdFor, artistIdFor } from "@/lib/catalog";
 import {
   type Device,
   type DeviceCommand,
@@ -135,6 +135,13 @@ export default function RemoteBar({
         ? `/artist/${encodeURIComponent(fallbackArtistId)}?name=${encodeURIComponent(track.artist)}`
         : `/music?q=${encodeURIComponent(track.artist)}`))
     : "";
+  const fallbackAlbumId = track?.album ? albumIdFor(track.artist, track.album) : null;
+  const albumHref = track?.album
+    ? (track.albumHref ??
+      (fallbackAlbumId
+        ? `/album/${encodeURIComponent(fallbackAlbumId)}?artist=${encodeURIComponent(track.artist)}&title=${encodeURIComponent(track.album)}`
+        : `/music?q=${encodeURIComponent(track.album)}`))
+    : undefined;
 
   return (
     <div
@@ -156,15 +163,14 @@ export default function RemoteBar({
                 <Link className="music-link" href={artistHref} prefetch={false}>
                   {track.artist}
                 </Link>
-                {track.album && " · "}
-                {track.album &&
-                  (track.albumHref ? (
-                    <Link className="music-link" href={track.albumHref} prefetch={false}>
+                {track.album && albumHref && (
+                  <>
+                    {" · "}
+                    <Link className="music-link" href={albumHref} prefetch={false}>
                       {track.album}
                     </Link>
-                  ) : (
-                    track.album
-                  ))}
+                  </>
+                )}
               </span>
             </>
           ) : (

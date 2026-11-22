@@ -173,12 +173,22 @@ describe("playing from a list", () => {
       tracks: [
         { trackId: "a", title: "b", artist: "c", album: "Clayman", albumHref: "/album/in-flames-clayman" },
         { trackId: "d", title: "e", artist: "f", album: "Far", albumHref: "/music?album=al-far" },
+        {
+          trackId: "g",
+          title: "Death By MP3",
+          artist: "slayr",
+          album: "Half Blood",
+          albumHref: "/album/slayr-half-blood?artist=slayr&title=Half%20Blood",
+        },
+        { trackId: "h", title: "h", artist: "i", album: "Half Blood", albumHref: "/music?q=Half%20Blood" },
       ],
-      order: [0, 1],
+      order: [0, 1, 2, 3],
       position: 0,
     });
     assert.equal(saved?.tracks[0].albumHref, "/album/in-flames-clayman");
     assert.equal(saved?.tracks[1].albumHref, "/music?album=al-far");
+    assert.equal(saved?.tracks[2].albumHref, "/album/slayr-half-blood?artist=slayr&title=Half%20Blood");
+    assert.equal(saved?.tracks[3].albumHref, "/music?q=Half%20Blood");
     assert.equal(
       restoreQueue({
         tracks: [{ trackId: "a", title: "b", artist: "c", album: "x", albumHref: "https://evil.example/" }],

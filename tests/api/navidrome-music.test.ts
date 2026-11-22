@@ -368,6 +368,9 @@ describe("Browsing Navidrome", () => {
     assert.ok(html.includes("Not played yet"));
     assert.ok(html.includes("/music?album=al-first"));
     assert.ok(html.includes("/music?album=al-second"));
+    const albumsAt = html.indexOf("<h2>Albums</h2>");
+    const songsAt = html.indexOf("<h2>Songs</h2>");
+    assert.ok(albumsAt !== -1 && songsAt !== -1 && albumsAt < songsAt);
 
     const guest = await fetch(`${BASE_URL}${artistPath}`);
     const guestHtml = await guest.text();
@@ -409,6 +412,16 @@ describe("Browsing Navidrome", () => {
 
     const unknownArtist = await fetch(`${BASE_URL}/artist/totally-unknown-artist`);
     assert.equal(unknownArtist.status, 404);
+
+    const missingAlbumFallback = await fetch(
+      `${BASE_URL}/album/missing-album?artist=${encodeURIComponent(user.artist)}&title=First`,
+      { headers: { cookie }, redirect: "manual" },
+    );
+    assert.ok(missingAlbumFallback.status === 307 || missingAlbumFallback.status === 308);
+    assert.equal(missingAlbumFallback.headers.get("location"), "/music?album=al-first");
+
+    const totallyMissingAlbum = await fetch(`${BASE_URL}/album/totally-missing-album`);
+    assert.equal(totallyMissingAlbum.status, 404);
   });
 
   it("adds a new song to Soundscape when it is played", async () => {
@@ -428,5 +441,15 @@ describe("Browsing Navidrome", () => {
     assert.equal(listed.albumHref, `/album/${encodeURIComponent(`${artistIdFor(user.artist)}-second`)}`);
     assert.equal(listed.newSong, undefined);
     assert.equal(await getSong((await getNavidrome(user.userId))!, "../bad"), null);
+
+    const collabAlbumFallback = await fetch(
+      `${BASE_URL}/album/wrong-slug?artist=${encodeURIComponent(`${user.artist} • Guest`)}&title=Second`,
+      { headers: { cookie: `soundscape_session=${await startSession(user.userId)}` }, redirect: "manual" },
+    );
+    assert.ok(collabAlbumFallback.status === 307 || collabAlbumFallback.status === 308);
+    assert.equal(
+      collabAlbumFallback.headers.get("location"),
+      `/album/${encodeURIComponent(`${artistIdFor(user.artist)}-second`)}`,
+    );
   });
 });

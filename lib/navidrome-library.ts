@@ -217,6 +217,7 @@ export async function getNavidromeAlbum(server: Navidrome, albumId: string) {
   ]);
   if (!result.album) return null;
   return {
+    id: albumId,
     name: text(result.album.name) ?? "Untitled album",
     artist: text(result.album.artist),
     songs: songs(result.album.song).sort(byDiscAndTrack),

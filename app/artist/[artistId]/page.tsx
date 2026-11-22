@@ -245,17 +245,6 @@ export default async function ArtistPage({ params, searchParams }: Props) {
         ))}
       </div>
 
-      <ArtistSongs
-        rows={songRows}
-        canPlay={Boolean(viewer)}
-        artistId={artistId}
-        artistName={knownArtist.name}
-        hasNavidrome={isKnownArtist && Boolean(navidrome)}
-        navidromeArtistId={catalog?.artistId}
-        songsTruncated={catalog?.songsTruncated}
-        hasUnplayed={extraSongs.length > 0}
-      />
-
       {albumRows.length > 0 && (
         <section>
           <h2>Albums</h2>
@@ -274,6 +263,17 @@ export default async function ArtistPage({ params, searchParams }: Props) {
           </ul>
         </section>
       )}
+
+      <ArtistSongs
+        rows={songRows}
+        canPlay={Boolean(viewer)}
+        artistId={artistId}
+        artistName={knownArtist.name}
+        hasNavidrome={isKnownArtist && Boolean(navidrome)}
+        navidromeArtistId={catalog?.artistId}
+        songsTruncated={catalog?.songsTruncated}
+        hasUnplayed={extraSongs.length > 0}
+      />
 
       <section>
         <h2>Similar artists</h2>
