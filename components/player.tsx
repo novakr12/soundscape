@@ -143,9 +143,10 @@ export function useCurrentTrackId() {
 
 function artistPage(track: PlayerTrack) {
   if (track.artistHref) return track.artistHref;
-  return track.newSong
-    ? `/music?q=${encodeURIComponent(track.artist)}`
-    : `/artist/${encodeURIComponent(artistIdFor(track.artist))}`;
+  const id = artistIdFor(track.artist);
+  return id
+    ? `/artist/${encodeURIComponent(id)}?name=${encodeURIComponent(track.artist)}`
+    : `/music?q=${encodeURIComponent(track.artist)}`;
 }
 
 function remoteTrack(track: {
@@ -171,6 +172,7 @@ function handed(track: PlayerTrack) {
     artist: track.artist,
     ...(track.album ? { album: track.album } : {}),
     ...(track.albumHref ? { albumHref: track.albumHref } : {}),
+    ...(track.artistHref ? { artistHref: track.artistHref } : {}),
     ...(track.cover ? { cover: track.cover } : {}),
     ...(track.songId ? { songId: track.songId } : {}),
     ...(track.duration ? { duration: track.duration } : {}),
@@ -922,7 +924,12 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
       body: JSON.stringify(
         track.songId ? { trackId: track.trackId, songId: track.songId } : { trackId: track.trackId },
       ),
-    }).catch(() => {});
+    })
+      .then((response) => (response.ok ? (response.json() as Promise<{ trackId?: string; artist?: string }>) : null))
+      .then((saved) => {
+        if (saved?.trackId && track.newSong) markSaved(track, saved.trackId, saved.artist);
+      })
+      .catch(() => {});
   }
 
   function ended() {
@@ -1523,6 +1530,26 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
         if (id === playing.current && !fellBack.current) describe(known, true);
       })
       .catch(() => {});
+  }
+
+  function markSaved(track: PlayerTrack, savedTrackId: string, savedArtist?: string) {
+    const savedArtistId = artistIdFor(savedArtist ?? track.artist);
+    const savedArtistHref = savedArtistId ? `/artist/${encodeURIComponent(savedArtistId)}` : undefined;
+    const nextTracks = tracksRef.current.map((each) => {
+      const same = track.songId ? each.songId === track.songId : each.trackId === track.trackId;
+      if (!same || !each.newSong) return each;
+      const { newSong: _, ...rest } = each;
+      const refreshArtist =
+        savedArtistHref &&
+        (!each.artistHref || each.artistHref.startsWith("/music") || each.artistHref.includes("?name="));
+      return {
+        ...rest,
+        trackId: savedTrackId,
+        ...(refreshArtist ? { artistHref: savedArtistHref } : {}),
+      };
+    });
+    tracksRef.current = nextTracks;
+    setTracks(nextTracks);
   }
 
   function withAlbum(track: PlayerTrack, album: string, albumHref?: string) {

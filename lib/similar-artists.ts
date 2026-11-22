@@ -1,4 +1,4 @@
-import { artistIdFor } from "./catalog";
+import { artistIdFor, mainArtist } from "./catalog";
 import { deezerRelatedArtists } from "./deezer";
 import { artistFromSearch } from "./genres";
 import { request } from "./http";
@@ -15,8 +15,13 @@ async function mbidFor(artistId: string, name: string) {
   const [row] = await sql`SELECT mbid FROM artists WHERE id = ${artistId}`;
   if (row?.mbid) return row.mbid as string;
   const mbid = await artistFromSearch(name).catch(() => null);
-  if (mbid && row) await sql`UPDATE artists SET mbid = ${mbid} WHERE id = ${artistId} AND mbid IS NULL`;
-  return mbid;
+  if (mbid) {
+    if (row) await sql`UPDATE artists SET mbid = ${mbid} WHERE id = ${artistId} AND mbid IS NULL`;
+    return mbid;
+  }
+  const primary = mainArtist(name);
+  if (!primary || primary === name) return null;
+  return artistFromSearch(primary).catch(() => null);
 }
 
 export async function listenBrainzSimilar(mbid: string, limit: number): Promise<string[]> {

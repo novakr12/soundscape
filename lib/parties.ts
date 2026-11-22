@@ -90,6 +90,7 @@ export function handedForGuests(partyId: string, track: DeviceTrack, duration: n
     artist: track.artist,
     ...(track.album ? { album: track.album } : {}),
     ...(track.albumHref ? { albumHref: track.albumHref } : {}),
+    ...(track.artistHref ? { artistHref: track.artistHref } : {}),
     ...(cover ? { cover } : {}),
     ...(songId ? { songId } : {}),
     ...(duration && duration > 0 ? { duration } : {}),

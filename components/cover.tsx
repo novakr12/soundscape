@@ -4,14 +4,16 @@ export default function Cover({
   src,
   large = false,
   round = false,
+  lazy = false,
 }: {
   src?: string;
   large?: boolean;
   round?: boolean;
+  lazy?: boolean;
 }) {
   const className = `cover${large ? " large" : ""}${round && src ? " round" : ""}`;
   const size = large ? 128 : 40;
-  if (src) return <CoverPicture src={src} shown={size} className={className} />;
+  if (src) return <CoverPicture src={src} shown={size} className={className} lazy={lazy} />;
 
   return (
     <span className={`${className} cover-fallback`} aria-hidden="true">

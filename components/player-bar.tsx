@@ -2,9 +2,10 @@
 
 import Link from "next/link";
 import type { Ref, RefObject } from "react";
+import { artistIdFor } from "@/lib/catalog";
 import type { Repeat } from "@/lib/play-queue";
 import CoverPicture from "./cover-picture";
-import { ArtistLink, SongLink } from "./music-links";
+import { SongLink } from "./music-links";
 import type { PlayerTrack } from "./player";
 import { DevicesIcon, LyricsIcon, NextIcon, PreviousIcon, QueueIcon, RepeatIcon, ShuffleIcon } from "./player-icons";
 import { PlayPauseButton, SeekBar } from "./player-transport";
@@ -121,6 +122,13 @@ export function PlayerBar({
   onDevices,
 }: PlayerBarProps) {
   const entrance = useBarEntrance(Boolean(current) && !away);
+  const fallbackArtistId = current ? artistIdFor(current.artist) : "";
+  const artistHref = current
+    ? (current.artistHref ??
+      (fallbackArtistId
+        ? `/artist/${encodeURIComponent(fallbackArtistId)}?name=${encodeURIComponent(current.artist)}`
+        : `/music?q=${encodeURIComponent(current.artist)}`))
+    : "";
   return (
     <div className={`player${entrance}`} hidden={!current || away}>
       <div className="player-song">
@@ -129,20 +137,24 @@ export function PlayerBar({
           {current && (
             <>
               <strong title={current.title}>
-                {current.newSong ? current.title : <SongLink trackId={current.trackId}>{current.title}</SongLink>}
-              </strong>
-              <span className="muted" title={[current.artist, current.album].filter(Boolean).join(" · ")}>
-                {current.artistHref ? (
-                  <Link className="music-link" href={current.artistHref} prefetch={false}>
-                    {current.artist}
-                  </Link>
-                ) : current.newSong ? (
-                  <Link className="music-link" href={`/music?q=${encodeURIComponent(current.artist)}`} prefetch={false}>
-                    {current.artist}
+                {!current.newSong ? (
+                  <SongLink trackId={current.trackId}>{current.title}</SongLink>
+                ) : current.songId ? (
+                  <SongLink trackId={current.trackId} songId={current.songId}>
+                    {current.title}
+                  </SongLink>
+                ) : current.albumHref ? (
+                  <Link className="music-link" href={current.albumHref} prefetch={false}>
+                    {current.title}
                   </Link>
                 ) : (
-                  <ArtistLink name={current.artist} />
+                  current.title
                 )}
+              </strong>
+              <span className="muted" title={[current.artist, current.album].filter(Boolean).join(" · ")}>
+                <Link className="music-link" href={artistHref} prefetch={false}>
+                  {current.artist}
+                </Link>
                 {current.album && " · "}
                 {current.album &&
                   (current.albumHref ? (

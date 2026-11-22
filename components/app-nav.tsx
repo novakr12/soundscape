@@ -4,10 +4,17 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 
+type HistoryState = { back?: boolean; forward?: boolean };
+
 type DesktopWindow = Window & {
   soundscapeDesktop?: unknown;
+  soundscapeDesktopHistory?: HistoryState;
   navigation?: EventTarget & { canGoBack?: boolean; canGoForward?: boolean };
 };
+
+function validHistory(state: HistoryState | undefined): state is { back: boolean; forward: boolean } {
+  return Boolean(state && typeof state.back === "boolean" && typeof state.forward === "boolean");
+}
 
 function Arrow({ back }: { back?: boolean }) {
   return (
@@ -48,29 +55,51 @@ export default function AppNav() {
 
   useEffect(() => {
     const view = window as DesktopWindow;
-    if (!view.soundscapeDesktop) return;
-    setInApp(true);
-    const navigation = view.navigation;
-    if (!navigation || typeof navigation.canGoBack !== "boolean") return;
-    const read = () => setCan({ back: Boolean(navigation.canGoBack), forward: Boolean(navigation.canGoForward) });
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    const follow = () => {
-      clearTimeout(timer);
-      timer = setTimeout(read, 0);
-    };
-    read();
-    navigation.addEventListener("currententrychange", follow);
-    return () => {
-      clearTimeout(timer);
-      navigation.removeEventListener("currententrychange", follow);
-    };
+    if (view.soundscapeDesktop) {
+      setInApp(true);
+      return;
+    }
+    const ready = () => setInApp(Boolean(view.soundscapeDesktop));
+    view.addEventListener("soundscape-desktop-ready", ready);
+    return () => view.removeEventListener("soundscape-desktop-ready", ready);
   }, []);
+
+  useEffect(() => {
+    if (!inApp) return;
+    const view = window as DesktopWindow;
+    const navigation = view.navigation;
+    if (navigation && typeof navigation.canGoBack === "boolean") {
+      const read = () => setCan({ back: Boolean(navigation.canGoBack), forward: Boolean(navigation.canGoForward) });
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const follow = () => {
+        clearTimeout(timer);
+        timer = setTimeout(read, 0);
+      };
+      read();
+      navigation.addEventListener("currententrychange", follow);
+      return () => {
+        clearTimeout(timer);
+        navigation.removeEventListener("currententrychange", follow);
+      };
+    }
+    const readDesktop = (detail?: HistoryState) => {
+      const state = detail ?? view.soundscapeDesktopHistory;
+      if (validHistory(state)) setCan(state);
+    };
+    readDesktop();
+    const onHistory = (event: Event) => readDesktop((event as CustomEvent<HistoryState | undefined>).detail);
+    view.addEventListener("soundscape-desktop-history", onHistory);
+    return () => view.removeEventListener("soundscape-desktop-history", onHistory);
+  }, [inApp]);
 
   useEffect(() => {
     const view = window as DesktopWindow;
     const navigation = view.navigation;
-    if (view.soundscapeDesktop && pathname && navigation && typeof navigation.canGoBack === "boolean") {
+    if (!view.soundscapeDesktop || !pathname) return;
+    if (navigation && typeof navigation.canGoBack === "boolean") {
       setCan({ back: Boolean(navigation.canGoBack), forward: Boolean(navigation.canGoForward) });
+    } else if (validHistory(view.soundscapeDesktopHistory)) {
+      setCan(view.soundscapeDesktopHistory);
     }
   }, [pathname]);
 

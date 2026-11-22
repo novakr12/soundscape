@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from "node:crypto";
-import { artistIdFor, isSongId, mainArtist, slug, songTitle } from "./catalog";
+import { artistIdFor, artistParts, fold, isSongId, mainArtist, slug, songTitle } from "./catalog";
 import { request } from "./http";
 import { sql } from "./postgres";
 import { decrypt, encrypt, serverUrl } from "./servers";
@@ -106,15 +106,29 @@ export async function removeNavidrome(userId: string) {
   forgetFullSongs();
 }
 
-function artistIds(artist: string) {
-  return new Set([artist, mainArtist(artist)].map(artistIdFor));
+function primaryArtistIds(artist: string) {
+  return new Set([artist, mainArtist(artist)].map(artistIdFor).filter(Boolean));
 }
 
-function isSameSong(song: LibrarySong, candidate: SubsonicSong) {
-  if (!candidate.title || !candidate.artist) return false;
-  if (slug(songTitle(candidate.title)) !== slug(songTitle(song.title))) return false;
-  const wanted = artistIds(song.artist);
-  return [...artistIds(candidate.artist)].some((id) => wanted.has(id));
+function allArtistIds(artist: string) {
+  return new Set([artist, ...artistParts(artist)].map(artistIdFor).filter(Boolean));
+}
+
+function sameTitle(song: LibrarySong, candidate: SubsonicSong) {
+  const wanted = slug(songTitle(song.title));
+  return Boolean(candidate.title && candidate.artist && wanted && slug(songTitle(candidate.title)) === wanted);
+}
+
+function isPrimaryMatch(song: LibrarySong, candidate: SubsonicSong) {
+  if (!sameTitle(song, candidate) || !candidate.artist) return false;
+  const wanted = primaryArtistIds(song.artist);
+  return [...primaryArtistIds(candidate.artist)].some((id) => wanted.has(id));
+}
+
+function isCollaboratorMatch(song: LibrarySong, candidate: SubsonicSong) {
+  if (!sameTitle(song, candidate) || !candidate.artist) return false;
+  const wanted = allArtistIds(song.artist);
+  return [...allArtistIds(candidate.artist)].some((id) => wanted.has(id));
 }
 
 export type LibrarySearch = { match: SubsonicSong | null; queries: string[]; seen: SubsonicSong[] };
@@ -122,7 +136,16 @@ export type LibrarySearch = { match: SubsonicSong | null; queries: string[]; see
 async function searchLibrary(server: Navidrome, song: LibrarySong): Promise<LibrarySearch> {
   const queries: string[] = [];
   const seen = new Map<string, SubsonicSong>();
-  for (const query of new Set([`${song.artist} ${songTitle(song.title)}`, songTitle(song.title)])) {
+  const title = songTitle(song.title);
+  const primary = mainArtist(song.artist);
+  const foldedTitle = fold(title);
+  const foldedPrimary = fold(primary);
+  const attempts = [`${song.artist} ${title}`, `${primary} ${title}`, title];
+  if (foldedTitle !== title.toLowerCase() || foldedPrimary !== primary.toLowerCase()) {
+    attempts.push(`${foldedPrimary} ${foldedTitle}`, foldedTitle);
+  }
+  let fallbackMatch: SubsonicSong | null = null;
+  for (const query of new Set(attempts)) {
     queries.push(query);
     const result = await call<{ searchResult3?: { song?: SubsonicSong[] } }>(server, "search3", [
       ["query", query],
@@ -132,10 +155,11 @@ async function searchLibrary(server: Navidrome, song: LibrarySong): Promise<Libr
     ]);
     const songs = result.searchResult3?.song ?? [];
     for (const candidate of songs) seen.set(candidate.id, candidate);
-    const match = songs.find((candidate) => isSameSong(song, candidate));
+    const match = songs.find((candidate) => isPrimaryMatch(song, candidate));
     if (match) return { match, queries, seen: [...seen.values()] };
+    fallbackMatch ??= songs.find((candidate) => isCollaboratorMatch(song, candidate)) ?? null;
   }
-  return { match: null, queries, seen: [...seen.values()] };
+  return { match: fallbackMatch, queries, seen: [...seen.values()] };
 }
 
 export async function findLibrarySong(server: Navidrome, song: LibrarySong): Promise<SubsonicSong | null> {
@@ -187,6 +211,59 @@ export async function findFullSong(userId: string, trackId: string, now = Date.n
   return (await checkFullSong(userId, trackId, now)).songId ?? null;
 }
 
+async function findAlbumSong(
+  server: Navidrome,
+  artist: string,
+  album: string,
+  title: string,
+): Promise<SubsonicSong | null> {
+  const wantedAlbum = slug(album);
+  const wantedTitle = slug(songTitle(title));
+  if (!wantedAlbum || !wantedTitle) return null;
+  const search = await call<{ searchResult3?: { album?: { id?: unknown; name?: unknown; artist?: unknown }[] } }>(
+    server,
+    "search3",
+    [
+      ["query", album],
+      ["albumCount", "20"],
+      ["artistCount", "0"],
+      ["songCount", "0"],
+    ],
+  );
+  const candidates = (search.searchResult3?.album ?? []).flatMap((candidate) =>
+    typeof candidate.id === "string" &&
+    isSongId(candidate.id) &&
+    typeof candidate.name === "string" &&
+    slug(candidate.name) === wantedAlbum
+      ? [
+          {
+            id: candidate.id,
+            name: candidate.name,
+            artist: typeof candidate.artist === "string" ? candidate.artist : "",
+          },
+        ]
+      : [],
+  );
+  const exactArtist = artistIdFor(artist);
+  const wantedPrimary = primaryArtistIds(artist);
+  const wantedAll = allArtistIds(artist);
+  const match =
+    candidates.find((candidate) => artistIdFor(candidate.artist) === exactArtist) ??
+    candidates.find((candidate) => [...primaryArtistIds(candidate.artist)].some((id) => wantedPrimary.has(id))) ??
+    candidates.find((candidate) => [...allArtistIds(candidate.artist)].some((id) => wantedAll.has(id))) ??
+    (candidates.length === 1 ? candidates[0] : undefined);
+  if (!match) return null;
+  const result = await call<{ album?: { song?: SubsonicSong[] } }>(server, "getAlbum", [["id", match.id]]);
+  const found = (result.album?.song ?? []).find(
+    (song) =>
+      typeof song.id === "string" &&
+      isSongId(song.id) &&
+      typeof song.title === "string" &&
+      slug(songTitle(song.title)) === wantedTitle,
+  );
+  return found ? { ...found, album: found.album ?? match.name, albumId: found.albumId ?? match.id } : null;
+}
+
 export async function checkFullSong(userId: string, trackId: string, now = Date.now()): Promise<FullSongCheck> {
   const server = await getNavidrome(userId);
   if (!server) {
@@ -194,12 +271,22 @@ export async function checkFullSong(userId: string, trackId: string, now = Date.
     return { full: false, reason: "navidrome-not-connected" };
   }
   const [track] = await sql`
-    SELECT t.title, a.name AS artist FROM tracks t JOIN artists a ON a.id = t.artist_id WHERE t.id = ${trackId}`;
+    SELECT t.title, a.name AS artist, al.title AS album
+    FROM tracks t
+    JOIN artists a ON a.id = t.artist_id
+    LEFT JOIN albums al ON al.id = t.album_id
+    WHERE t.id = ${trackId}`;
   if (!track) return { full: false, reason: "unknown-song" };
   const lookedFor = { artist: track.artist as string, title: track.title as string };
   let search: LibrarySearch;
   try {
     search = await searchLibrary(server, { trackId, ...lookedFor });
+    if (!search.match && track.album) {
+      const albumMatch = await findAlbumSong(server, lookedFor.artist, track.album as string, lookedFor.title).catch(
+        () => null,
+      );
+      if (albumMatch) search = { ...search, match: albumMatch };
+    }
   } catch (error) {
     remember(userId, trackId, null, now);
     return {

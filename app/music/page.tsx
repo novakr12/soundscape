@@ -1,10 +1,12 @@
 import Form from "next/form";
 import Link from "next/link";
 import MusicList from "@/components/music-list";
+import { artistSearchQueries } from "@/lib/artist-catalog";
 import { type MusicSong, toMusicSongs } from "@/lib/music";
 import { libraryOrder, songOrder, sortChoices, sortSongs } from "@/lib/music-sort";
 import { getNavidrome, NavidromeError } from "@/lib/navidrome";
 import {
+  findNavidromeArtist,
   getLibraries,
   getLibraryAlbums,
   getLibrarySongs,
@@ -115,7 +117,11 @@ export default async function MusicPage({ searchParams }: Props) {
       const artist = await getNavidromeArtist(server, params.artist);
       if (artist) {
         const order = songOrder(params.sort);
-        const raw = await getSongsOfAlbums(server, artist.albums);
+        let raw = await getSongsOfAlbums(server, artist.albums);
+        if (raw.length === 0) {
+          const found = await findNavidromeArtist(server, artist.name).catch(() => null);
+          if (found) raw = found.songs;
+        }
         const all = order ? sortSongs(raw, order) : raw;
         const from = (page - 1) * COLLECTION_PAGE_SIZE;
         shown = {
@@ -166,12 +172,23 @@ export default async function MusicPage({ searchParams }: Props) {
       const query = params.q?.trim().slice(0, 100) || undefined;
       if (query) {
         const order = songOrder(params.sort);
-        const found = await getLibrarySongs(server, {
+        let found = await getLibrarySongs(server, {
           libraryId: library?.id,
           query,
           offset: (page - 1) * PAGE_SIZE,
           size: PAGE_SIZE + 1,
         });
+        if (found.length === 0 && page === 1) {
+          for (const fallback of artistSearchQueries(query).slice(1)) {
+            found = await getLibrarySongs(server, {
+              libraryId: library?.id,
+              query: fallback,
+              offset: 0,
+              size: PAGE_SIZE + 1,
+            });
+            if (found.length > 0) break;
+          }
+        }
         shown = {
           title: library?.name ?? "Library",
           songs: await toMusicSongs(sortSongs(found.slice(0, PAGE_SIZE), order), { library: library?.id }),
@@ -397,7 +414,11 @@ export default async function MusicPage({ searchParams }: Props) {
               )}
             </>
           ) : (
-            !problem && <p className="muted">That {params.album ? "album" : "playlist"} is gone from Navidrome.</p>
+            !problem && (
+              <p className="muted">
+                That {params.album ? "album" : params.artist ? "artist" : "playlist"} is gone from Navidrome.
+              </p>
+            )
           )}
         </section>
       </div>

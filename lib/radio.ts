@@ -1,5 +1,5 @@
 import { getSimilarArtists } from "./artists";
-import { artistIdFor, slug, songTitle, trackIdFor } from "./catalog";
+import { artistIdFor, mainArtist, slug, songTitle, trackIdFor } from "./catalog";
 import { type MusicSong, toMusicSongs } from "./music";
 import { getNavidrome } from "./navidrome";
 import { getLibrarySongs, getRandomSongs, type NavidromeSong } from "./navidrome-library";
@@ -195,7 +195,15 @@ export async function radioSongs(
   const songsBy = async (artistId: string, name: string) => {
     try {
       const found = await getLibrarySongs(server, { query: name, offset: 0, size: SONGS_PER_ARTIST });
-      return found.filter((song) => artistIdFor(song.artist) === artistId);
+      const exact = found.filter((song) => artistIdFor(song.artist) === artistId);
+      if (exact.length > 0) return exact;
+      const primary = mainArtist(name);
+      const primaryId = artistIdFor(primary);
+      if (!primaryId || primaryId === artistId) return [];
+      const broad = await getLibrarySongs(server, { query: primary, offset: 0, size: SONGS_PER_ARTIST });
+      return broad.filter(
+        (song) => artistIdFor(song.artist) === primaryId || artistIdFor(mainArtist(song.artist)) === primaryId,
+      );
     } catch {
       return [];
     }

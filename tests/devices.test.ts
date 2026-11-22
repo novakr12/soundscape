@@ -118,6 +118,33 @@ describe("device commands", () => {
       track: { trackId: "t1", title: "Song", artist: "Band", album: "Record", cover: "/api/cover/t1" },
       next: true,
     });
+    assert.deepEqual(
+      readDeviceCommand({
+        do: "enqueue",
+        track: { ...song, artistHref: "/artist/band?name=Band" },
+      }),
+      {
+        do: "enqueue",
+        track: {
+          trackId: "t1",
+          title: "Song",
+          artist: "Band",
+          album: "Record",
+          artistHref: "/artist/band?name=Band",
+          cover: "/api/cover/t1",
+        },
+        next: false,
+      },
+    );
+    assert.equal(
+      (
+        readDeviceCommand({
+          do: "enqueue",
+          track: { ...song, artistHref: "https://evil.example/artist" },
+        }) as { track: { artistHref?: string } }
+      ).track.artistHref,
+      undefined,
+    );
     assert.equal((readDeviceCommand({ do: "enqueue", track: song }) as { next: boolean }).next, false);
     assert.equal(readDeviceCommand({ do: "enqueue", track: { trackId: "x" } }), null);
     assert.equal(readDeviceCommand({ do: "enqueue" }), null);
@@ -126,14 +153,31 @@ describe("device commands", () => {
   it("reads a handed-over queue", () => {
     const command = readDeviceCommand({
       do: "take",
-      tracks: [song, { trackId: "t2" }, { ...song, trackId: "t3", albumHref: "https://evil.example", duration: 180 }],
+      tracks: [
+        { ...song, artistHref: "/artist/band" },
+        { trackId: "t2" },
+        {
+          ...song,
+          trackId: "t3",
+          albumHref: "https://evil.example",
+          artistHref: "https://evil.example",
+          duration: 180,
+        },
+      ],
       position: 1,
       time: 42,
     });
     assert.deepEqual(command, {
       do: "take",
       tracks: [
-        { trackId: "t1", title: "Song", artist: "Band", album: "Record", cover: "/api/cover/t1" },
+        {
+          trackId: "t1",
+          title: "Song",
+          artist: "Band",
+          album: "Record",
+          artistHref: "/artist/band",
+          cover: "/api/cover/t1",
+        },
         { trackId: "t3", title: "Song", artist: "Band", album: "Record", cover: "/api/cover/t1", duration: 180 },
       ],
       position: 1,

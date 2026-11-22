@@ -189,6 +189,41 @@ describe("playing from a list", () => {
     );
   });
 
+  it("remembers the artist link when valid and rejects external links", () => {
+    const saved = restoreQueue({
+      tracks: [
+        { trackId: "t1", title: "One", artist: "Yeat", artistHref: "/artist/yeat" },
+        {
+          trackId: "t2",
+          title: "Two",
+          artist: "Yeat • Lil Uzi Vert",
+          artistHref: "/artist/yeat-lil-uzi-vert?name=Yeat%20%E2%80%A2%20Lil%20Uzi%20Vert",
+        },
+        { trackId: "t3", title: "Three", artist: "$ilk Band", artistHref: "/music?artist=ar-1&library=2" },
+        { trackId: "t4", title: "Four", artist: "Air", artistHref: "/music?q=Air" },
+      ],
+      order: [0, 1, 2, 3],
+      position: 0,
+    });
+    assert.deepEqual(
+      saved?.tracks.map((track) => track.artistHref),
+      [
+        "/artist/yeat",
+        "/artist/yeat-lil-uzi-vert?name=Yeat%20%E2%80%A2%20Lil%20Uzi%20Vert",
+        "/music?artist=ar-1&library=2",
+        "/music?q=Air",
+      ],
+    );
+    assert.equal(
+      restoreQueue({
+        tracks: [{ trackId: "t1", title: "One", artist: "Yeat", artistHref: "https://evil.example/" }],
+        order: [0],
+        position: 0,
+      }),
+      null,
+    );
+  });
+
   it("remembers songs that come straight from Navidrome", () => {
     const saved = restoreQueue({
       tracks: [

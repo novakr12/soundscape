@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { isSongId, mainArtist, songArtist, songTitle, trackIdFor } from "../lib/catalog";
+import { artistParts, isSongId, mainArtist, songArtist, songTitle, trackIdFor } from "../lib/catalog";
 import { shuffled } from "../lib/shuffle";
 
 describe("songTitle", () => {
@@ -84,12 +84,18 @@ describe("trackIdFor", () => {
 });
 
 describe("mainArtist and isSongId", () => {
-  it("extracts the primary artist from collaborations", () => {
+  it("extracts the primary artist and collaborator parts", () => {
     assert.equal(mainArtist("Disclosure, Aminé, slowthai"), "Disclosure");
     assert.equal(mainArtist("Simon & Garfunkel"), "Simon");
     assert.equal(mainArtist("Artist x Other"), "Artist");
+    assert.equal(mainArtist("Artist × Other"), "Artist");
+    assert.equal(mainArtist("Yeat • Lil Uzi Vert"), "Yeat");
+    assert.equal(mainArtist("Artist · Guest"), "Artist");
     assert.equal(mainArtist("Artist feat. Guest"), "Artist");
+    assert.equal(mainArtist("Artist (feat. Guest)"), "Artist");
     assert.equal(mainArtist("Radiohead"), "Radiohead");
+    assert.deepEqual(artistParts("Yeat • Lil Uzi Vert"), ["Yeat", "Lil Uzi Vert"]);
+    assert.deepEqual(artistParts("Disclosure, Aminé, slowthai"), ["Disclosure", "Aminé", "slowthai"]);
   });
 
   it("accepts safe song IDs and rejects invalid ones", () => {

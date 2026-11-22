@@ -89,6 +89,7 @@ type SavedTrack = {
   newSong?: boolean;
   album?: string;
   albumHref?: string;
+  artistHref?: string;
   gain?: Gain;
   duration?: number;
 };
@@ -107,6 +108,7 @@ function savedDuration(value: unknown) {
 }
 
 const ALBUM_HREF = /^\/(album\/[^/?#]+|music\?album=[A-Za-z0-9_-]+)$/;
+const ARTIST_HREF = /^\/(artist\/[^/?#]+(\?name=[^#]+)?|music\?(artist|q)=[^#]+)$/;
 
 function isTrack(value: unknown): value is SavedTrack {
   if (typeof value !== "object" || value === null) return false;
@@ -119,7 +121,9 @@ function isTrack(value: unknown): value is SavedTrack {
     (track.songId === undefined || (typeof track.songId === "string" && isSongId(track.songId))) &&
     (track.newSong === undefined || typeof track.newSong === "boolean") &&
     (track.album === undefined || (typeof track.album === "string" && track.album.length <= 300)) &&
-    (track.albumHref === undefined || (typeof track.albumHref === "string" && ALBUM_HREF.test(track.albumHref)))
+    (track.albumHref === undefined || (typeof track.albumHref === "string" && ALBUM_HREF.test(track.albumHref))) &&
+    (track.artistHref === undefined ||
+      (typeof track.artistHref === "string" && track.artistHref.length <= 1000 && ARTIST_HREF.test(track.artistHref)))
   );
 }
 
@@ -140,22 +144,25 @@ export function restoreQueue(raw: unknown): SavedQueue<SavedTrack> | null {
     : 0;
   const time = typeof saved.time === "number" && Number.isFinite(saved.time) && saved.time > 0 ? saved.time : 0;
   return {
-    tracks: tracks.map(({ trackId, title, artist, cover, songId, newSong, album, albumHref, gain, duration }) => {
-      const level = savedGain(gain);
-      const length = savedDuration(duration);
-      return {
-        trackId,
-        title,
-        artist,
-        ...(cover ? { cover } : {}),
-        ...(songId ? { songId } : {}),
-        ...(newSong ? { newSong } : {}),
-        ...(album ? { album } : {}),
-        ...(album && albumHref ? { albumHref } : {}),
-        ...(level ? { gain: level } : {}),
-        ...(length ? { duration: length } : {}),
-      };
-    }),
+    tracks: tracks.map(
+      ({ trackId, title, artist, cover, songId, newSong, album, albumHref, artistHref, gain, duration }) => {
+        const level = savedGain(gain);
+        const length = savedDuration(duration);
+        return {
+          trackId,
+          title,
+          artist,
+          ...(cover ? { cover } : {}),
+          ...(songId ? { songId } : {}),
+          ...(newSong ? { newSong } : {}),
+          ...(album ? { album } : {}),
+          ...(album && albumHref ? { albumHref } : {}),
+          ...(artistHref ? { artistHref } : {}),
+          ...(level ? { gain: level } : {}),
+          ...(length ? { duration: length } : {}),
+        };
+      },
+    ),
     order,
     position,
     time,

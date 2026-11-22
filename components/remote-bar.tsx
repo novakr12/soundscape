@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { type RefObject, useEffect, useState } from "react";
+import { artistIdFor } from "@/lib/catalog";
 import {
   type Device,
   type DeviceCommand,
@@ -13,7 +14,7 @@ import {
 import { nextRepeat, SEEK_STEP_SECONDS } from "@/lib/play-queue";
 import CoverPicture from "./cover-picture";
 import { clock, KindIcon, useLater, useResetTimer } from "./devices";
-import { ArtistLink, SongLink } from "./music-links";
+import { SongLink } from "./music-links";
 import {
   DevicesIcon,
   LyricsIcon,
@@ -127,6 +128,13 @@ export default function RemoteBar({
     [keys],
   );
   const entrance = useBarEntrance(true);
+  const fallbackArtistId = track ? artistIdFor(track.artist) : "";
+  const artistHref = track
+    ? (track.artistHref ??
+      (fallbackArtistId
+        ? `/artist/${encodeURIComponent(fallbackArtistId)}?name=${encodeURIComponent(track.artist)}`
+        : `/music?q=${encodeURIComponent(track.artist)}`))
+    : "";
 
   return (
     <div
@@ -140,20 +148,18 @@ export default function RemoteBar({
           {track ? (
             <>
               <strong title={track.title}>
-                <SongLink trackId={track.trackId}>{track.title}</SongLink>
+                <SongLink trackId={track.trackId} songId={track.songId ?? undefined}>
+                  {track.title}
+                </SongLink>
               </strong>
               <span className="muted" title={[track.artist, track.album].filter(Boolean).join(" · ")}>
-                {track.artistHref ? (
-                  <Link className="music-link" href={track.artistHref}>
-                    {track.artist}
-                  </Link>
-                ) : (
-                  <ArtistLink name={track.artist} />
-                )}
+                <Link className="music-link" href={artistHref} prefetch={false}>
+                  {track.artist}
+                </Link>
                 {track.album && " · "}
                 {track.album &&
                   (track.albumHref ? (
-                    <Link className="music-link" href={track.albumHref}>
+                    <Link className="music-link" href={track.albumHref} prefetch={false}>
                       {track.album}
                     </Link>
                   ) : (

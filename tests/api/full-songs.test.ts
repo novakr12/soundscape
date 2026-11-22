@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { after, before, describe, it } from "node:test";
-import { trackIdFor } from "../../lib/catalog";
+import { artistIdFor, trackIdFor } from "../../lib/catalog";
 import { importListens } from "../../lib/imports";
 import {
   checkFullSong,
@@ -13,14 +13,30 @@ import {
   saveNavidrome,
   streamSong,
 } from "../../lib/navidrome";
+import { sql } from "../../lib/postgres";
 import { closeConnections, createTestUser, removeTestUser, testUser } from "./helpers";
 
 process.env.AUTH_SECRET ??= "test-only-secret";
 
 const user = testUser();
 const stranger = testUser();
+const collabArtist = `${user.artist} • Featured`;
+const albumArtist = `${user.artist} Showcase`;
+const albumName = `Lyfë Showcase ${user.run}`;
 const audio = Buffer.from(Array.from({ length: 1000 }, (_, i) => i % 256));
-const library = [{ id: "song-1", title: "Owned Song", artist: user.artist }];
+const library = [
+  { id: "song-1", title: "Owned Song", artist: user.artist },
+  { id: "song-collab", title: "Flawlëss (feat. Featured)", artist: user.artist },
+  { id: "song-comp", title: "Compiled Cut", artist: "Various Artists" },
+];
+const albums = [
+  {
+    id: "album-1",
+    name: albumName,
+    artist: "Various Artists",
+    song: [{ id: "song-comp", title: "Compiled Cut", artist: "Various Artists" }],
+  },
+];
 let server: Server;
 let url: string;
 
@@ -43,8 +59,23 @@ function fakeNavidrome() {
     if (method === "ping") return response.end(subsonic({}));
     if (method === "search3") {
       const words = (params.get("query") ?? "").toLowerCase().split(/\s+/).filter(Boolean);
-      const song = library.filter((s) => words.every((word) => `${s.artist} ${s.title}`.toLowerCase().includes(word)));
-      return response.end(subsonic({ searchResult3: { song } }));
+      const song =
+        params.get("songCount") === "0"
+          ? []
+          : library.filter((s) => words.every((word) => `${s.artist} ${s.title}`.toLowerCase().includes(word)));
+      const album =
+        params.get("albumCount") === "0" || !params.get("albumCount")
+          ? undefined
+          : albums.filter((a) => words.every((word) => `${a.artist} ${a.name}`.toLowerCase().includes(word)));
+      return response.end(subsonic({ searchResult3: { song, ...(album ? { album } : {}) } }));
+    }
+    if (method === "getAlbum") {
+      const album = albums.find((candidate) => candidate.id === params.get("id"));
+      if (!album) {
+        response.setHeader("content-type", "application/json");
+        return response.end(JSON.stringify({ "subsonic-response": { status: "failed", error: { code: 70 } } }));
+      }
+      return response.end(subsonic({ album }));
     }
     if (method === "stream") {
       if (params.get("id") !== "song-1") {
@@ -80,6 +111,8 @@ before(async () => {
   await importListens(user.userId, [
     { artist: user.artist, title: "Owned Song", playedAt: new Date(Date.now() - 3_600_000) },
     { artist: user.artist, title: "Missing Song", playedAt: new Date(Date.now() - 7_200_000) },
+    { artist: collabArtist, title: "Flawlëss", playedAt: new Date(Date.now() - 5_400_000) },
+    { artist: albumArtist, title: "Compiled Cut", album: albumName, playedAt: new Date(Date.now() - 10_800_000) },
   ]);
   await saveNavidrome(user.userId, url, "dj", "secret");
 });
@@ -88,6 +121,7 @@ after(async () => {
   server.close();
   await removeTestUser(user);
   await removeTestUser(stranger);
+  await sql`DELETE FROM artists WHERE id = ANY(${[artistIdFor(collabArtist), artistIdFor(albumArtist)]})`;
   await closeConnections();
 });
 
@@ -98,6 +132,16 @@ describe("Full songs from Navidrome", () => {
     assert.equal(await findFullSong(user.userId, trackIdFor(user.artist, "Missing Song")), null);
     assert.equal(await findFullSong(user.userId, "no-such-track"), null);
     assert.equal(await findFullSong(stranger.userId, trackIdFor(user.artist, "Owned Song")), null);
+  });
+
+  it("matches multi-artist bullet credits and falls back to the album when artist tags differ", async () => {
+    forgetFullSongs();
+    assert.equal(await findFullSong(user.userId, trackIdFor(collabArtist, "Flawlëss")), "song-collab");
+    const viaAlbum = await checkFullSong(user.userId, trackIdFor(albumArtist, "Compiled Cut"));
+    assert.equal(viaAlbum.full, true);
+    assert.equal(viaAlbum.songId, "song-comp");
+    assert.equal(viaAlbum.album, albumName);
+    assert.equal(viaAlbum.albumId, "album-1");
   });
 
   it("explains why a song isn't played in full", async () => {

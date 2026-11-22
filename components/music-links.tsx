@@ -1,9 +1,18 @@
 import Link from "next/link";
 import { artistIdFor } from "@/lib/catalog";
 
-export function SongLink({ trackId, children }: { trackId: string; children: React.ReactNode }) {
+export function SongLink({
+  trackId,
+  songId,
+  children,
+}: {
+  trackId: string;
+  songId?: string;
+  children: React.ReactNode;
+}) {
+  const href = `/track/${encodeURIComponent(trackId)}${songId ? `?song=${encodeURIComponent(songId)}` : ""}`;
   return (
-    <Link className="music-link" href={`/track/${encodeURIComponent(trackId)}`} prefetch={false}>
+    <Link className="music-link" href={href} prefetch={false}>
       {children}
     </Link>
   );

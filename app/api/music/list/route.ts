@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { toMusicSongs } from "@/lib/music";
 import { songOrder, sortSongs } from "@/lib/music-sort";
 import { getNavidrome, NavidromeError } from "@/lib/navidrome";
-import { getNavidromeArtist, getPlaylistSongs, getSongsOfAlbums } from "@/lib/navidrome-library";
+import { findNavidromeArtist, getNavidromeArtist, getPlaylistSongs, getSongsOfAlbums } from "@/lib/navidrome-library";
 import { currentUserId } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
@@ -26,7 +26,10 @@ export async function GET(request: Request) {
     if (artistId) {
       const artist = await getNavidromeArtist(server, artistId);
       if (!artist) return NextResponse.json({ error: "Artist not found" }, { status: 404 });
-      const raw = await getSongsOfAlbums(server, artist.albums);
+      let raw = await getSongsOfAlbums(server, artist.albums);
+      if (raw.length === 0) {
+        raw = (await findNavidromeArtist(server, artist.name).catch(() => null))?.songs ?? [];
+      }
       return NextResponse.json({
         songs: await toMusicSongs(order ? sortSongs(raw, order) : raw, { library }),
       });

@@ -11,15 +11,20 @@ import RadioButton from "@/components/radio-button";
 import { DailyPlaysChart } from "@/components/stats-charts";
 import { isAdmin } from "@/lib/admin";
 import { albumOf } from "@/lib/albums";
-import { trackAlias } from "@/lib/aliases";
+import { artistAlias, resolveTracks, trackAlias } from "@/lib/aliases";
+import { getArtist } from "@/lib/artists";
+import { artistIdFor } from "@/lib/catalog";
 import { otherSongsBy } from "@/lib/library-edits";
 import { isLoved } from "@/lib/loved";
-import { getNavidrome } from "@/lib/navidrome";
+import { albumKey, navidromeCover } from "@/lib/music";
+import { getNavidrome, isSongId } from "@/lib/navidrome";
+import { getSong } from "@/lib/navidrome-library";
+import { sql } from "@/lib/postgres";
 import { routeParam } from "@/lib/route-param";
 import { currentUserId } from "@/lib/session";
 import { getAlsoPlayed, getTrack, getTrackPlaysPerDay, getYourPlays } from "@/lib/tracks";
 
-type Props = { params: Promise<{ trackId: string }>; searchParams?: Promise<{ play?: string }> };
+type Props = { params: Promise<{ trackId: string }>; searchParams?: Promise<{ play?: string; song?: string }> };
 
 function plural(count: number, word: string) {
   return `${count.toLocaleString("en")} ${word}${count === 1 ? "" : "s"}`;
@@ -30,19 +35,127 @@ function duration(ms: number) {
   return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
 }
 
-export async function generateMetadata({ params }: Props): Promise<Metadata> {
+async function navidromeTrackFallback(viewer: string | null, songParam: string | undefined) {
+  if (!viewer || !songParam || !isSongId(songParam)) return null;
+  const server = await getNavidrome(viewer);
+  if (!server) return null;
+  const song = await getSong(server, songParam).catch(() => null);
+  if (!song) return null;
+  const [resolved] = await resolveTracks([song]);
+  return { song, resolved };
+}
+
+export async function generateMetadata({ params, searchParams }: Props): Promise<Metadata> {
   const track = await getTrack(routeParam((await params).trackId));
-  return { title: track ? `${track.title} · ${track.artist} · Soundscape` : "Soundscape" };
+  if (track) return { title: `${track.title} · ${track.artist} · Soundscape` };
+  const [viewer, query] = await Promise.all([currentUserId(), searchParams ?? Promise.resolve(undefined)]);
+  const fallback = await navidromeTrackFallback(viewer, query?.song);
+  return { title: fallback ? `${fallback.song.title} · ${fallback.song.artist} · Soundscape` : "Soundscape" };
 }
 
 export default async function TrackPage({ params, searchParams }: Props) {
   const trackId = routeParam((await params).trackId);
-  const autoplay = (await searchParams)?.play === "1";
+  const resolvedParams = searchParams ? await searchParams : undefined;
+  const autoplay = resolvedParams?.play === "1";
   const [track, viewer] = await Promise.all([getTrack(trackId), currentUserId()]);
   if (!track) {
     const target = await trackAlias(trackId);
     if (target) redirect(`/track/${encodeURIComponent(target)}`);
-    notFound();
+    const fallback = await navidromeTrackFallback(viewer, resolvedParams?.song);
+    if (!fallback) notFound();
+    const { song, resolved } = fallback;
+    if (await getTrack(resolved.trackId)) redirect(`/track/${encodeURIComponent(resolved.trackId)}`);
+
+    const [knownArtist, aliasedArtist] = await Promise.all([
+      getArtist(resolved.artistId),
+      artistAlias(resolved.artistId),
+    ]);
+    const fallbackArtistId = resolved.artistId || artistIdFor(song.artist);
+    const artistHref = knownArtist
+      ? `/artist/${encodeURIComponent(resolved.artistId)}`
+      : aliasedArtist
+        ? `/artist/${encodeURIComponent(aliasedArtist)}`
+        : fallbackArtistId
+          ? `/artist/${encodeURIComponent(fallbackArtistId)}?name=${encodeURIComponent(song.artist)}`
+          : `/music?q=${encodeURIComponent(song.artist)}`;
+
+    const candidateAlbumId = song.album ? albumKey(resolved.artistId, song.album) : null;
+    const knownAlbumRow = candidateAlbumId
+      ? (await sql`SELECT id FROM albums WHERE id = ${candidateAlbumId}`)[0]
+      : null;
+    const albumHref =
+      knownAlbumRow && candidateAlbumId
+        ? `/album/${encodeURIComponent(candidateAlbumId)}`
+        : song.albumId
+          ? `/music?album=${encodeURIComponent(song.albumId)}`
+          : undefined;
+
+    const cover = navidromeCover(song.coverArt);
+    const durationMs = song.duration ? Math.round(song.duration * 1000) : undefined;
+    const playerTrack = {
+      trackId: resolved.trackId,
+      title: song.title,
+      artist: song.artist,
+      ...(cover ? { cover } : {}),
+      ...(song.album ? { album: song.album } : {}),
+      ...(albumHref ? { albumHref } : {}),
+      artistHref,
+      songId: song.id,
+      ...(song.gain ? { gain: song.gain } : {}),
+      ...(song.duration ? { duration: song.duration } : {}),
+      newSong: true,
+    };
+
+    return (
+      <>
+        <div className="song-header">
+          <Cover src={cover} large />
+          <div>
+            <p className="muted">Song</p>
+            <h1>{song.title}</h1>
+            <p>
+              <Link href={artistHref} prefetch={false}>
+                {song.artist}
+              </Link>
+              {song.album && (
+                <>
+                  <span className="muted"> · </span>
+                  {albumHref ? (
+                    <Link href={albumHref} prefetch={false}>
+                      {song.album}
+                    </Link>
+                  ) : (
+                    song.album
+                  )}
+                </>
+              )}
+              {durationMs && <span className="muted"> · {duration(durationMs)}</span>}
+            </p>
+            {autoplay && <AutoPlay track={playerTrack} />}
+            <div className="export-buttons">
+              <PlayButton track={playerTrack} />
+            </div>
+          </div>
+        </div>
+
+        <div className="tiles">
+          <div className="tile">
+            <span className="muted">Plays</span>
+            <strong>0</strong>
+          </div>
+          <div className="tile">
+            <span className="muted">Listeners</span>
+            <strong>0</strong>
+          </div>
+          <div className="tile">
+            <span className="muted">Your plays</span>
+            <strong>0</strong>
+          </div>
+        </div>
+
+        <p className="muted">Not played yet · in your Navidrome.</p>
+      </>
+    );
   }
 
   const admin = isAdmin(viewer);
@@ -81,11 +194,29 @@ export default async function TrackPage({ params, searchParams }: Props) {
             {track.durationMs && <span className="muted"> · {duration(track.durationMs)}</span>}
           </p>
           {viewer && autoplay && (
-            <AutoPlay track={{ trackId, title: track.title, artist: track.artist, cover: track.cover }} />
+            <AutoPlay
+              track={{
+                trackId,
+                title: track.title,
+                artist: track.artist,
+                artistHref: `/artist/${encodeURIComponent(track.artistId)}`,
+                ...(album ? { album: album.title, albumHref: `/album/${encodeURIComponent(album.albumId)}` } : {}),
+                ...(track.cover ? { cover: track.cover } : {}),
+              }}
+            />
           )}
           {viewer && (
             <div className="export-buttons">
-              <PlayButton track={{ trackId, title: track.title, artist: track.artist, cover: track.cover }} />
+              <PlayButton
+                track={{
+                  trackId,
+                  title: track.title,
+                  artist: track.artist,
+                  artistHref: `/artist/${encodeURIComponent(track.artistId)}`,
+                  ...(album ? { album: album.title, albumHref: `/album/${encodeURIComponent(album.albumId)}` } : {}),
+                  ...(track.cover ? { cover: track.cover } : {}),
+                }}
+              />
               <LoveButton trackId={trackId} loved={loved} />
               {navidrome && (
                 <RadioButton seed={{ trackId }} label="Play this song, then similar songs from your Navidrome" />

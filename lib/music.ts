@@ -4,7 +4,13 @@ import { resolveTracks } from "./aliases";
 import { slug, songArtist, songTitle } from "./catalog";
 import { saveTracks } from "./imports";
 import { getNavidrome } from "./navidrome";
-import { findNavidromeAlbum, getLibrarySongs, getSong, type NavidromeSong } from "./navidrome-library";
+import {
+  findNavidromeAlbum,
+  findNavidromeArtist,
+  getLibrarySongs,
+  getSong,
+  type NavidromeSong,
+} from "./navidrome-library";
 import { sql } from "./postgres";
 
 export type MusicSong = PlayerTrack & { album?: string; duration?: number; artistHref?: string; albumHref?: string };
@@ -98,6 +104,16 @@ export async function navidromeAlbumFor(userId: string, artist: string, title: s
   if (!server) return null;
   try {
     return await findNavidromeAlbum(server, artist, title);
+  } catch {
+    return null;
+  }
+}
+
+export async function navidromeArtistFor(userId: string, artist: string) {
+  const server = await getNavidrome(userId);
+  if (!server) return null;
+  try {
+    return await findNavidromeArtist(server, artist);
   } catch {
     return null;
   }

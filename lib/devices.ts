@@ -47,6 +47,7 @@ export type HandedTrack = {
   artist: string;
   album?: string;
   albumHref?: string;
+  artistHref?: string;
   cover?: string;
   songId?: string;
   duration?: number;
@@ -169,6 +170,7 @@ export function readHandedTrack(value: unknown): HandedTrack | null {
     artist: track.artist,
     ...(track.album ? { album: track.album } : {}),
     ...(albumHref && isOwnPath(albumHref) ? { albumHref } : {}),
+    ...(track.artistHref ? { artistHref: track.artistHref } : {}),
     ...(track.cover ? { cover: track.cover } : {}),
     ...(track.songId ? { songId: track.songId } : {}),
     ...(duration !== null && duration > 0 ? { duration } : {}),

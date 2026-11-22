@@ -1,4 +1,5 @@
-import { artistIdFor, slug } from "./catalog";
+import { artistSearchQueries, matchesArtistRecord, matchesSongForArtist, sortNavidromeAlbums } from "./artist-catalog";
+import { artistIdFor, mainArtist, slug } from "./catalog";
 import { fromReplayGain, type Gain } from "./levelling";
 import { call, isSongId, type Navidrome } from "./navidrome";
 
@@ -222,6 +223,53 @@ export async function getNavidromeAlbum(server: Navidrome, albumId: string) {
   };
 }
 
+export type NavidromeArtistAlbum = {
+  id: string;
+  name: string;
+  artist?: string;
+  coverArt?: string;
+  songCount?: number;
+  year?: number;
+};
+
+export type NavidromeArtistCatalog = {
+  artistId?: string;
+  name: string;
+  coverArt?: string;
+  albums: NavidromeArtistAlbum[];
+  songs: NavidromeSong[];
+  songsTruncated?: boolean;
+};
+
+export const MAX_ARTIST_ALBUMS = 60;
+
+type RawArtistAlbum = {
+  id?: unknown;
+  name?: unknown;
+  artist?: unknown;
+  coverArt?: unknown;
+  songCount?: unknown;
+  year?: unknown;
+};
+
+function toArtistAlbum(raw: RawArtistAlbum): NavidromeArtistAlbum | null {
+  const id = typeof raw.id === "string" ? raw.id : null;
+  const name = text(raw.name);
+  if (!id || !isSongId(id) || !name) return null;
+  const artist = text(raw.artist);
+  const coverArt = text(raw.coverArt);
+  const songCount = count(raw.songCount);
+  const year = typeof raw.year === "number" && Number.isFinite(raw.year) && raw.year > 0 ? raw.year : undefined;
+  return {
+    id,
+    name,
+    ...(artist ? { artist } : {}),
+    ...(coverArt && isSongId(coverArt) ? { coverArt } : {}),
+    ...(songCount !== undefined ? { songCount } : {}),
+    ...(year !== undefined ? { year } : {}),
+  };
+}
+
 export async function getNavidromeArtist(server: Navidrome, artistId: string) {
   if (!isSongId(artistId)) return null;
   const result = await call<{ artist?: { name?: unknown; album?: { id?: unknown }[] } }>(server, "getArtist", [
@@ -232,6 +280,154 @@ export async function getNavidromeArtist(server: Navidrome, artistId: string) {
     typeof album.id === "string" && isSongId(album.id) ? [album.id] : [],
   );
   return { name: text(result.artist.name) ?? "Unknown artist", albums };
+}
+
+export async function findNavidromeArtist(
+  server: Navidrome,
+  name: string,
+  options?: { maxAlbums?: number },
+): Promise<NavidromeArtistCatalog | null> {
+  const queries = artistSearchQueries(name);
+  if (queries.length === 0) return null;
+  const maxAlbums = Math.max(0, options?.maxAlbums ?? MAX_ARTIST_ALBUMS);
+
+  const matchedArtists = new Map<string, { id: string; name: string; coverArt?: string }>();
+  const searchAlbums = new Map<string, NavidromeArtistAlbum>();
+  const searchSongs = new Map<string, NavidromeSong>();
+
+  for (const query of queries) {
+    const result = await call<{
+      searchResult3?: {
+        artist?: { id?: unknown; name?: unknown; coverArt?: unknown }[];
+        album?: RawArtistAlbum[];
+        song?: RawSong[];
+      };
+    }>(server, "search3", [
+      ["query", query],
+      ["artistCount", "20"],
+      ["albumCount", "20"],
+      ["songCount", "100"],
+    ]);
+
+    for (const rawArtist of result.searchResult3?.artist ?? []) {
+      const id = typeof rawArtist.id === "string" ? rawArtist.id : null;
+      const artistName = text(rawArtist.name);
+      if (!id || !isSongId(id) || !artistName || !matchesArtistRecord(name, artistName)) continue;
+      const coverArt = text(rawArtist.coverArt);
+      if (!matchedArtists.has(id)) {
+        matchedArtists.set(id, {
+          id,
+          name: artistName,
+          ...(coverArt && isSongId(coverArt) ? { coverArt } : {}),
+        });
+      }
+    }
+
+    for (const rawAlbum of result.searchResult3?.album ?? []) {
+      const album = toArtistAlbum(rawAlbum);
+      if (album?.artist && matchesArtistRecord(name, album.artist) && !searchAlbums.has(album.id)) {
+        searchAlbums.set(album.id, album);
+      }
+    }
+
+    for (const song of songs(result.searchResult3?.song)) {
+      if (matchesSongForArtist(name, song.artist, song.title) && !searchSongs.has(song.id)) {
+        searchSongs.set(song.id, song);
+      }
+    }
+
+    if (matchedArtists.size > 0) break;
+  }
+
+  const albumMap = new Map<string, NavidromeArtistAlbum>();
+  const matchedArtistList = [...matchedArtists.values()].slice(0, 5);
+  let primaryArtist = matchedArtistList[0];
+
+  if (matchedArtistList.length > 0) {
+    const responses = await Promise.all(
+      matchedArtistList.map((matchedArtist) =>
+        call<{ artist?: { name?: unknown; coverArt?: unknown; album?: RawArtistAlbum[] } }>(server, "getArtist", [
+          ["id", matchedArtist.id],
+        ]).catch(() => null),
+      ),
+    );
+    for (let i = 0; i < responses.length; i++) {
+      const artistRecord = responses[i]?.artist;
+      if (!artistRecord) continue;
+      if (i === 0 && primaryArtist) {
+        const artistName = text(artistRecord.name);
+        const coverArt = text(artistRecord.coverArt);
+        primaryArtist = {
+          id: primaryArtist.id,
+          name: artistName ?? primaryArtist.name,
+          coverArt: primaryArtist.coverArt ?? (coverArt && isSongId(coverArt) ? coverArt : undefined),
+        };
+      }
+      for (const rawAlbum of artistRecord.album ?? []) {
+        const album = toArtistAlbum(rawAlbum);
+        if (album && !albumMap.has(album.id)) albumMap.set(album.id, album);
+      }
+    }
+  }
+
+  for (const album of searchAlbums.values()) {
+    if (!albumMap.has(album.id)) albumMap.set(album.id, album);
+  }
+
+  const primaryAlbums = sortNavidromeAlbums([...albumMap.values()]);
+  const albumsToFetch = primaryAlbums.slice(0, maxAlbums);
+  const songsTruncated = primaryAlbums.length > maxAlbums;
+
+  const albumSongLists: NavidromeSong[][] = new Array(albumsToFetch.length).fill([]);
+  let next = 0;
+  async function worker() {
+    while (next < albumsToFetch.length) {
+      const at = next++;
+      const targetAlbum = albumsToFetch[at];
+      const fetched = await getNavidromeAlbum(server, targetAlbum.id).catch(() => null);
+      if (!fetched) continue;
+      albumSongLists[at] = fetched.songs.map((song) => ({
+        ...song,
+        album: song.album ?? (fetched.name !== "Untitled album" ? fetched.name : targetAlbum.name),
+        albumId: song.albumId ?? targetAlbum.id,
+      }));
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(5, albumsToFetch.length) }, worker));
+
+  const songMap = new Map<string, NavidromeSong>();
+  for (const list of albumSongLists) {
+    for (const song of list) {
+      if (!songMap.has(song.id)) songMap.set(song.id, song);
+    }
+  }
+
+  for (const song of searchSongs.values()) {
+    if (!songMap.has(song.id)) {
+      songMap.set(song.id, song);
+      if (song.albumId && song.album && !albumMap.has(song.albumId)) {
+        albumMap.set(song.albumId, {
+          id: song.albumId,
+          name: song.album,
+          artist: song.artist,
+          ...(song.coverArt ? { coverArt: song.coverArt } : {}),
+        });
+      }
+    }
+  }
+
+  const albums = sortNavidromeAlbums([...albumMap.values()]);
+  const allSongs = [...songMap.values()];
+  if (albums.length === 0 && allSongs.length === 0) return null;
+
+  return {
+    ...(primaryArtist?.id ? { artistId: primaryArtist.id } : {}),
+    name: primaryArtist?.name ?? name,
+    ...(primaryArtist?.coverArt ? { coverArt: primaryArtist.coverArt } : {}),
+    albums,
+    songs: allSongs,
+    ...(songsTruncated ? { songsTruncated: true } : {}),
+  };
 }
 
 async function getAlbumSongs(server: Navidrome, albumId: string) {
@@ -256,8 +452,10 @@ export async function findNavidromeAlbum(server: Navidrome, artist: string, titl
       : [],
   );
   const artistId = artistIdFor(artist);
+  const primaryId = artistIdFor(mainArtist(artist));
   const match =
     candidates.find((album) => artistIdFor(album.artist) === artistId) ??
+    candidates.find((album) => primaryId && artistIdFor(mainArtist(album.artist)) === primaryId) ??
     (candidates.length === 1 ? candidates[0] : undefined);
   return match ? getNavidromeAlbum(server, match.id) : null;
 }

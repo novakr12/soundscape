@@ -37,6 +37,8 @@ export type ArtistSong = {
   trackId: string;
   title: string;
   cover?: string;
+  albumId?: string;
+  album?: string;
   plays: number;
   listeners: number;
 };
@@ -85,16 +87,19 @@ export const getArtist = cache(async (artistId: string): Promise<Artist | null> 
 
 export async function getTopSongs(artistId: string, limit = 10): Promise<ArtistSong[]> {
   const rows = await sql`
-    SELECT t.id, t.title, t.cover, sum(p.plays) AS plays, count(*) AS listeners
-    FROM tracks t JOIN user_track_plays p ON p.track_id = t.id
+    SELECT t.id, t.title, t.cover, al.id AS album_id, al.title AS album_title, sum(p.plays) AS plays, count(*) AS listeners
+    FROM tracks t
+    JOIN user_track_plays p ON p.track_id = t.id
+    LEFT JOIN albums al ON al.id = t.album_id
     WHERE t.artist_id = ${artistId}
-    GROUP BY t.id
+    GROUP BY t.id, al.id
     ORDER BY plays DESC, listeners DESC, t.title
     LIMIT ${limit}`;
   return rows.map((row) => ({
     trackId: row.id,
     title: row.title,
     cover: row.cover ?? undefined,
+    ...(row.album_id ? { albumId: row.album_id, album: row.album_title ?? undefined } : {}),
     plays: row.plays,
     listeners: row.listeners,
   }));
