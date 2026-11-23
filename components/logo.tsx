@@ -59,7 +59,7 @@ export function Lockup({ animated = false, heading = false }: { animated?: boole
         ) : (
           <Wordmark />
         )}
-        <span className="tagline">Music tracker</span>
+        <span className="tagline">Music player & tracker</span>
         <AppVersion />
       </div>
     </div>
