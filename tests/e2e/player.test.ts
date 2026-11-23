@@ -75,7 +75,9 @@ function answers(method: string, query: URLSearchParams): object {
   }
   if (method === "search3") {
     const words = (query.get("query") ?? "").toLowerCase().replaceAll('"', "").trim();
-    const song = words ? SONGS.filter((candidate) => candidate.artist.toLowerCase().includes(words)) : [];
+    const song = words
+      ? SONGS.filter((candidate) => `${candidate.artist} ${candidate.title}`.toLowerCase().includes(words))
+      : [];
     return { searchResult3: Number(query.get("songCount") ?? "0") > 0 ? { song } : {} };
   }
   return {};
@@ -147,6 +149,14 @@ async function waitForSong(name: string) {
   );
 }
 
+async function waitForSongs(target: Page) {
+  await target.waitForFunction(() =>
+    [...document.querySelectorAll(".music-songs li .play-controls > button")].some((button) =>
+      Object.keys(button).some((key) => key.startsWith("__reactProps")),
+    ),
+  );
+}
+
 async function nearTheEnd(seconds: number) {
   await page.evaluate((left) => {
     const audio = document.querySelector<HTMLAudioElement>(".player audio");
@@ -199,6 +209,7 @@ describe("player", () => {
 
   it("plays a full song from an album and keeps the time moving", async () => {
     await page.goto(`${BASE_URL}/music?album=e2e-album`, { waitUntil: "domcontentloaded" });
+    await waitForSongs(page);
     const listening = page.waitForResponse((response) => response.url().endsWith("/api/now-playing"), {
       timeout: 30_000,
     });
@@ -479,6 +490,7 @@ describe("player", () => {
 
   it("adds a song to a Navidrome playlist", async () => {
     await page.goto(`${BASE_URL}/music?album=e2e-album`, { waitUntil: "domcontentloaded" });
+    await waitForSongs(page);
     const row = page.locator(".music-songs li").nth(1);
     await row.getByLabel("More for Second Wind").click();
     await row.getByRole("button", { name: "Add to playlist…" }).click();
@@ -516,7 +528,12 @@ describe("player", () => {
 
   it("shows the lyrics in step with the song", async () => {
     await page.goto(`${BASE_URL}/music?album=e2e-album`, { waitUntil: "domcontentloaded" });
-    await page.locator(".music-songs li").first().getByRole("button", { name: "▶ Play" }).click();
+    await waitForSongs(page);
+    await page
+      .locator(".music-songs li")
+      .first()
+      .getByRole("button", { name: /^(▶ Play|♪ Playing)$/ })
+      .click();
     await waitForSong("First Light");
     await page.evaluate(() => {
       const audio = document.querySelector<HTMLAudioElement>(".player audio");
@@ -662,7 +679,12 @@ describe("player", () => {
     other.on("pageerror", (error) => problems.push(`other ${other.url()}: ${error.message}`));
     try {
       await page.goto(`${BASE_URL}/music?album=e2e-album`, { waitUntil: "domcontentloaded" });
-      await page.locator(".music-songs li").first().getByRole("button", { name: "▶ Play" }).click();
+      await waitForSongs(page);
+      await page
+        .locator(".music-songs li")
+        .first()
+        .getByRole("button", { name: /^(▶ Play|♪ Playing)$/ })
+        .click();
       await waitForSong("First Light");
       const playing = (await title()) ?? "";
       const artistLink = page.locator(".player .now-playing").getByRole("link", { name: "Player Test Band" });
@@ -957,6 +979,7 @@ describe("player", () => {
       await phone.click('button[type="submit"]');
       await phone.waitForURL((url) => !url.pathname.startsWith("/login"), { timeout: 30_000 });
       await phone.goto(`${BASE_URL}/music?album=e2e-album`, { waitUntil: "domcontentloaded" });
+      await waitForSongs(phone);
       await phone.locator(".music-songs li").first().getByRole("button", { name: "▶ Play" }).click();
       await phone.waitForFunction(
         () => {
