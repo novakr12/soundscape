@@ -18,6 +18,7 @@ export type PlayerOptions = {
   visualizerBounce: VisualizerBounce;
   visualizerBars: VisualizerBarCount;
   accent: string;
+  accentIcon: boolean;
 };
 
 export const CROSSFADE_CHOICES = [0, 2, 4, 6, 8, 12];
@@ -34,6 +35,7 @@ export const DEFAULT_OPTIONS: PlayerOptions = {
   visualizerBounce: "lively",
   visualizerBars: 8,
   accent: DEFAULT_ACCENT,
+  accentIcon: false,
 };
 
 export function readOptions(raw: unknown): PlayerOptions {
@@ -57,6 +59,7 @@ export function readOptions(raw: unknown): PlayerOptions {
       ? (saved.visualizerBars as VisualizerBarCount)
       : DEFAULT_OPTIONS.visualizerBars,
     accent: isAccent(saved.accent) ? saved.accent.toLowerCase() : DEFAULT_OPTIONS.accent,
+    accentIcon: typeof saved.accentIcon === "boolean" ? saved.accentIcon : DEFAULT_OPTIONS.accentIcon,
   };
 }
 

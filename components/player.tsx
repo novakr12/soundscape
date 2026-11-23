@@ -563,6 +563,11 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
     () =>
       watchOptions((next) => {
         paintAccent(next.accent, document.documentElement);
+        try {
+          nativePort(window as Window & { soundscapeNative?: unknown })?.postMessage(
+            JSON.stringify({ do: "icon", accent: next.accentIcon ? next.accent : null }),
+          );
+        } catch {}
         optionsRef.current = next;
         setOptions(next);
       }),
