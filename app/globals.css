@@ -1931,18 +1931,21 @@ tr.selected {
 }
 
 @keyframes logo-draw {
-  to {
-    stroke-dashoffset: 0;
+  from {
+    stroke-dashoffset: 1.05;
   }
 }
 
 @keyframes logo-fill {
-  to {
-    opacity: 0.25;
+  from {
+    opacity: 0;
   }
 }
 
 @keyframes logo-dot {
+  from {
+    transform: scale(0);
+  }
   60% {
     transform: scale(1.5);
   }
@@ -1952,44 +1955,39 @@ tr.selected {
 }
 
 @keyframes logo-reveal {
-  to {
-    clip-path: inset(0 0 0 0);
+  from {
+    clip-path: inset(0 100% 0 0);
   }
 }
 
 @keyframes logo-show {
-  to {
-    opacity: 1;
+  from {
+    opacity: 0;
   }
 }
 
 .animated .logo-line {
   stroke-dasharray: 1 2;
-  stroke-dashoffset: 1.05;
-  animation: logo-draw 0.9s ease-in-out 0.1s forwards;
+  animation: logo-draw 0.9s ease-in-out 0.1s backwards;
 }
 
 .animated .logo-area {
-  opacity: 0;
-  animation: logo-fill 0.5s ease-out 0.7s forwards;
+  animation: logo-fill 0.5s ease-out 0.7s backwards;
 }
 
 .animated .logo-dot {
-  transform: scale(0);
   transform-box: fill-box;
   transform-origin: center;
-  animation: logo-dot 0.4s ease-out 0.95s forwards;
+  animation: logo-dot 0.4s ease-out 0.95s backwards;
 }
 
 .lockup.animated .wordmark {
-  clip-path: inset(0 100% 0 0);
-  animation: logo-reveal 0.7s ease-out 0.35s forwards;
+  animation: logo-reveal 0.7s ease-out 0.35s backwards;
 }
 
 .lockup.animated .tagline,
 .lockup.animated .app-version {
-  opacity: 0;
-  animation: logo-show 0.4s ease-out 1.05s forwards;
+  animation: logo-show 0.4s ease-out 1.05s backwards;
 }
 
 @keyframes dialog-in {
