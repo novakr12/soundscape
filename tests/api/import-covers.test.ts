@@ -41,6 +41,7 @@ before(async () => {
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   process.env.DEEZER_API_URL = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
   process.env.DEEZER_REQUEST_GAP_MS = "0";
+  process.env.ITUNES_API_URL = "http://127.0.0.1:9";
   process.env.MUSICBRAINZ_URL = "http://127.0.0.1:9/ws/2";
 
   await createTestUser(user.userId);

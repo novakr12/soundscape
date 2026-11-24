@@ -4,6 +4,7 @@ export const keys = {
   loginFailures: (username: string) => `login:fail:${username}`,
   importLock: (userId: string) => `import:lock:${userId}`,
   coverProgress: (userId: string) => `covers:progress:${userId}`,
+  coverLink: (trackId: string) => `cover-link:${trackId}`,
   lastfmProgress: (userId: string) => `lastfm:progress:${userId}`,
   listeningRecord: (userId: string) => `record:${userId}`,
   leaderboardAbove: (userId: string) => `leaderboard:above:${userId}`,

@@ -9,6 +9,7 @@ export type Play = {
   trackId: string;
   title: string;
   artist: string;
+  cover?: string;
   playedAt: string;
   count: number;
 };

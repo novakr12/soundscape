@@ -353,6 +353,12 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
   function sendTo(device: Device, command: DeviceCommand): Promise<string | null> {
     const nativePlayer = nativeRef.current;
     if (port.current && nativePlayer && device.id === nativePlayer.id) {
+      if (command.do === "volume") {
+        try {
+          localStorage.setItem("soundscape-volume", JSON.stringify({ volume: command.volume, muted: false }));
+        } catch {}
+        window.dispatchEvent(new CustomEvent("soundscape-set-volume", { detail: command.volume }));
+      }
       return Promise.resolve(tellNative(command) ? null : "The phone's player can't be reached.");
     }
     return link.send(device.id, command);

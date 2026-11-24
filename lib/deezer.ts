@@ -92,32 +92,48 @@ async function searchDeezer(query: string): Promise<DeezerSearchResult[]> {
   return body.data ?? [];
 }
 
-export async function findDeezerTrack(artist: string, title: string): Promise<DeezerMatch | null> {
-  const cleanTitle = withoutFeatures(title);
-  const wantedTitle = normalize(cleanTitle);
+function matchDeezerResults(results: DeezerSearchResult[], artist: string, title: string): DeezerMatch | null {
+  const wantedTitle = normalize(withoutFeatures(title));
   const wantedMainTitle = normalize(mainTitle(title));
   const wantedArtists = [...new Set([normalize(artist), normalize(mainArtist(artist))])];
+  for (const wantedArtist of wantedArtists) {
+    const byArtist = results.filter((t) => normalize(t.artist.name) === wantedArtist);
+    const match =
+      byArtist.find((t) => normalize(t.title) === wantedTitle) ??
+      byArtist.find((t) => normalize(t.title).startsWith(`${wantedTitle} `)) ??
+      byArtist.find((t) => normalize(mainTitle(t.title)) === wantedMainTitle);
+    if (match) {
+      return {
+        deezerId: match.id,
+        cover: match.album.cover_medium,
+        durationMs: match.duration * 1000,
+        ...(match.album.title ? { album: match.album.title } : {}),
+      };
+    }
+  }
+  return null;
+}
+
+export async function findDeezerTrack(artist: string, title: string): Promise<DeezerMatch | null> {
+  const cleanTitle = withoutFeatures(title);
   const queries = [...new Set([`${artist} ${cleanTitle}`, `${mainArtist(artist)} ${mainTitle(title)}`])];
 
   for (const query of queries) {
     const results = await searchDeezer(query);
-    for (const wantedArtist of wantedArtists) {
-      const byArtist = results.filter((t) => normalize(t.artist.name) === wantedArtist);
-      const match =
-        byArtist.find((t) => normalize(t.title) === wantedTitle) ??
-        byArtist.find((t) => normalize(t.title).startsWith(`${wantedTitle} `)) ??
-        byArtist.find((t) => normalize(mainTitle(t.title)) === wantedMainTitle);
-      if (match) {
-        return {
-          deezerId: match.id,
-          cover: match.album.cover_medium,
-          durationMs: match.duration * 1000,
-          ...(match.album.title ? { album: match.album.title } : {}),
-        };
-      }
-    }
+    const match = matchDeezerResults(results, artist, title);
+    if (match) return match;
   }
   return null;
+}
+
+export async function findDeezerCover(artist: string, title: string): Promise<DeezerMatch | null> {
+  const direct = await findDeezerTrack(artist, title);
+  if (direct) return direct;
+  const artistTerm = mainArtist(artist).replace(/"/g, " ").trim();
+  const titleTerm = mainTitle(title).replace(/"/g, " ").trim();
+  if (!artistTerm || !titleTerm) return null;
+  const results = await searchDeezer(`artist:"${artistTerm}" track:"${titleTerm}"`);
+  return matchDeezerResults(results, artist, title);
 }
 
 async function deezerAlbumOf(deezerId: number): Promise<string | null> {
@@ -261,7 +277,7 @@ export async function matchMissingTracks(limit = 200, userId?: string): Promise<
     const artist: string = row.artist;
     let match: DeezerMatch | null;
     try {
-      match = await findDeezerTrack(artist, title);
+      match = await findDeezerCover(artist, title);
     } catch {
       summary.unreachable = true;
       break;

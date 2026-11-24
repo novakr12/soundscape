@@ -149,6 +149,13 @@ export async function saveNavidromeSong(userId: string, songId: string): Promise
       durationMs: song.duration ? Math.round(song.duration * 1000) : null,
     },
   ]);
+  if (song.coverArt) {
+    await sql`
+      UPDATE tracks
+      SET navidrome_cover = coalesce(navidrome_cover, ${song.coverArt}),
+          navidrome_user = CASE WHEN navidrome_cover IS NULL THEN ${userId} ELSE navidrome_user END
+      WHERE id = ${trackId}`;
+  }
   if (song.album) await linkAlbums([{ trackId, album: song.album, number: song.track }]);
   return trackId;
 }

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { afterEach, describe, it, mock } from "node:test";
-import { findDeezerTrack, normalize } from "../lib/deezer";
+import { findDeezerCover, findDeezerTrack, normalize } from "../lib/deezer";
 
 type Song = { id: number; title: string; artist: string; album?: string };
 
@@ -128,6 +128,19 @@ describe("findDeezerTrack", () => {
   it("throws when Deezer reports an error", async () => {
     mock.method(globalThis, "fetch", async () => Response.json({ error: { message: "Quota limit exceeded" } }));
     await assert.rejects(findDeezerTrack("Radiohead", "Creep"), /Quota limit exceeded/);
+  });
+
+  it("falls back to structured artist/track search in findDeezerCover", async () => {
+    const fetchMock = deezerReturns({
+      'artist:"Sleep" track:"Dopesmoker"': [{ id: 99, title: "Dopesmoker", artist: "Sleep", album: "Dopesmoker" }],
+    });
+    assert.deepEqual(await findDeezerCover("Sleep", "Dopesmoker"), {
+      deezerId: 99,
+      cover: "cover-99",
+      durationMs: 200_000,
+      album: "Dopesmoker",
+    });
+    assert.deepEqual(queriesSent(fetchMock), ["Sleep Dopesmoker", 'artist:"Sleep" track:"Dopesmoker"']);
   });
 });
 

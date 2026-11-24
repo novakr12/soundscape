@@ -32,7 +32,12 @@ const globalForMusicBrainz = globalThis as unknown as {
 
 const BUSY_RETRIES = 4;
 
-export async function musicBrainz<T>(path: string, params: Record<string, string>, attempt = 0): Promise<T | null> {
+export async function musicBrainz<T>(
+  path: string,
+  params: Record<string, string>,
+  attempt = 0,
+  fast = false,
+): Promise<T | null> {
   const now = Date.now();
   const nextAt = globalForMusicBrainz.soundscapeMbNextAt ?? 0;
   const wait = Math.max(0, nextAt - now);
@@ -43,27 +48,27 @@ export async function musicBrainz<T>(path: string, params: Record<string, string
   try {
     response = await request(`${musicBrainzUrl()}${path}?${new URLSearchParams({ ...params, fmt: "json" })}`, {
       headers: { accept: "application/json" },
-      timeoutMs: 10_000,
+      timeoutMs: fast ? 4_000 : 10_000,
     });
   } catch {
     throw new Unreachable("MusicBrainz is unreachable");
   }
   if (response.status === 404) return null;
-  if (response.status === 503 && attempt < BUSY_RETRIES) {
+  if (response.status === 503 && !fast && attempt < BUSY_RETRIES) {
     await new Promise((resolve) => setTimeout(resolve, 3 * 2 ** attempt * requestGapMs()));
-    return musicBrainz<T>(path, params, attempt + 1);
+    return musicBrainz<T>(path, params, attempt + 1, fast);
   }
   if (!response.ok) throw new Unreachable(`MusicBrainz answered with ${response.status}`);
   return response.json();
 }
 
-async function hasFrontCover(releaseGroup: string) {
+async function hasFrontCover(releaseGroup: string, fast = false) {
   let response: Response;
   try {
     response = await request(`${coverArtArchiveUrl()}/release-group/${releaseGroup}/front-250`, {
       method: "HEAD",
       redirect: "manual",
-      timeoutMs: 10_000,
+      timeoutMs: fast ? 4_000 : 10_000,
     });
   } catch {
     throw new Unreachable("The Cover Art Archive is unreachable");
@@ -100,26 +105,42 @@ function releaseGroupsByPreference(recordings: Recording[]) {
   return [...new Set(releases.map((release) => release["release-group"]!.id))];
 }
 
-async function recordingsFor(artist: string, title: string, mbid?: string | null): Promise<Recording[]> {
+async function recordingsFor(artist: string, title: string, mbid?: string | null, fast = false): Promise<Recording[]> {
   if (mbid) {
-    const recording = await musicBrainz<Recording>(`/recording/${mbid}`, {
-      inc: "artist-credits releases release-groups",
-    });
+    const recording = await musicBrainz<Recording>(
+      `/recording/${mbid}`,
+      {
+        inc: "artist-credits releases release-groups",
+      },
+      0,
+      fast,
+    );
     if (recording) return [recording];
   }
   const query = `recording:${quote(songTitle(title))} AND artist:${quote(mainArtist(artist))}`;
   for (const search of [`${query} AND status:official`, query]) {
-    const body = await musicBrainz<{ recordings?: Recording[] }>("/recording", { query: search, limit: "100" });
+    const body = await musicBrainz<{ recordings?: Recording[] }>(
+      "/recording",
+      { query: search, limit: "100" },
+      0,
+      fast,
+    );
     const recordings = (body?.recordings ?? []).filter((r) => isSameRecording(r, artist, title));
     if (recordings.length > 0) return recordings;
   }
   return [];
 }
 
-async function findCoverArt(artist: string, title: string, mbid?: string | null): Promise<CoverArtMatch | null> {
-  const recordings = await recordingsFor(artist, title, mbid);
-  for (const releaseGroup of releaseGroupsByPreference(recordings).slice(0, RELEASE_GROUPS_TRIED)) {
-    if (!(await hasFrontCover(releaseGroup))) continue;
+export async function findCoverArt(
+  artist: string,
+  title: string,
+  mbid?: string | null,
+  options: { fast?: boolean } = {},
+): Promise<CoverArtMatch | null> {
+  const fast = options.fast ?? false;
+  const recordings = await recordingsFor(artist, title, mbid, fast);
+  for (const releaseGroup of releaseGroupsByPreference(recordings).slice(0, fast ? 2 : RELEASE_GROUPS_TRIED)) {
+    if (!(await hasFrontCover(releaseGroup, fast))) continue;
     const recording =
       recordings.find((r) => r.releases?.some((release) => release["release-group"]?.id === releaseGroup)) ??
       recordings[0];
