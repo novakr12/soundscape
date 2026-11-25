@@ -369,6 +369,7 @@ main {
   gap: 2px;
   height: 18px;
   flex: none;
+  contain: layout style paint;
 }
 
 .visualizer-bar {
@@ -503,7 +504,7 @@ main {
   width: 100%;
 }
 
-.player .player-seek input[type="range"] {
+:is(.player, .theater-dock) .player-seek input[type="range"] {
   flex: 1;
   width: auto;
   min-width: 0;
@@ -2468,6 +2469,12 @@ tr.selected {
   cursor: pointer;
 }
 
+:is(.player, .theater-dock) .player-seek input[type="range"] {
+  flex: 1;
+  width: auto;
+  min-width: 0;
+}
+
 :is(.volume, .player-seek, .device, .eq-band) input[type="range"]::-webkit-slider-runnable-track {
   height: 4px;
   border-radius: 2px;
@@ -3267,20 +3274,22 @@ body.theater-open {
   padding: calc(1rem + env(safe-area-inset-top)) calc(1.5rem + env(safe-area-inset-right))
     calc(1.25rem + env(safe-area-inset-bottom)) calc(1.5rem + env(safe-area-inset-left));
   background-color: var(--bg);
-  background-image:
-    radial-gradient(
-      ellipse 80% 70% at 32% 40%,
-      color-mix(in oklab, var(--theater-tint, var(--accent)) 28%, transparent),
-      transparent 72%
-    ),
-    radial-gradient(
-      ellipse 60% 50% at 75% 75%,
-      color-mix(in oklab, var(--theater-tint, var(--accent)) 14%, transparent),
-      transparent 70%
-    );
   color: var(--fg);
   overflow: hidden;
   animation: theater-enter 180ms ease-out;
+}
+
+.theater-bg {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  contain: strict;
+  background-image: radial-gradient(
+    ellipse 85% 65% at 35% 30%,
+    color-mix(in srgb, var(--theater-tint, var(--accent)) 22%, transparent),
+    transparent 72%
+  );
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -3290,6 +3299,8 @@ body.theater-open {
 }
 
 .theater-head {
+  position: relative;
+  z-index: 1;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -3313,6 +3324,8 @@ body.theater-open {
 }
 
 .theater-stage {
+  position: relative;
+  z-index: 1;
   flex: 1;
   min-height: 0;
   width: min(72rem, 100%);
@@ -3324,7 +3337,7 @@ body.theater-open {
 }
 
 .theater-stage.with-lyrics {
-  grid-template-columns: minmax(16rem, 26rem) minmax(0, 1fr);
+  grid-template-columns: minmax(15rem, min(24rem, 36vw)) minmax(0, 1fr);
   align-items: center;
 }
 
@@ -3337,13 +3350,21 @@ body.theater-open {
   gap: 1rem;
 }
 
+.theater-info {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  min-width: 0;
+}
+
 .theater-cover {
-  width: min(22rem, 42vh, 100%);
+  width: min(22rem, 40vh, 100%);
   aspect-ratio: 1;
   border-radius: 12px;
   overflow: hidden;
   background: color-mix(in srgb, var(--muted) 15%, transparent);
-  box-shadow: 0 24px 60px rgb(0 0 0 / 0.35);
+  box-shadow: 0 12px 28px rgb(0 0 0 / 0.3);
   flex: none;
 }
 
@@ -3424,7 +3445,6 @@ body.theater-open {
   height: 100%;
   overflow-y: auto;
   padding: 1.5rem 0.5rem 3rem;
-  mask-image: linear-gradient(to bottom, transparent, black 2rem, black calc(100% - 3rem), transparent);
 }
 
 .theater-lyrics {
@@ -3464,12 +3484,63 @@ body.theater-open {
 }
 
 .theater-dock {
+  position: relative;
+  z-index: 1;
   flex: none;
-  width: min(44rem, 100%);
+  width: min(48rem, 100%);
   margin: 0 auto;
   display: flex;
   flex-direction: column;
+  gap: 0.65rem;
+}
+
+.theater-dock .player-seek {
   gap: 0.75rem;
+}
+
+.theater-dock .player-time {
+  min-width: 2.8rem;
+  font-size: 0.8rem;
+}
+
+.theater-dock .player-seek input[type="range"] {
+  height: 1.5rem;
+}
+
+.theater-dock .player-seek input[type="range"]::-webkit-slider-runnable-track {
+  height: 5px;
+  border-radius: 999px;
+}
+
+.theater-dock .player-seek input[type="range"]::-moz-range-track {
+  height: 5px;
+  border-radius: 999px;
+}
+
+.theater-dock .player-seek input[type="range"]::-webkit-slider-thumb {
+  width: 15px;
+  height: 15px;
+  margin-top: -5px;
+}
+
+.theater-dock .player-seek input[type="range"]::-moz-range-thumb {
+  width: 15px;
+  height: 15px;
+}
+
+.theater-dock-bar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.theater-dock-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 0.35rem;
+  min-width: 0;
 }
 
 .theater-controls {
@@ -3479,33 +3550,76 @@ body.theater-open {
   gap: 0.85rem;
 }
 
-.theater-extras {
+.theater-dock-volume {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-  flex-wrap: wrap;
+  justify-content: flex-end;
+  min-width: 0;
 }
 
-.theater-extra-buttons {
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
+.theater-dock-volume .volume input[type="range"] {
+  width: clamp(5.5rem, 12vw, 8rem);
 }
 
-@media (max-width: 900px) {
+@media (max-width: 1080px) {
   .theater-stage.with-lyrics {
     grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: auto minmax(10rem, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
     align-items: stretch;
+    gap: 1rem;
   }
 
-  .theater-art-col {
+  .theater-stage.with-lyrics .theater-art-col {
+    width: min(46rem, 100%);
+    margin: 0 auto;
+    flex-direction: row;
+    align-items: center;
+    gap: 1.1rem;
+  }
+
+  .theater-stage.with-lyrics .theater-cover {
+    width: min(6.5rem, 15vh);
+    border-radius: 8px;
+  }
+
+  .theater-stage.with-lyrics .theater-info {
+    flex: 1;
+    gap: 0.5rem;
+  }
+
+  .theater-stage.with-lyrics .theater-viz-wrap {
+    justify-content: flex-start;
+  }
+
+  .theater-stage.with-lyrics .theater-lyrics-col {
+    width: min(46rem, 100%);
     margin: 0 auto;
   }
 
-  .theater-cover {
-    width: min(17rem, 32vh, 100%);
+  .theater-stage.with-lyrics .theater-lyrics-scroll {
+    padding: 0.75rem 0.25rem 2.5rem;
+  }
+}
+
+@media (max-width: 680px) {
+  .theater-dock-bar {
+    grid-template-columns: minmax(0, 1fr) auto;
+    row-gap: 0.65rem;
+  }
+
+  .theater-controls {
+    grid-column: 1 / -1;
+    grid-row: 1;
+  }
+
+  .theater-dock-actions {
+    grid-column: 1;
+    grid-row: 2;
+  }
+
+  .theater-dock-volume {
+    grid-column: 2;
+    grid-row: 2;
   }
 }
 
@@ -3517,11 +3631,11 @@ body.theater-open {
   }
 
   .theater-cover {
-    width: min(14rem, 28vh, 100%);
+    width: min(15rem, 30vh, 78vw);
   }
 
-  .theater-extras {
-    justify-content: center;
+  .theater-stage.with-lyrics .theater-cover {
+    width: 4.5rem;
   }
 }
 

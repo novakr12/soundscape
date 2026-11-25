@@ -33,6 +33,10 @@ export function useLyrics({
   const key = keyOf(track);
 
   useEffect(() => {
+    if (!enabled) {
+      setActiveLine(-1);
+      return;
+    }
     const params = new URLSearchParams({ trackId: track.trackId, title: track.title, artist: track.artist });
     if (track.songId) params.set("songId", track.songId);
     if (track.album) params.set("album", track.album);
@@ -50,7 +54,7 @@ export function useLyrics({
     return () => {
       stop.abort();
     };
-  }, [key, track.trackId, track.songId, track.title, track.artist, track.album]);
+  }, [enabled, key, track.trackId, track.songId, track.title, track.artist, track.album]);
 
   const lyrics = "lyrics" in state && state.key === key ? state.lyrics : null;
 
@@ -89,8 +93,8 @@ export function useLyrics({
   }, [enabled, lyrics, playing, audio]);
 
   return {
-    loading: "loading" in state || state.key !== key,
-    failed: "failed" in state && state.key === key,
+    loading: enabled && ("loading" in state || state.key !== key),
+    failed: enabled && "failed" in state && state.key === key,
     lyrics,
     activeLine,
   };

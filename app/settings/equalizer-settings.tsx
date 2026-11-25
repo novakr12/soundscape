@@ -60,8 +60,8 @@ export default function EqualizerSettings({
       </label>
       <p className="muted" role={nativeEq ? undefined : "note"}>
         {nativeEq
-          ? "Shapes audio live across 10 frequency bands in the built-in desktop player."
-          : "Applies to the desktop app's built-in player. Your preset and band settings are saved here and take effect automatically on desktop."}
+          ? "Shapes audio live across 10 frequency bands in the built-in player."
+          : "Applies to the desktop and Android apps' built-in player. Your preset and band settings are saved here and take effect automatically in the app."}
       </p>
       {equalizer.enabled && (
         <div className="eq-panel">

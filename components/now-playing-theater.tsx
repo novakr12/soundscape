@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { type CSSProperties, type ReactNode, type RefObject, useEffect, useRef, useState } from "react";
+import { type CSSProperties, type ReactNode, type RefObject, useEffect, useMemo, useRef, useState } from "react";
 import { extractAmbientColor } from "@/lib/ambient-color";
 import { nativePort } from "@/lib/app-bridge";
 import { albumIdFor, artistIdFor } from "@/lib/catalog";
@@ -29,14 +29,17 @@ function sampleImageData(source: CanvasImageSource): string | null {
   const canvas = document.createElement("canvas");
   canvas.width = SAMPLE_SIZE;
   canvas.height = SAMPLE_SIZE;
-  const context = canvas.getContext("2d", { willReadFrequently: true }) ?? canvas.getContext("2d");
-  if (!context) return null;
   try {
+    const context = canvas.getContext("2d", { willReadFrequently: true }) ?? canvas.getContext("2d");
+    if (!context) return null;
     context.drawImage(source, 0, 0, SAMPLE_SIZE, SAMPLE_SIZE);
     const data = context.getImageData(0, 0, SAMPLE_SIZE, SAMPLE_SIZE).data;
     return extractAmbientColor(data);
   } catch {
     return null;
+  } finally {
+    canvas.width = 0;
+    canvas.height = 0;
   }
 }
 
@@ -45,21 +48,31 @@ async function sampleCoverColor(src: string, signal: AbortSignal): Promise<strin
   if (tintCache.has(url)) return tintCache.get(url) ?? null;
 
   let color: string | null = null;
+  const inCanvasShell = (window as Window & { soundscapeCanvasCovers?: boolean }).soundscapeCanvasCovers === true;
   try {
-    if (url.startsWith("/") && !url.startsWith("//") && typeof createImageBitmap === "function") {
-      const response = await fetch(url, { signal });
-      if (response.ok && !signal.aborted) {
-        const blob = await response.blob();
-        if (!signal.aborted) {
-          const bitmap = await createImageBitmap(blob);
-          try {
-            if (!signal.aborted) color = sampleImageData(bitmap);
-          } finally {
-            bitmap.close();
+    let decoded = false;
+    if (typeof createImageBitmap === "function") {
+      try {
+        const response = await fetch(url, { signal });
+        if (response.ok && !signal.aborted) {
+          const blob = await response.blob();
+          if (!signal.aborted) {
+            const bitmap = await createImageBitmap(blob);
+            try {
+              if (!signal.aborted) {
+                color = sampleImageData(bitmap);
+                decoded = true;
+              }
+            } finally {
+              bitmap.close();
+            }
           }
         }
+      } catch {
+        // Fall through below when Image fallback is safe
       }
-    } else {
+    }
+    if (!decoded && !inCanvasShell && !signal.aborted) {
       color = await new Promise<string | null>((resolve) => {
         const img = new Image();
         img.crossOrigin = "anonymous";
@@ -106,7 +119,8 @@ type NowPlayingTheaterProps = {
   visualizer?: ReactNode;
   seek: ReactNode;
   transport: ReactNode;
-  extras?: ReactNode;
+  actions?: ReactNode;
+  volume?: ReactNode;
 };
 
 export default function NowPlayingTheater({
@@ -123,11 +137,15 @@ export default function NowPlayingTheater({
   visualizer,
   seek,
   transport,
-  extras,
+  actions,
+  volume,
 }: NowPlayingTheaterProps) {
   const closeRef = useRef<HTMLButtonElement>(null);
   const closeCallback = useRef(onClose);
   closeCallback.current = onClose;
+  const onSeekRef = useRef(onSeek);
+  onSeekRef.current = onSeek;
+  const reducedMotionRef = useRef(false);
   const lyricsScrollRef = useRef<HTMLDivElement>(null);
   const lyricsListRef = useRef<HTMLOListElement>(null);
   const [tint, setTint] = useState<{ src: string; color: string | null }>({ src: "", color: null });
@@ -167,12 +185,20 @@ export default function NowPlayingTheater({
       const detail = (event as CustomEvent<unknown>).detail;
       if (typeof detail === "boolean") setIsFullscreen(detail);
     };
+    const reducedQuery =
+      typeof window.matchMedia === "function" ? window.matchMedia("(prefers-reduced-motion: reduce)") : null;
+    const syncReduced = () => {
+      reducedMotionRef.current = Boolean(reducedQuery?.matches);
+    };
+    syncReduced();
+    reducedQuery?.addEventListener("change", syncReduced);
     document.addEventListener("fullscreenchange", onDomFullscreen);
     window.addEventListener("soundscape-fullscreen", onNativeFullscreen);
 
     return () => {
       document.body.classList.remove("theater-open");
       window.removeEventListener("keydown", onKeyDown);
+      reducedQuery?.removeEventListener("change", syncReduced);
       document.removeEventListener("fullscreenchange", onDomFullscreen);
       window.removeEventListener("soundscape-fullscreen", onNativeFullscreen);
       if (enteredFullscreenRef.current) {
@@ -210,10 +236,9 @@ export default function NowPlayingTheater({
     const box = lyricsScrollRef.current;
     const line = lyricsListRef.current?.children[activeLine] as HTMLElement | undefined;
     if (!box || !line) return;
-    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     box.scrollTo({
       top: line.offsetTop - box.clientHeight / 2 + line.clientHeight / 2,
-      behavior: reduced ? "auto" : "smooth",
+      behavior: reducedMotionRef.current ? "auto" : "smooth",
     });
   }, [showLyrics, activeLine]);
 
@@ -254,15 +279,44 @@ export default function NowPlayingTheater({
     : undefined;
   const activeTint = track.cover && tint.src === track.cover ? tint.color : null;
 
+  const lyricsBody = useMemo(() => {
+    if (loading) return <p className="muted">Looking for lyrics…</p>;
+    if (failed) return <p className="muted">Lyrics couldn&apos;t be loaded right now.</p>;
+    if (!lyrics) return <p className="muted">No lyrics found for this song.</p>;
+    if (lyrics.instrumental) return <p className="muted">Instrumental</p>;
+    return (
+      <ol ref={lyricsListRef} className={lyrics.synced ? "theater-lyrics synced" : "theater-lyrics"}>
+        {lyrics.lines.map((line, i) => (
+          <li
+            key={`${i}-${line.at ?? ""}`}
+            className={i === activeLine ? "current" : i < activeLine ? "sung" : undefined}
+          >
+            {lyrics.synced ? (
+              <button
+                type="button"
+                onClick={() => {
+                  if (line.at !== undefined) onSeekRef.current(line.at);
+                }}
+              >
+                {line.text || "♪"}
+              </button>
+            ) : (
+              line.text || "\u00a0"
+            )}
+          </li>
+        ))}
+      </ol>
+    );
+  }, [loading, failed, lyrics, activeLine]);
+
   return (
-    <section
-      className="theater"
-      role="dialog"
-      aria-modal="true"
-      aria-label="Now playing"
-      style={activeTint ? ({ "--theater-tint": activeTint } as CSSProperties) : undefined}
-    >
-      <header className="theater-head">
+    <section className="theater" role="dialog" aria-modal="true" aria-label="Now playing">
+      <div
+        className="theater-bg"
+        aria-hidden="true"
+        style={activeTint ? ({ "--theater-tint": activeTint } as CSSProperties) : undefined}
+      />
+      <div className="theater-head">
         <p className="theater-context muted">{contextLabel ?? "Now playing"}</p>
         <div className="theater-head-actions">
           <button
@@ -298,7 +352,7 @@ export default function NowPlayingTheater({
             <CloseIcon size={22} />
           </button>
         </div>
-      </header>
+      </div>
 
       <div className={showLyrics ? "theater-stage with-lyrics" : "theater-stage"}>
         <div className="theater-art-col">
@@ -311,81 +365,53 @@ export default function NowPlayingTheater({
               </div>
             )}
           </div>
-          <div className="theater-meta">
-            <div
-              className="theater-text"
-              onClick={(event) => {
-                if (event.target instanceof Element && event.target.closest("a")) onClose();
-              }}
-            >
-              <h2 className="theater-title" title={track.title}>
-                {!track.newSong ? (
-                  <SongLink trackId={track.trackId}>{track.title}</SongLink>
-                ) : track.songId ? (
-                  <SongLink trackId={track.trackId} songId={track.songId}>
-                    {track.title}
-                  </SongLink>
-                ) : track.albumHref ? (
-                  <Link className="music-link" href={track.albumHref} prefetch={false}>
-                    {track.title}
-                  </Link>
-                ) : (
-                  track.title
-                )}
-              </h2>
-              <p className="theater-subtitle muted" title={[track.artist, track.album].filter(Boolean).join(" · ")}>
-                <Link className="music-link" href={artistHref} prefetch={false}>
-                  {track.artist}
-                </Link>
-                {track.album && albumHref && (
-                  <>
-                    {" · "}
-                    <Link className="music-link" href={albumHref} prefetch={false}>
-                      {track.album}
+          <div className="theater-info">
+            <div className="theater-meta">
+              <div
+                className="theater-text"
+                onClick={(event) => {
+                  if (event.target instanceof Element && event.target.closest("a")) onClose();
+                }}
+              >
+                <h2 className="theater-title" title={track.title}>
+                  {!track.newSong ? (
+                    <SongLink trackId={track.trackId}>{track.title}</SongLink>
+                  ) : track.songId ? (
+                    <SongLink trackId={track.trackId} songId={track.songId}>
+                      {track.title}
+                    </SongLink>
+                  ) : track.albumHref ? (
+                    <Link className="music-link" href={track.albumHref} prefetch={false}>
+                      {track.title}
                     </Link>
-                  </>
-                )}
-              </p>
+                  ) : (
+                    track.title
+                  )}
+                </h2>
+                <p className="theater-subtitle muted" title={[track.artist, track.album].filter(Boolean).join(" · ")}>
+                  <Link className="music-link" href={artistHref} prefetch={false}>
+                    {track.artist}
+                  </Link>
+                  {track.album && albumHref && (
+                    <>
+                      {" · "}
+                      <Link className="music-link" href={albumHref} prefetch={false}>
+                        {track.album}
+                      </Link>
+                    </>
+                  )}
+                </p>
+              </div>
+              <PlayerLove artist={track.artist} title={track.title} enabled={canLove} />
             </div>
-            <PlayerLove artist={track.artist} title={track.title} enabled={canLove} />
+            {visualizer && <div className="theater-viz-wrap">{visualizer}</div>}
           </div>
-          {visualizer && <div className="theater-viz-wrap">{visualizer}</div>}
         </div>
 
         {showLyrics && (
           <div className="theater-lyrics-col">
             <div ref={lyricsScrollRef} className="theater-lyrics-scroll">
-              {loading ? (
-                <p className="muted">Looking for lyrics…</p>
-              ) : failed ? (
-                <p className="muted">Lyrics couldn&apos;t be loaded right now.</p>
-              ) : !lyrics ? (
-                <p className="muted">No lyrics found for this song.</p>
-              ) : lyrics.instrumental ? (
-                <p className="muted">Instrumental</p>
-              ) : (
-                <ol ref={lyricsListRef} className={lyrics.synced ? "theater-lyrics synced" : "theater-lyrics"}>
-                  {lyrics.lines.map((line, i) => (
-                    <li
-                      key={`${i}-${line.at ?? ""}`}
-                      className={i === activeLine ? "current" : i < activeLine ? "sung" : undefined}
-                    >
-                      {lyrics.synced ? (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (line.at !== undefined) onSeek(line.at);
-                          }}
-                        >
-                          {line.text || "♪"}
-                        </button>
-                      ) : (
-                        line.text || "\u00a0"
-                      )}
-                    </li>
-                  ))}
-                </ol>
-              )}
+              {lyricsBody}
               {lyrics && (
                 <p className="muted lyrics-source">
                   {lyrics.source === "navidrome" ? "From your Navidrome" : "From LRCLIB"}
@@ -398,8 +424,11 @@ export default function NowPlayingTheater({
 
       <footer className="theater-dock">
         {seek}
-        <div className="theater-controls">{transport}</div>
-        {extras && <div className="theater-extras">{extras}</div>}
+        <div className="theater-dock-bar">
+          <div className="theater-dock-actions">{actions}</div>
+          <div className="theater-controls">{transport}</div>
+          <div className="theater-dock-volume">{volume}</div>
+        </div>
       </footer>
     </section>
   );

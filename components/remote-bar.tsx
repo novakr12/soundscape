@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { type RefObject, useEffect, useRef, useState } from "react";
+import { type RefObject, useEffect, useMemo, useRef, useState } from "react";
 import { albumIdFor, artistIdFor } from "@/lib/catalog";
 import {
   type Device,
@@ -249,18 +249,28 @@ export default function RemoteBar({
     return length > 0 ? Math.min(current, length) : current;
   };
 
-  const theaterTrack: PlayerTrack | null = track
-    ? {
-        trackId: track.trackId,
-        title: track.title,
-        artist: track.artist,
-        ...(track.album ? { album: track.album } : {}),
-        ...(track.cover ? { cover: track.cover } : {}),
-        ...(track.songId ? { songId: track.songId } : {}),
-        albumHref,
-        artistHref,
-      }
-    : null;
+  const trackId = track?.trackId;
+  const trackTitle = track?.title;
+  const trackArtist = track?.artist;
+  const trackAlbum = track?.album;
+  const trackCover = track?.cover;
+  const trackSongId = track?.songId;
+  const theaterTrack: PlayerTrack | null = useMemo(
+    () =>
+      trackId && trackTitle && trackArtist
+        ? {
+            trackId,
+            title: trackTitle,
+            artist: trackArtist,
+            ...(trackAlbum ? { album: trackAlbum } : {}),
+            ...(trackCover ? { cover: trackCover } : {}),
+            ...(trackSongId ? { songId: trackSongId } : {}),
+            albumHref,
+            artistHref,
+          }
+        : null,
+    [trackId, trackTitle, trackArtist, trackAlbum, trackCover, trackSongId, albumHref, artistHref],
+  );
 
   return (
     <>
@@ -459,7 +469,7 @@ export default function RemoteBar({
           >
             <DevicesIcon size={18} />
           </button>
-          {track && (here || device.kind !== "android") && <SleepTimer sleep={sleep} onChoose={chooseSleep} />}
+          {track && <SleepTimer sleep={sleep} onChoose={chooseSleep} />}
           <VolumeBar
             value={shownVolume}
             onChange={(value) => applyVolume(value)}
@@ -565,37 +575,37 @@ export default function RemoteBar({
               )}
             </div>
           }
-          extras={
+          actions={
             <>
-              <div className="theater-extra-buttons">
-                {!here && (
-                  <button type="button" className="secondary remote-here" onClick={onPlayHere}>
-                    Play here
-                  </button>
-                )}
-                {state.upNext.length > 0 && (
-                  <button
-                    type="button"
-                    className="icon-button player-toggle"
-                    aria-label={`Queue on ${device.name}`}
-                    title="Queue (Q)"
-                    onClick={onQueue}
-                  >
-                    <QueueIcon size={18} />
-                  </button>
-                )}
-                {(here || device.kind !== "android") && <SleepTimer sleep={sleep} onChoose={chooseSleep} />}
-              </div>
-              <VolumeBar
-                value={shownVolume}
-                onChange={(value) => applyVolume(value)}
-                onToggleMute={toggleMute}
-                sliderLabel={`Volume on ${device.name}`}
-                muteLabel={`Mute ${device.name}`}
-                unmuteLabel={`Unmute ${device.name}`}
-                peekKey={volumePeek}
-              />
+              {!here && (
+                <button type="button" className="secondary remote-here" onClick={onPlayHere}>
+                  Play here
+                </button>
+              )}
+              {state.upNext.length > 0 && (
+                <button
+                  type="button"
+                  className="icon-button player-toggle"
+                  aria-label={`Queue on ${device.name}`}
+                  title="Queue (Q)"
+                  onClick={onQueue}
+                >
+                  <QueueIcon size={18} />
+                </button>
+              )}
+              <SleepTimer sleep={sleep} onChoose={chooseSleep} />
             </>
+          }
+          volume={
+            <VolumeBar
+              value={shownVolume}
+              onChange={(value) => applyVolume(value)}
+              onToggleMute={toggleMute}
+              sliderLabel={`Volume on ${device.name}`}
+              muteLabel={`Mute ${device.name}`}
+              unmuteLabel={`Unmute ${device.name}`}
+              peekKey={volumePeek}
+            />
           }
         />
       )}

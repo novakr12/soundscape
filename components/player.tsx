@@ -1544,7 +1544,7 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
       window.addEventListener("soundscape-queue-saved", onSaved);
       if (!tellNative({ do: "savequeue", id, name })) {
         cleanup();
-        reject(new Error("The desktop player can't be reached."));
+        reject(new Error("The built-in player can't be reached."));
       }
     });
   }
@@ -1851,22 +1851,14 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
               onJump={(at) => {
                 if (at > 0 && !onlyHost()) away.current.send({ do: "jump", ahead: at });
               }}
-              onRemove={
-                followed.kind !== "android"
-                  ? (at) => {
-                      if (at > 0 && !onlyHost()) away.current.send({ do: "remove", ahead: at });
-                    }
-                  : undefined
-              }
-              onMove={
-                followed.kind !== "android"
-                  ? (from, to) => {
-                      if (from > 0 && to > 0 && from !== to && !onlyHost()) {
-                        away.current.send({ do: "move", from, to });
-                      }
-                    }
-                  : undefined
-              }
+              onRemove={(at) => {
+                if (at > 0 && !onlyHost()) away.current.send({ do: "remove", ahead: at });
+              }}
+              onMove={(from, to) => {
+                if (from > 0 && to > 0 && from !== to && !onlyHost()) {
+                  away.current.send({ do: "move", from, to });
+                }
+              }}
               onSavePlaylist={
                 username !== null
                   ? (name) => {
@@ -1963,23 +1955,21 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
                   </button>
                 </div>
               }
-              extras={
+              actions={
                 <>
-                  <div className="theater-extra-buttons">
-                    <button
-                      type="button"
-                      className="icon-button player-toggle"
-                      aria-label="Queue"
-                      title="Queue (Q)"
-                      onClick={() => togglePanel("queue")}
-                    >
-                      <QueueIcon size={18} />
-                    </button>
-                    <SleepTimer sleep={sleep} onChoose={chooseSleep} />
-                  </div>
-                  <VolumeControl audio={activeAudio} level={(full ? level : 1) * fadeIn} />
+                  <button
+                    type="button"
+                    className="icon-button player-toggle"
+                    aria-label="Queue"
+                    title="Queue (Q)"
+                    onClick={() => togglePanel("queue")}
+                  >
+                    <QueueIcon size={18} />
+                  </button>
+                  <SleepTimer sleep={sleep} onChoose={chooseSleep} />
                 </>
               }
+              volume={<VolumeControl audio={activeAudio} level={(full ? level : 1) * fadeIn} />}
             />
           )}
           <PlayerBar
