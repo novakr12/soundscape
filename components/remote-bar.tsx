@@ -29,6 +29,7 @@ import {
 } from "./player-icons";
 import PlayerLove from "./player-love";
 import { PlayerVisualizer } from "./player-transport";
+import SleepTimer, { type Sleep } from "./sleep-timer";
 import { useBarEntrance } from "./use-bar-entrance";
 import { useNow } from "./use-now";
 import { VolumeBar } from "./volume-control";
@@ -68,7 +69,12 @@ export default function RemoteBar({
   onLyrics: () => void;
   canLove: boolean;
 }) {
-  const [asked, setAsked] = useState<{ shuffle?: boolean; repeat?: RepeatMode; since: number } | null>(null);
+  const [asked, setAsked] = useState<{
+    shuffle?: boolean;
+    repeat?: RepeatMode;
+    sleep?: Sleep;
+    since: number;
+  } | null>(null);
   const now = useNow(500);
   const [guess, setGuess] = useState<Guess | null>(null);
   const [seeking, setSeeking] = useState<number | null>(null);
@@ -93,6 +99,13 @@ export default function RemoteBar({
   const fresh = asked && now - asked.since < GUESS_KEEP_MS ? asked : null;
   const shuffle = fresh?.shuffle ?? state.shuffle;
   const repeat = fresh?.repeat ?? state.repeat;
+  const remoteSleep: Sleep =
+    state.sleep?.kind === "song"
+      ? { kind: "song" }
+      : state.sleep?.kind === "time"
+        ? { kind: "time", until: device.at - offset + state.sleep.left * 1000 }
+        : null;
+  const sleep = fresh?.sleep !== undefined ? fresh.sleep : remoteSleep;
 
   const volumeReset = useResetTimer(2000);
   const seekLater = useLater((value) => {
@@ -136,6 +149,13 @@ export default function RemoteBar({
     const mode = nextRepeat(repeat);
     send({ do: "repeat", mode });
     setAsked({ ...fresh, repeat: mode, since: now });
+  }
+
+  function chooseSleep(next: Sleep) {
+    if (next === null) send({ do: "sleep", kind: "off" });
+    else if (next.kind === "song") send({ do: "sleep", kind: "song" });
+    else send({ do: "sleep", kind: "time", seconds: Math.max(1, Math.round((next.until - Date.now()) / 1000)) });
+    setAsked({ ...fresh, sleep: next, since: now });
   }
 
   function toggle() {
@@ -383,6 +403,7 @@ export default function RemoteBar({
         >
           <DevicesIcon size={18} />
         </button>
+        {track && (here || device.kind !== "android") && <SleepTimer sleep={sleep} onChoose={chooseSleep} />}
         <VolumeBar
           value={shownVolume}
           onChange={(value) => applyVolume(value)}

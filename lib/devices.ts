@@ -19,6 +19,8 @@ export const REPEAT_MODES = ["off", "all", "one"] as const;
 
 export type RepeatMode = (typeof REPEAT_MODES)[number];
 
+export type DeviceSleep = { kind: "song" } | { kind: "time"; left: number } | null;
+
 export type DeviceState = {
   track: DeviceTrack | null;
   playing: boolean;
@@ -28,6 +30,7 @@ export type DeviceState = {
   blocked: boolean;
   shuffle: boolean | null;
   repeat: RepeatMode | null;
+  sleep: DeviceSleep;
   upNext: UpNext[];
 };
 
@@ -62,6 +65,8 @@ export type DeviceCommand =
   | { do: "enqueue"; track: HandedTrack; next: boolean }
   | { do: "shuffle"; on: boolean }
   | { do: "repeat"; mode: RepeatMode }
+  | { do: "sleep"; kind: "off" | "song" }
+  | { do: "sleep"; kind: "time"; seconds: number }
   | { do: "jump"; ahead: number };
 
 export const DEVICE_ONLINE_MS = 150_000;
@@ -130,6 +135,18 @@ export function readRepeat(value: unknown): RepeatMode | null {
   return REPEAT_MODES.find((mode) => mode === value) ?? null;
 }
 
+const MAX_SLEEP_SECONDS = 86_400;
+
+function readSleep(value: unknown): DeviceSleep {
+  if (!isRecord(value)) return null;
+  if (value.kind === "song") return { kind: "song" };
+  if (value.kind === "time") {
+    const left = finite(value.left);
+    return left !== null && left > 0 && left <= MAX_SLEEP_SECONDS ? { kind: "time", left } : null;
+  }
+  return null;
+}
+
 export function readDeviceState(value: unknown): DeviceState {
   const raw = isRecord(value) ? value : {};
   const time = finite(raw.time);
@@ -145,6 +162,7 @@ export function readDeviceState(value: unknown): DeviceState {
     blocked: raw.blocked === true,
     shuffle: typeof raw.shuffle === "boolean" ? raw.shuffle : null,
     repeat: readRepeat(raw.repeat),
+    sleep: readSleep(raw.sleep),
     upNext: readUpNext(raw.upNext),
   };
 }
@@ -204,6 +222,16 @@ export function readDeviceCommand(value: unknown): DeviceCommand | null {
   if (name === "repeat") {
     const mode = readRepeat(value.mode);
     return mode ? { do: "repeat", mode } : null;
+  }
+  if (name === "sleep") {
+    if (value.kind === "off" || value.kind === "song") return { do: "sleep", kind: value.kind };
+    if (value.kind === "time") {
+      const seconds = finite(value.seconds);
+      return seconds !== null && seconds >= 1 && seconds <= MAX_SLEEP_SECONDS
+        ? { do: "sleep", kind: "time", seconds }
+        : null;
+    }
+    return null;
   }
   if (name === "jump") {
     const ahead = finite(value.ahead);

@@ -205,6 +205,7 @@ function idleState(): DeviceState {
     blocked: false,
     shuffle: null,
     repeat: null,
+    sleep: null,
     upNext: [],
   };
 }
@@ -606,7 +607,8 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
 
   const reportLater = useRef(link.report);
   reportLater.current = link.report;
-  const queueShape = `${tracks.length}|${order.join(",")}|${position}|${shuffle}|${repeat}`;
+  const sleepKey = sleep?.kind === "time" ? `time:${sleep.until}` : (sleep?.kind ?? "off");
+  const queueShape = `${tracks.length}|${order.join(",")}|${position}|${shuffle}|${repeat}|${sleepKey}`;
   useEffect(() => {
     if (queueShape) reportLater.current();
   }, [queueShape]);
@@ -1341,6 +1343,12 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
       blocked: blocked.current,
       shuffle: shuffleRef.current,
       repeat: repeatRef.current,
+      sleep:
+        sleepRef.current?.kind === "song"
+          ? { kind: "song" }
+          : sleepRef.current?.kind === "time"
+            ? { kind: "time", left: Math.max(0, (sleepRef.current.until - Date.now()) / 1000) }
+            : null,
       upNext: orderRef.current
         .slice(positionRef.current + 1, positionRef.current + 1 + MOST_UP_NEXT)
         .map((index) => tracksRef.current[index])
@@ -1405,6 +1413,12 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
       repeatRef.current = command.mode;
       setRepeat(command.mode);
       remember();
+      return;
+    }
+    if (command.do === "sleep") {
+      if (command.kind === "off") chooseSleep(null);
+      else if (command.kind === "song") chooseSleep({ kind: "song" });
+      else if (command.kind === "time") chooseSleep({ kind: "time", until: Date.now() + command.seconds * 1000 });
       return;
     }
     if (command.do === "jump") {

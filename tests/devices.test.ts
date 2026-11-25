@@ -40,6 +40,7 @@ describe("device reports", () => {
         blocked: false,
         shuffle: null,
         repeat: null,
+        sleep: null,
         upNext: [],
       },
     });
@@ -73,6 +74,15 @@ describe("device reports", () => {
     assert.equal(odd.track?.albumHref, null);
     assert.equal(odd.shuffle, null);
     assert.equal(odd.repeat, null);
+  });
+
+  it("reads sleep timer state and drops invalid sleep values", () => {
+    assert.deepEqual(readDeviceState({ sleep: { kind: "song" } }).sleep, { kind: "song" });
+    assert.deepEqual(readDeviceState({ sleep: { kind: "time", left: 300 } }).sleep, { kind: "time", left: 300 });
+    assert.equal(readDeviceState({ sleep: { kind: "time", left: 0 } }).sleep, null);
+    assert.equal(readDeviceState({ sleep: { kind: "time", left: 100_000 } }).sleep, null);
+    assert.equal(readDeviceState({ sleep: { kind: "forever" } }).sleep, null);
+    assert.equal(readDeviceState({ sleep: "song" }).sleep, null);
   });
 
   it("is not playing without a song and drops outside covers", () => {
@@ -110,6 +120,19 @@ describe("device commands", () => {
     assert.equal(readDeviceCommand({ do: "jump", ahead: 0 }), null);
     assert.equal(readDeviceCommand({ do: "jump", ahead: 11 }), null);
     assert.equal(readDeviceCommand({ do: "jump", ahead: 1.5 }), null);
+  });
+
+  it("reads sleep timer commands", () => {
+    assert.deepEqual(readDeviceCommand({ do: "sleep", kind: "off" }), { do: "sleep", kind: "off" });
+    assert.deepEqual(readDeviceCommand({ do: "sleep", kind: "song" }), { do: "sleep", kind: "song" });
+    assert.deepEqual(readDeviceCommand({ do: "sleep", kind: "time", seconds: 900 }), {
+      do: "sleep",
+      kind: "time",
+      seconds: 900,
+    });
+    assert.equal(readDeviceCommand({ do: "sleep", kind: "time", seconds: 0 }), null);
+    assert.equal(readDeviceCommand({ do: "sleep", kind: "time", seconds: 100_000 }), null);
+    assert.equal(readDeviceCommand({ do: "sleep", kind: "nap" }), null);
   });
 
   it("reads a song to queue up", () => {
