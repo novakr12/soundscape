@@ -14,7 +14,7 @@ import {
 import { nextRepeat, SEEK_STEP_SECONDS } from "@/lib/play-queue";
 import { VOLUME_STEP } from "@/lib/volume";
 import CoverPicture from "./cover-picture";
-import { clock, KindIcon, useLater, useResetTimer } from "./devices";
+import { clock, KindIcon, useLater, usePaced, useResetTimer } from "./devices";
 import { SongLink } from "./music-links";
 import {
   DevicesIcon,
@@ -93,10 +93,13 @@ export default function RemoteBar({
     setGuess({ playing: shown.playing, time: value, since: Date.now() });
     setSeeking(null);
   });
-  const volumeLater = useLater((value) => {
-    send({ do: "volume", volume: value });
-    volumeReset.schedule(() => setVolume(null));
-  });
+  const volumeLive = usePaced(
+    (value) => {
+      send({ do: "volume", volume: value });
+      volumeReset.schedule(() => setVolume(null));
+    },
+    here ? 25 : 150,
+  );
 
   function toggle() {
     const playing = !shown.playing;
@@ -335,7 +338,7 @@ export default function RemoteBar({
               const value = Number(event.target.value);
               volumeReset.cancel();
               setVolume(value);
-              volumeLater(value);
+              volumeLive(value);
             }}
           />
         </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import { type RefObject, useEffect, useRef, useState } from "react";
+import { type RefObject, useEffect, useMemo, useRef, useState } from "react";
 import {
   type AppView,
   DEVICE_HEARTBEAT_MS,
@@ -17,6 +17,7 @@ import {
   nowPlayingLine,
   timeNow,
 } from "@/lib/devices";
+import { createPaced } from "@/lib/paced";
 import { VOLUME_STEP } from "@/lib/volume";
 import { type PartyControls, PartySection } from "./listening-party";
 import { NextIcon, PauseIcon, PlayIcon, PreviousIcon } from "./player-icons";
@@ -255,6 +256,14 @@ export function useLater(send: (value: number) => void, waitMs = 250) {
   };
 }
 
+export function usePaced(send: (value: number) => void, waitMs: number) {
+  const sendRef = useRef(send);
+  sendRef.current = send;
+  const pacer = useMemo(() => createPaced<number>((value) => sendRef.current(value), waitMs), [waitMs]);
+  useEffect(() => () => pacer.cancel(), [pacer]);
+  return pacer.push;
+}
+
 export function useResetTimer(delayMs: number) {
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   useEffect(() => () => clearTimeout(timer.current), []);
@@ -294,10 +303,10 @@ function RemoteDevice({
     send({ do: "seek", time: value });
     seekReset.schedule(() => setSeeking(null));
   });
-  const volumeLater = useLater((value) => {
+  const volumeLive = usePaced((value) => {
     send({ do: "volume", volume: value });
     volumeReset.schedule(() => setVolume(null));
-  });
+  }, 150);
   const shownVolume = volume ?? state.volume;
 
   return (
@@ -373,7 +382,7 @@ function RemoteDevice({
                 const value = Number(event.target.value);
                 volumeReset.cancel();
                 setVolume(value);
-                volumeLater(value);
+                volumeLive(value);
               }}
             />
           </div>

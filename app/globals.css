@@ -2303,6 +2303,7 @@ tr.selected {
   align-items: center;
   gap: 0.35rem;
   flex-shrink: 0;
+  padding-right: 1rem;
 }
 
 :is(.volume, .player-seek, .device) input[type="range"] {
