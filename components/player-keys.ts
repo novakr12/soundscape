@@ -18,6 +18,7 @@ export type PlayerKeyHandlers = {
   cycleRepeat: () => void;
   toggleQueue: () => void;
   toggleLyrics: () => void;
+  toggleTheater: () => void;
   toggleMute: () => void;
   stepVolume: (delta: number) => void;
   openHelp: () => void;
@@ -74,6 +75,8 @@ export function usePlayerKeys(
         handlers.current.toggleQueue();
       } else if (wanted === "lyrics") {
         handlers.current.toggleLyrics();
+      } else if (wanted === "theater") {
+        handlers.current.toggleTheater();
       }
     };
     window.addEventListener("keydown", pressed);

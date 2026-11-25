@@ -223,6 +223,7 @@ export type Shortcut =
   | "volume-down"
   | "lyrics"
   | "queue"
+  | "theater"
   | "shuffle"
   | "repeat"
   | "help";
@@ -243,6 +244,8 @@ export function shortcutFor(key: string, keys: { shift: boolean; other: boolean;
       return "lyrics";
     case "q":
       return "queue";
+    case "f":
+      return "theater";
     case "s":
       return "shuffle";
     case "r":

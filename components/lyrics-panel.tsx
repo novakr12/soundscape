@@ -1,17 +1,8 @@
 "use client";
 
-import { type RefObject, useEffect, useRef, useState } from "react";
-import { currentLine, type Lyrics } from "@/lib/lyrics-text";
+import { type RefObject, useEffect, useRef } from "react";
 import type { PlayerTrack } from "./player";
-
-const REFRESH_MS = 250;
-const PLAY_EVENTS = ["play", "playing", "pause", "ended", "emptied"];
-
-type State = { key: string; lyrics: Lyrics | null } | { key: string; loading: true } | { key: string; failed: true };
-
-function keyOf(track: PlayerTrack) {
-  return `${track.trackId}|${track.songId ?? ""}`;
-}
+import { useLyrics } from "./use-lyrics";
 
 export default function LyricsPanel({
   track,
@@ -28,34 +19,8 @@ export default function LyricsPanel({
   onSeek: (seconds: number) => void;
   onClose: () => void;
 }) {
-  const clock = useRef(time);
-  clock.current = time;
-  const [state, setState] = useState<State>({ key: keyOf(track), loading: true });
-  const [at, setAt] = useState(-1);
+  const { loading, failed, lyrics, activeLine: at } = useLyrics({ track, time, playing, audio });
   const list = useRef<HTMLOListElement>(null);
-  const key = keyOf(track);
-
-  useEffect(() => {
-    const params = new URLSearchParams({ trackId: track.trackId, title: track.title, artist: track.artist });
-    if (track.songId) params.set("songId", track.songId);
-    if (track.album) params.set("album", track.album);
-    const stop = new AbortController();
-    setState({ key, loading: true });
-    setAt(-1);
-    fetch(`/api/lyrics?${params}`, { signal: stop.signal })
-      .then((response) => (response.ok ? response.json() : Promise.reject(new Error(String(response.status)))))
-      .then((answer: { lyrics: Lyrics | null }) => {
-        if (!stop.signal.aborted) setState({ key, lyrics: answer.lyrics });
-      })
-      .catch(() => {
-        if (!stop.signal.aborted) setState({ key, failed: true });
-      });
-    return () => {
-      stop.abort();
-    };
-  }, [key, track.trackId, track.songId, track.title, track.artist, track.album]);
-
-  const lyrics = "lyrics" in state && state.key === key ? state.lyrics : null;
 
   useEffect(() => {
     const body = document.body;
@@ -71,40 +36,6 @@ export default function LyricsPanel({
       body.style.removeProperty("--player-height");
     };
   }, []);
-
-  useEffect(() => {
-    if (!lyrics?.synced) return;
-    let timer: ReturnType<typeof setInterval> | undefined;
-    const isPlaying = () => {
-      if (playing !== undefined) return playing;
-      const element = audio?.current;
-      return element ? !element.paused && !element.ended : true;
-    };
-    const tick = () => setAt(currentLine(lyrics.lines, clock.current()));
-    const arm = () => {
-      const wanted = !document.hidden && isPlaying();
-      if (wanted && timer === undefined) {
-        tick();
-        timer = setInterval(tick, REFRESH_MS);
-      } else if (!wanted && timer !== undefined) {
-        clearInterval(timer);
-        timer = undefined;
-      }
-    };
-    tick();
-    arm();
-    document.addEventListener("visibilitychange", arm);
-    if (audio) {
-      for (const event of PLAY_EVENTS) document.addEventListener(event, arm, true);
-    }
-    return () => {
-      if (timer !== undefined) clearInterval(timer);
-      document.removeEventListener("visibilitychange", arm);
-      if (audio) {
-        for (const event of PLAY_EVENTS) document.removeEventListener(event, arm, true);
-      }
-    };
-  }, [lyrics, playing, audio]);
 
   useEffect(() => {
     const box = list.current?.parentElement;
@@ -125,9 +56,9 @@ export default function LyricsPanel({
           Close
         </button>
       </div>
-      {"loading" in state || state.key !== key ? (
+      {loading ? (
         <p className="muted">Looking for lyrics…</p>
-      ) : "failed" in state ? (
+      ) : failed ? (
         <p className="muted">Lyrics couldn&apos;t be loaded right now.</p>
       ) : !lyrics ? (
         <p className="muted">No lyrics found for this song.</p>

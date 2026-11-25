@@ -44,6 +44,7 @@ const GROUPS: { heading: string; items: Entry[] }[] = [
   {
     heading: "Panels & navigation",
     items: [
+      { action: "Now playing view", keys: <kbd>F</kbd> },
       { action: "Toggle queue", keys: <kbd>Q</kbd> },
       { action: "Toggle lyrics", keys: <kbd>L</kbd> },
       {

@@ -16,8 +16,11 @@ import { stepVolume, toggleMuteVolume, VOLUME_KEY_STEP } from "@/lib/volume";
 import CoverPicture from "./cover-picture";
 import { clock, KindIcon, useLater, usePaced, useResetTimer } from "./devices";
 import { SongLink } from "./music-links";
+import NowPlayingTheater from "./now-playing-theater";
+import type { PlayerTrack } from "./player";
 import {
   DevicesIcon,
+  ExpandIcon,
   LyricsIcon,
   NextIcon,
   PauseIcon,
@@ -51,8 +54,12 @@ export default function RemoteBar({
   keys,
   showQueue,
   showLyrics,
+  showTheater,
+  theaterLyrics,
   onQueue,
   onLyrics,
+  onTheater,
+  onToggleTheaterLyrics,
   canLove,
 }: {
   device: Device;
@@ -65,8 +72,12 @@ export default function RemoteBar({
   keys: RefObject<(shortcut: Shortcut) => boolean>;
   showQueue: boolean;
   showLyrics: boolean;
+  showTheater: boolean;
+  theaterLyrics: boolean;
   onQueue: () => void;
   onLyrics: () => void;
+  onTheater: () => void;
+  onToggleTheaterLyrics: () => void;
   canLove: boolean;
 }) {
   const [asked, setAsked] = useState<{
@@ -201,6 +212,7 @@ export default function RemoteBar({
     }
     if (!track) return false;
     if (shortcut === "lyrics") onLyrics();
+    else if (shortcut === "theater") onTheater();
     else if (shortcut === "toggle") toggle();
     else if (shortcut === "next" || shortcut === "previous") skip(shortcut);
     else if (shortcut === "back" || shortcut === "forward")
@@ -231,189 +243,362 @@ export default function RemoteBar({
         : `/music?q=${encodeURIComponent(track.album)}`))
     : undefined;
 
+  const liveTime = () => {
+    if (seeking !== null) return seeking;
+    const current = shownPlayback(device, Date.now() + offset, guess, Date.now()).time;
+    return length > 0 ? Math.min(current, length) : current;
+  };
+
+  const theaterTrack: PlayerTrack | null = track
+    ? {
+        trackId: track.trackId,
+        title: track.title,
+        artist: track.artist,
+        ...(track.album ? { album: track.album } : {}),
+        ...(track.cover ? { cover: track.cover } : {}),
+        ...(track.songId ? { songId: track.songId } : {}),
+        albumHref,
+        artistHref,
+      }
+    : null;
+
   return (
-    <div
-      className={`${here ? "player" : "player remote-player"}${entrance}`}
-      data-remote={device.id}
-      data-here={here || undefined}
-    >
-      <div className="player-song">
-        {track?.cover && <CoverPicture src={track.cover} shown={48} />}
-        {here && track && <PlayerVisualizer playing={shown.playing} />}
-        <div className="now-playing">
-          {track ? (
-            <>
-              <strong title={track.title}>
-                <SongLink trackId={track.trackId} songId={track.songId ?? undefined}>
-                  {track.title}
-                </SongLink>
-              </strong>
-              <span className="muted" title={[track.artist, track.album].filter(Boolean).join(" · ")}>
-                <Link className="music-link" href={artistHref} prefetch={false}>
-                  {track.artist}
-                </Link>
-                {track.album && albumHref && (
-                  <>
-                    {" · "}
-                    <Link className="music-link" href={albumHref} prefetch={false}>
-                      {track.album}
-                    </Link>
-                  </>
-                )}
+    <>
+      <div
+        className={`${here ? "player" : "player remote-player"}${entrance}`}
+        data-remote={device.id}
+        data-here={here || undefined}
+      >
+        <div className="player-song">
+          {track?.cover && (
+            <button
+              type="button"
+              className="player-cover-button"
+              aria-label="Open now playing view"
+              title="Now playing (F)"
+              onClick={onTheater}
+            >
+              <CoverPicture src={track.cover} shown={48} />
+            </button>
+          )}
+          {here && track && <PlayerVisualizer playing={shown.playing} paused={showTheater} />}
+          <div className="now-playing">
+            {track ? (
+              <>
+                <strong title={track.title}>
+                  <SongLink trackId={track.trackId} songId={track.songId ?? undefined}>
+                    {track.title}
+                  </SongLink>
+                </strong>
+                <span className="muted" title={[track.artist, track.album].filter(Boolean).join(" · ")}>
+                  <Link className="music-link" href={artistHref} prefetch={false}>
+                    {track.artist}
+                  </Link>
+                  {track.album && albumHref && (
+                    <>
+                      {" · "}
+                      <Link className="music-link" href={albumHref} prefetch={false}>
+                        {track.album}
+                      </Link>
+                    </>
+                  )}
+                </span>
+              </>
+            ) : (
+              <strong>Nothing playing</strong>
+            )}
+            {!here && (
+              <span className="remote-where">
+                <KindIcon kind={device.kind} />
+                <span>Playing on {device.name}</span>
               </span>
-            </>
-          ) : (
-            <strong>Nothing playing</strong>
-          )}
+            )}
+          </div>
+          {track && <PlayerLove artist={track.artist} title={track.title} enabled={canLove} />}
+        </div>
+        <div className="player-center">
+          <div className="player-skip">
+            {shuffle !== null && (
+              <button
+                type="button"
+                className="icon-button player-toggle"
+                data-player="shuffle"
+                aria-label={`Shuffle on ${device.name}`}
+                aria-pressed={shuffle}
+                title={shuffle ? "Shuffle is on (S)" : "Shuffle is off (S)"}
+                onClick={toggleShuffle}
+              >
+                <ShuffleIcon size={18} />
+              </button>
+            )}
+            <button
+              type="button"
+              className="icon-button"
+              data-player="previous"
+              aria-label={`Previous song on ${device.name}`}
+              title="Previous song (Shift+←)"
+              disabled={!track}
+              onClick={() => skip("previous")}
+            >
+              <PreviousIcon />
+            </button>
+            <button
+              type="button"
+              className="player-play"
+              data-player="play"
+              aria-label={shown.playing ? `Pause on ${device.name}` : `Play on ${device.name}`}
+              disabled={!track}
+              onClick={toggle}
+            >
+              {shown.playing ? <PauseIcon size={22} /> : <PlayIcon size={22} />}
+            </button>
+            <button
+              type="button"
+              className="icon-button"
+              data-player="next"
+              aria-label={`Next song on ${device.name}`}
+              title="Next song (Shift+→)"
+              disabled={!track}
+              onClick={() => skip("next")}
+            >
+              <NextIcon />
+            </button>
+            {repeat !== null && (
+              <button
+                type="button"
+                className="icon-button player-toggle"
+                data-player="repeat"
+                data-repeat={repeat}
+                aria-label={`Repeat on ${device.name}: ${repeat}`}
+                aria-pressed={repeat !== "off"}
+                title={`${REPEAT_LABELS[repeat]} (R)`}
+                onClick={cycleRepeat}
+              >
+                <RepeatIcon size={18} one={repeat === "one"} />
+              </button>
+            )}
+          </div>
+          <div className="player-seek">
+            <span className="player-time">{clock(at)}</span>
+            <input
+              type="range"
+              min={0}
+              max={length || 1}
+              step="any"
+              value={at}
+              disabled={length === 0}
+              aria-label={`Seek on ${device.name}`}
+              aria-valuetext={`${clock(at)} of ${clock(length)}`}
+              style={{ "--fill": `${length > 0 ? (at / length) * 100 : 0}%` } as React.CSSProperties}
+              onChange={(event) => {
+                const value = Number(event.target.value);
+                setSeeking(value);
+                seekLater(value);
+              }}
+            />
+            <span className="player-time">{clock(length)}</span>
+          </div>
+        </div>
+        <div className="player-side">
           {!here && (
-            <span className="remote-where">
-              <KindIcon kind={device.kind} />
-              <span>Playing on {device.name}</span>
-            </span>
+            <button type="button" className="secondary remote-here" onClick={onPlayHere} disabled={!track}>
+              Play here
+            </button>
           )}
-        </div>
-        {track && <PlayerLove artist={track.artist} title={track.title} enabled={canLove} />}
-      </div>
-      <div className="player-center">
-        <div className="player-skip">
-          {shuffle !== null && (
+          {state.upNext.length > 0 && (
             <button
               type="button"
               className="icon-button player-toggle"
-              data-player="shuffle"
-              aria-label={`Shuffle on ${device.name}`}
-              aria-pressed={shuffle}
-              title={shuffle ? "Shuffle is on (S)" : "Shuffle is off (S)"}
-              onClick={toggleShuffle}
+              data-player="queue"
+              aria-label={`Queue on ${device.name}`}
+              aria-expanded={showQueue}
+              aria-pressed={showQueue}
+              title="Queue (Q)"
+              onClick={onQueue}
             >
-              <ShuffleIcon size={18} />
+              <QueueIcon size={18} />
+            </button>
+          )}
+          {track && (
+            <button
+              type="button"
+              className="icon-button player-toggle"
+              data-player="lyrics"
+              aria-label="Lyrics"
+              aria-expanded={showLyrics}
+              aria-pressed={showLyrics}
+              title="Lyrics (L)"
+              onClick={onLyrics}
+            >
+              <LyricsIcon size={18} />
+            </button>
+          )}
+          {track && (
+            <button
+              type="button"
+              className="icon-button player-toggle"
+              data-player="theater"
+              aria-label="Now playing view"
+              aria-expanded={showTheater}
+              aria-pressed={showTheater}
+              title="Now playing (F)"
+              onClick={onTheater}
+            >
+              <ExpandIcon size={18} />
             </button>
           )}
           <button
             type="button"
-            className="icon-button"
-            data-player="previous"
-            aria-label={`Previous song on ${device.name}`}
-            title="Previous song (Shift+←)"
-            disabled={!track}
-            onClick={() => skip("previous")}
+            className="icon-button player-toggle active"
+            data-player="devices"
+            aria-label="Devices"
+            aria-expanded={showDevices}
+            aria-pressed={showDevices}
+            title="Devices"
+            onClick={onDevices}
           >
-            <PreviousIcon />
+            <DevicesIcon size={18} />
           </button>
-          <button
-            type="button"
-            className="player-play"
-            data-player="play"
-            aria-label={shown.playing ? `Pause on ${device.name}` : `Play on ${device.name}`}
-            disabled={!track}
-            onClick={toggle}
-          >
-            {shown.playing ? <PauseIcon size={22} /> : <PlayIcon size={22} />}
-          </button>
-          <button
-            type="button"
-            className="icon-button"
-            data-player="next"
-            aria-label={`Next song on ${device.name}`}
-            title="Next song (Shift+→)"
-            disabled={!track}
-            onClick={() => skip("next")}
-          >
-            <NextIcon />
-          </button>
-          {repeat !== null && (
-            <button
-              type="button"
-              className="icon-button player-toggle"
-              data-player="repeat"
-              data-repeat={repeat}
-              aria-label={`Repeat on ${device.name}: ${repeat}`}
-              aria-pressed={repeat !== "off"}
-              title={`${REPEAT_LABELS[repeat]} (R)`}
-              onClick={cycleRepeat}
-            >
-              <RepeatIcon size={18} one={repeat === "one"} />
-            </button>
-          )}
-        </div>
-        <div className="player-seek">
-          <span className="player-time">{clock(at)}</span>
-          <input
-            type="range"
-            min={0}
-            max={length || 1}
-            step="any"
-            value={at}
-            disabled={length === 0}
-            aria-label={`Seek on ${device.name}`}
-            aria-valuetext={`${clock(at)} of ${clock(length)}`}
-            style={{ "--fill": `${length > 0 ? (at / length) * 100 : 0}%` } as React.CSSProperties}
-            onChange={(event) => {
-              const value = Number(event.target.value);
-              setSeeking(value);
-              seekLater(value);
-            }}
+          {track && (here || device.kind !== "android") && <SleepTimer sleep={sleep} onChoose={chooseSleep} />}
+          <VolumeBar
+            value={shownVolume}
+            onChange={(value) => applyVolume(value)}
+            onToggleMute={toggleMute}
+            sliderLabel={`Volume on ${device.name}`}
+            muteLabel={`Mute ${device.name}`}
+            unmuteLabel={`Unmute ${device.name}`}
+            peekKey={volumePeek}
           />
-          <span className="player-time">{clock(length)}</span>
         </div>
       </div>
-      <div className="player-side">
-        {!here && (
-          <button type="button" className="secondary remote-here" onClick={onPlayHere} disabled={!track}>
-            Play here
-          </button>
-        )}
-        {state.upNext.length > 0 && (
-          <button
-            type="button"
-            className="icon-button player-toggle"
-            data-player="queue"
-            aria-label={`Queue on ${device.name}`}
-            aria-expanded={showQueue}
-            aria-pressed={showQueue}
-            title="Queue (Q)"
-            onClick={onQueue}
-          >
-            <QueueIcon size={18} />
-          </button>
-        )}
-        {track && (
-          <button
-            type="button"
-            className="icon-button player-toggle"
-            data-player="lyrics"
-            aria-label="Lyrics"
-            aria-expanded={showLyrics}
-            aria-pressed={showLyrics}
-            title="Lyrics (L)"
-            onClick={onLyrics}
-          >
-            <LyricsIcon size={18} />
-          </button>
-        )}
-        <button
-          type="button"
-          className="icon-button player-toggle active"
-          data-player="devices"
-          aria-label="Devices"
-          aria-expanded={showDevices}
-          aria-pressed={showDevices}
-          title="Devices"
-          onClick={onDevices}
-        >
-          <DevicesIcon size={18} />
-        </button>
-        {track && (here || device.kind !== "android") && <SleepTimer sleep={sleep} onChoose={chooseSleep} />}
-        <VolumeBar
-          value={shownVolume}
-          onChange={(value) => applyVolume(value)}
-          onToggleMute={toggleMute}
-          sliderLabel={`Volume on ${device.name}`}
-          muteLabel={`Mute ${device.name}`}
-          unmuteLabel={`Unmute ${device.name}`}
-          peekKey={volumePeek}
+      {showTheater && theaterTrack && (
+        <NowPlayingTheater
+          track={theaterTrack}
+          contextLabel={here ? undefined : `Playing on ${device.name}`}
+          playing={shown.playing}
+          time={liveTime}
+          onSeek={(seconds) => {
+            send({ do: "seek", time: seconds });
+            setGuess({ playing: shown.playing, time: seconds, since: Date.now() });
+          }}
+          onClose={onTheater}
+          showLyrics={theaterLyrics}
+          onToggleLyrics={onToggleTheaterLyrics}
+          canLove={canLove}
+          visualizer={
+            here ? <PlayerVisualizer playing={shown.playing} className="theater-visualizer" dotLift={24} /> : undefined
+          }
+          seek={
+            <div className="player-seek">
+              <span className="player-time">{clock(at)}</span>
+              <input
+                type="range"
+                min={0}
+                max={length || 1}
+                step="any"
+                value={at}
+                disabled={length === 0}
+                aria-label={`Seek on ${device.name}`}
+                aria-valuetext={`${clock(at)} of ${clock(length)}`}
+                style={{ "--fill": `${length > 0 ? (at / length) * 100 : 0}%` } as React.CSSProperties}
+                onChange={(event) => {
+                  const value = Number(event.target.value);
+                  setSeeking(value);
+                  seekLater(value);
+                }}
+              />
+              <span className="player-time">{clock(length)}</span>
+            </div>
+          }
+          transport={
+            <div className="player-skip">
+              {shuffle !== null && (
+                <button
+                  type="button"
+                  className="icon-button player-toggle"
+                  aria-label={`Shuffle on ${device.name}`}
+                  aria-pressed={shuffle}
+                  title={shuffle ? "Shuffle is on (S)" : "Shuffle is off (S)"}
+                  onClick={toggleShuffle}
+                >
+                  <ShuffleIcon size={18} />
+                </button>
+              )}
+              <button
+                type="button"
+                className="icon-button"
+                aria-label={`Previous song on ${device.name}`}
+                title="Previous song (Shift+←)"
+                onClick={() => skip("previous")}
+              >
+                <PreviousIcon />
+              </button>
+              <button
+                type="button"
+                className="player-play"
+                aria-label={shown.playing ? `Pause on ${device.name}` : `Play on ${device.name}`}
+                onClick={toggle}
+              >
+                {shown.playing ? <PauseIcon size={22} /> : <PlayIcon size={22} />}
+              </button>
+              <button
+                type="button"
+                className="icon-button"
+                aria-label={`Next song on ${device.name}`}
+                title="Next song (Shift+→)"
+                onClick={() => skip("next")}
+              >
+                <NextIcon />
+              </button>
+              {repeat !== null && (
+                <button
+                  type="button"
+                  className="icon-button player-toggle"
+                  data-repeat={repeat}
+                  aria-label={`Repeat on ${device.name}: ${repeat}`}
+                  aria-pressed={repeat !== "off"}
+                  title={`${REPEAT_LABELS[repeat]} (R)`}
+                  onClick={cycleRepeat}
+                >
+                  <RepeatIcon size={18} one={repeat === "one"} />
+                </button>
+              )}
+            </div>
+          }
+          extras={
+            <>
+              <div className="theater-extra-buttons">
+                {!here && (
+                  <button type="button" className="secondary remote-here" onClick={onPlayHere}>
+                    Play here
+                  </button>
+                )}
+                {state.upNext.length > 0 && (
+                  <button
+                    type="button"
+                    className="icon-button player-toggle"
+                    aria-label={`Queue on ${device.name}`}
+                    title="Queue (Q)"
+                    onClick={onQueue}
+                  >
+                    <QueueIcon size={18} />
+                  </button>
+                )}
+                {(here || device.kind !== "android") && <SleepTimer sleep={sleep} onChoose={chooseSleep} />}
+              </div>
+              <VolumeBar
+                value={shownVolume}
+                onChange={(value) => applyVolume(value)}
+                onToggleMute={toggleMute}
+                sliderLabel={`Volume on ${device.name}`}
+                muteLabel={`Mute ${device.name}`}
+                unmuteLabel={`Unmute ${device.name}`}
+                peekKey={volumePeek}
+              />
+            </>
+          }
         />
-      </div>
-    </div>
+      )}
+    </>
   );
 }

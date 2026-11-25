@@ -68,9 +68,9 @@ export function glide(shown: number[], target: readonly number[], elapsedMs: num
   return moving;
 }
 
-export function barTransform(style: VisualizerStyle, level: number) {
+export function barTransform(style: VisualizerStyle, level: number, dotLift = 14) {
   const value = Number.isFinite(level) ? Math.min(1, Math.max(REST, level)) : REST;
   if (style !== "dots") return `scaleY(${value})`;
   const lift = value - REST;
-  return `translateY(${(-lift * 14).toFixed(1)}px) scale(${(0.85 + lift * 0.5).toFixed(2)})`;
+  return `translateY(${(-lift * dotLift).toFixed(1)}px) scale(${(0.85 + lift * 0.5).toFixed(2)})`;
 }

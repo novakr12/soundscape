@@ -58,12 +58,16 @@ import type { RadioMore, RadioSeed } from "@/lib/radio";
 import { DevicesPanel, type LocalPlayer, PlayingElsewhere, useDeviceLink } from "./devices";
 import { type PartyControls, useParty } from "./listening-party";
 import LyricsPanel from "./lyrics-panel";
+import NowPlayingTheater from "./now-playing-theater";
 import { PlayerBar, QueuePanel } from "./player-bar";
+import { NextIcon, PreviousIcon, QueueIcon, RepeatIcon, ShuffleIcon } from "./player-icons";
 import { type PlayerKeyHandlers, usePlayerKeys } from "./player-keys";
+import { PlayerVisualizer, PlayPauseButton, SeekBar } from "./player-transport";
 import RemoteBar from "./remote-bar";
 import ShortcutsDialog from "./shortcuts-dialog";
-import type { Sleep } from "./sleep-timer";
+import SleepTimer, { type Sleep } from "./sleep-timer";
 import { useMediaSession } from "./use-media-session";
+import VolumeControl from "./volume-control";
 
 export type PlayerTrack = {
   trackId: string;
@@ -296,6 +300,10 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
   const [showQueue, setShowQueue] = useState(false);
   const [showLyrics, setShowLyrics] = useState(false);
   const [showDevices, setShowDevices] = useState(false);
+  const [showTheater, setShowTheater] = useState(false);
+  const showTheaterRef = useRef(false);
+  showTheaterRef.current = showTheater;
+  const [theaterLyrics, setTheaterLyrics] = useState(true);
   const [showShortcuts, setShowShortcuts] = useState(false);
   const actions = useRef<Actions>(null as unknown as Actions);
   const steady = useMemo<Actions>(
@@ -336,6 +344,7 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
     cycleRepeat: () => {},
     toggleQueue: () => {},
     toggleLyrics: () => {},
+    toggleTheater: () => {},
     toggleMute: () => {},
     stepVolume: () => {},
     openHelp: () => {},
@@ -1560,6 +1569,7 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
     cycleRepeat,
     toggleQueue: () => togglePanel("queue"),
     toggleLyrics: () => togglePanel("lyrics"),
+    toggleTheater: () => togglePanel("theater"),
     toggleMute: () => window.dispatchEvent(new Event("soundscape-toggle-mute")),
     stepVolume: (delta) => window.dispatchEvent(new CustomEvent("soundscape-step-volume", { detail: delta })),
     openHelp: () => setShowShortcuts(true),
@@ -1599,11 +1609,21 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
   );
   const elsewhere = link.devices.find((device) => device.state.playing) ?? null;
   const hasNext = position + 1 < queue.length || (repeat === "all" && queue.length > 1);
+  const hasTheaterTrack = current !== null || Boolean(followed?.state.track);
 
-  function togglePanel(panel: "queue" | "lyrics" | "devices") {
+  useEffect(() => {
+    if (!hasTheaterTrack) setShowTheater(false);
+  }, [hasTheaterTrack]);
+
+  function togglePanel(panel: "queue" | "lyrics" | "devices" | "theater") {
+    if (panel === "lyrics" && showTheaterRef.current) {
+      setTheaterLyrics((open) => !open);
+      return;
+    }
     setShowQueue((open) => (panel === "queue" ? !open : false));
     setShowLyrics((open) => (panel === "lyrics" ? !open : false));
     setShowDevices((open) => (panel === "devices" ? !open : false));
+    setShowTheater((open) => (panel === "theater" ? !open : false));
   }
 
   function start(track: PlayerTrack, play = true, at = 0) {
@@ -1787,8 +1807,12 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
               keys={remoteKeys}
               showQueue={showQueue}
               showLyrics={showLyrics}
+              showTheater={showTheater}
+              theaterLyrics={theaterLyrics}
               onQueue={() => togglePanel("queue")}
               onLyrics={() => togglePanel("lyrics")}
+              onTheater={() => togglePanel("theater")}
+              onToggleTheaterLyrics={() => setTheaterLyrics((open) => !open)}
               showDevices={showDevices}
               onDevices={() => togglePanel("devices")}
               canLove={username !== null}
@@ -1869,6 +1893,95 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
               onSavePlaylist={username !== null ? (name) => saveQueuePlaylist(name, queue) : undefined}
             />
           )}
+          {!followed && current && showTheater && (
+            <NowPlayingTheater
+              track={current}
+              contextLabel={
+                [!full && "30-second preview", queue.length > 1 && `${position + 1} of ${queue.length}`]
+                  .filter(Boolean)
+                  .join(" · ") || "Now playing"
+              }
+              audio={activeAudio}
+              time={() => audioRef.current?.currentTime ?? 0}
+              onSeek={(seconds) => {
+                if (audioRef.current) audioRef.current.currentTime = seconds;
+              }}
+              onClose={() => setShowTheater(false)}
+              showLyrics={theaterLyrics}
+              onToggleLyrics={() => setTheaterLyrics((open) => !open)}
+              canLove={username !== null}
+              visualizer={<PlayerVisualizer audio={audioRef} className="theater-visualizer" dotLift={24} />}
+              seek={<SeekBar audio={audioRef} known={current.duration} />}
+              transport={
+                <div className="player-skip">
+                  <button
+                    type="button"
+                    className="icon-button player-toggle"
+                    aria-label="Shuffle"
+                    aria-pressed={shuffle}
+                    title={shuffle ? "Shuffle is on (S)" : "Shuffle is off (S)"}
+                    onClick={toggleShuffle}
+                  >
+                    <ShuffleIcon size={18} />
+                  </button>
+                  <button
+                    type="button"
+                    className="icon-button"
+                    aria-label="Previous song"
+                    title="Previous song (Shift+←)"
+                    onClick={previousGuarded}
+                  >
+                    <PreviousIcon />
+                  </button>
+                  <PlayPauseButton audio={audioRef} />
+                  <button
+                    type="button"
+                    className="icon-button"
+                    aria-label="Next song"
+                    title="Next song (Shift+→)"
+                    onClick={nextGuarded}
+                    disabled={!hasNext}
+                  >
+                    <NextIcon />
+                  </button>
+                  <button
+                    type="button"
+                    className="icon-button player-toggle"
+                    data-repeat={repeat}
+                    aria-label={
+                      repeat === "off"
+                        ? "Repeat is off"
+                        : repeat === "all"
+                          ? "Repeating the queue"
+                          : "Repeating this song"
+                    }
+                    aria-pressed={repeat !== "off"}
+                    title="Cycle repeat (R)"
+                    onClick={cycleRepeat}
+                  >
+                    <RepeatIcon size={18} one={repeat === "one"} />
+                  </button>
+                </div>
+              }
+              extras={
+                <>
+                  <div className="theater-extra-buttons">
+                    <button
+                      type="button"
+                      className="icon-button player-toggle"
+                      aria-label="Queue"
+                      title="Queue (Q)"
+                      onClick={() => togglePanel("queue")}
+                    >
+                      <QueueIcon size={18} />
+                    </button>
+                    <SleepTimer sleep={sleep} onChoose={chooseSleep} />
+                  </div>
+                  <VolumeControl audio={activeAudio} level={(full ? level : 1) * fadeIn} />
+                </>
+              }
+            />
+          )}
           <PlayerBar
             away={followed !== null}
             current={current}
@@ -1893,6 +2006,8 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
             onQueue={() => togglePanel("queue")}
             showLyrics={showLyrics}
             onLyrics={() => togglePanel("lyrics")}
+            showTheater={showTheater}
+            onTheater={() => togglePanel("theater")}
             showDevices={showDevices}
             elsewhere={elsewhere !== null}
             onDevices={() => togglePanel("devices")}

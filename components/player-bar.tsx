@@ -8,7 +8,16 @@ import { formatQueueSaved, MAX_PLAYLIST_NAME, type QueueSaveResult } from "@/lib
 import CoverPicture from "./cover-picture";
 import { SongLink } from "./music-links";
 import type { PlayerTrack } from "./player";
-import { DevicesIcon, LyricsIcon, NextIcon, PreviousIcon, QueueIcon, RepeatIcon, ShuffleIcon } from "./player-icons";
+import {
+  DevicesIcon,
+  ExpandIcon,
+  LyricsIcon,
+  NextIcon,
+  PreviousIcon,
+  QueueIcon,
+  RepeatIcon,
+  ShuffleIcon,
+} from "./player-icons";
 import PlayerLove from "./player-love";
 import { PlayerVisualizer, PlayPauseButton, SeekBar } from "./player-transport";
 import SleepTimer, { type Sleep } from "./sleep-timer";
@@ -232,7 +241,9 @@ type PlayerBarProps = {
   hasNext: boolean;
   showQueue: boolean;
   showLyrics: boolean;
+  showTheater: boolean;
   onLyrics: () => void;
+  onTheater: () => void;
   audio: RefObject<HTMLAudioElement | null>;
   level: number;
   sleep: Sleep;
@@ -262,7 +273,9 @@ export function PlayerBar({
   hasNext,
   showQueue,
   showLyrics,
+  showTheater,
   onLyrics,
+  onTheater,
   audio,
   level,
   sleep,
@@ -297,8 +310,18 @@ export function PlayerBar({
   return (
     <div className={`player${entrance}`} hidden={!current || away}>
       <div className="player-song">
-        {current?.cover && <CoverPicture src={current.cover} shown={48} />}
-        {current && <PlayerVisualizer audio={live} />}
+        {current?.cover && (
+          <button
+            type="button"
+            className="player-cover-button"
+            aria-label="Open now playing view"
+            title="Now playing (F)"
+            onClick={onTheater}
+          >
+            <CoverPicture src={current.cover} shown={48} />
+          </button>
+        )}
+        {current && <PlayerVisualizer audio={live} paused={showTheater} />}
         <div className="now-playing">
           {current && (
             <>
@@ -412,6 +435,18 @@ export function PlayerBar({
           onClick={onLyrics}
         >
           <LyricsIcon size={18} />
+        </button>
+        <button
+          type="button"
+          className="icon-button player-toggle"
+          data-player="theater"
+          aria-label="Now playing view"
+          aria-expanded={showTheater}
+          aria-pressed={showTheater}
+          title="Now playing (F)"
+          onClick={onTheater}
+        >
+          <ExpandIcon size={18} />
         </button>
         <button
           type="button"

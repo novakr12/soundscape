@@ -177,3 +177,31 @@ export function QueueAddIcon(props: IconProps) {
     </Line>
   );
 }
+
+export function ExpandIcon(props: IconProps) {
+  return (
+    <Line {...props}>
+      <path d="M15 4h5v5M9 20H4v-5M20 4l-6 6M4 20l6-6" />
+    </Line>
+  );
+}
+
+export function FullscreenIcon({ active = false, ...props }: IconProps & { active?: boolean }) {
+  return (
+    <Line {...props}>
+      {active ? (
+        <path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5" />
+      ) : (
+        <path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" />
+      )}
+    </Line>
+  );
+}
+
+export function CloseIcon(props: IconProps) {
+  return (
+    <Line {...props}>
+      <path d="M6 6l12 12M18 6 6 18" />
+    </Line>
+  );
+}

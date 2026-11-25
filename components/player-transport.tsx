@@ -137,6 +137,8 @@ type Tap = {
 
 let sharedContext: AudioContext | null = null;
 const taps = new WeakMap<HTMLAudioElement, Tap>();
+let webWatchers = 0;
+let appWatchers = 0;
 
 function canTap() {
   return "captureStream" in HTMLMediaElement.prototype && typeof AudioContext !== "undefined";
@@ -178,6 +180,7 @@ function watchElement(element: HTMLAudioElement, options: PlayerOptions, paint: 
   sharedContext ??= new AudioContext();
   const context = sharedContext;
   const wake = () => context.resume().catch(() => {});
+  webWatchers++;
   wake();
   document.addEventListener("pointerdown", wake);
   const bins = new Uint8Array(SPECTRUM_BINS);
@@ -204,7 +207,8 @@ function watchElement(element: HTMLAudioElement, options: PlayerOptions, paint: 
   return () => {
     cancelAnimationFrame(frame);
     document.removeEventListener("pointerdown", wake);
-    context.suspend().catch(() => {});
+    webWatchers = Math.max(0, webWatchers - 1);
+    if (webWatchers === 0) context.suspend().catch(() => {});
   };
 }
 
@@ -228,20 +232,28 @@ function watchApp(options: PlayerOptions, paint: (levels: number[]) => void) {
   };
   window.addEventListener("soundscape-spectrum", onLevels);
   window.addEventListener("soundscape-spectrum-bins", onBins);
-  ask(true);
+  appWatchers++;
+  if (appWatchers === 1) ask(true);
   return () => {
     window.removeEventListener("soundscape-spectrum", onLevels);
     window.removeEventListener("soundscape-spectrum-bins", onBins);
-    ask(false);
+    appWatchers = Math.max(0, appWatchers - 1);
+    if (appWatchers === 0) ask(false);
   };
 }
 
 export function PlayerVisualizer({
   audio,
   playing = false,
+  className,
+  dotLift = 14,
+  paused = false,
 }: {
   audio?: RefObject<HTMLAudioElement | null>;
   playing?: boolean;
+  className?: string;
+  dotLift?: number;
+  paused?: boolean;
 }) {
   const [options, setOptions] = useState<PlayerOptions>(DEFAULT_OPTIONS);
   const [element, setElement] = useState<HTMLAudioElement | null>(null);
@@ -270,7 +282,7 @@ export function PlayerVisualizer({
   }, [audio]);
 
   const shown = readable && options.visualizer;
-  const active = audio ? element !== null : playing;
+  const active = !paused && (audio ? element !== null : playing);
 
   useEffect(() => {
     if (!shown || !active || still) return;
@@ -282,7 +294,7 @@ export function PlayerVisualizer({
     const draw = (now: number) => {
       const moving = glide(shownLevels, target, last ? Math.min(now - last, 100) : 16);
       bars.forEach((bar, at) => {
-        bar.style.transform = barTransform(options.visualizerStyle, shownLevels[at]);
+        bar.style.transform = barTransform(options.visualizerStyle, shownLevels[at], dotLift);
       });
       last = now;
       frame = moving ? requestAnimationFrame(draw) : 0;
@@ -298,13 +310,13 @@ export function PlayerVisualizer({
       cancelAnimationFrame(frame);
       for (const bar of bars) bar.style.transform = "";
     };
-  }, [shown, active, still, element, options]);
+  }, [shown, active, still, element, options, dotLift]);
 
   if (!shown) return null;
   return (
     <span
       ref={holder}
-      className="player-visualizer"
+      className={className ? `player-visualizer ${className}` : "player-visualizer"}
       data-playing={active || undefined}
       data-style={options.visualizerStyle}
       aria-hidden="true"

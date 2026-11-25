@@ -59,6 +59,7 @@ describe("visualizer", () => {
     assert.equal(barTransform("bars", 0.5), "scaleY(0.5)");
     assert.equal(barTransform("wave", 4), "scaleY(1)");
     assert.match(barTransform("dots", 1), /^translateY\(-11\.9px\)/);
+    assert.match(barTransform("dots", 1, 24), /^translateY\(-20\.4px\)/);
     assert.equal(barTransform("bars", Number.NaN), `scaleY(${REST})`);
   });
 });

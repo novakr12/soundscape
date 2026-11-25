@@ -155,6 +155,8 @@ describe("keyboard shortcuts", () => {
     assert.equal(shortcutFor("L", plain), "lyrics");
     assert.equal(shortcutFor("q", plain), "queue");
     assert.equal(shortcutFor("Q", plain), "queue");
+    assert.equal(shortcutFor("f", plain), "theater");
+    assert.equal(shortcutFor("F", plain), "theater");
     assert.equal(shortcutFor("s", plain), "shuffle");
     assert.equal(shortcutFor("S", plain), "shuffle");
     assert.equal(shortcutFor("r", plain), "repeat");
@@ -162,6 +164,7 @@ describe("keyboard shortcuts", () => {
     assert.equal(shortcutFor("?", { ...plain, shift: true }), "help");
     assert.equal(shortcutFor("?", plain), "help");
     assert.equal(shortcutFor("m", { ...plain, shift: true }), null);
+    assert.equal(shortcutFor("f", { ...plain, shift: true }), null);
     assert.equal(shortcutFor("a", plain), null);
   });
 
@@ -170,6 +173,7 @@ describe("keyboard shortcuts", () => {
     assert.equal(shortcutFor("ArrowLeft", { ...plain, other: true }), null);
     assert.equal(shortcutFor("ArrowUp", { shift: true, other: true, repeat: false }), null);
     assert.equal(shortcutFor("m", { ...plain, other: true }), null);
+    assert.equal(shortcutFor("f", { ...plain, other: true }), null);
     assert.equal(shortcutFor("?", { shift: true, other: true, repeat: false }), null);
   });
 
@@ -178,6 +182,7 @@ describe("keyboard shortcuts", () => {
     assert.equal(shortcutFor("ArrowRight", { shift: true, other: false, repeat: true }), null);
     assert.equal(shortcutFor("m", { ...plain, repeat: true }), null);
     assert.equal(shortcutFor("l", { ...plain, repeat: true }), null);
+    assert.equal(shortcutFor("f", { ...plain, repeat: true }), null);
     assert.equal(shortcutFor("?", { shift: true, other: false, repeat: true }), null);
     assert.equal(shortcutFor("ArrowRight", { ...plain, repeat: true }), "forward");
     assert.equal(shortcutFor("ArrowUp", { shift: true, other: false, repeat: true }), "volume-up");
