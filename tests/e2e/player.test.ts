@@ -3,6 +3,7 @@ import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { after, before, describe, it } from "node:test";
 import { type Browser, chromium, type Page } from "playwright";
+import { volumeGain } from "../../lib/volume";
 
 const BASE_URL = process.env.BASE_URL ?? "http://localhost:3000";
 const USERNAME = `e2eplayer${Date.now().toString(36)}`;
@@ -419,23 +420,25 @@ describe("player", () => {
   it("levels the volume with the album's ReplayGain and stops when turned off", async () => {
     const volume = () => page.evaluate(() => document.querySelector<HTMLAudioElement>(".player audio")?.volume ?? -1);
     const albumLevel = 10 ** (-4 / 20);
+    const base = volumeGain(0.8);
     await page.goto(`${BASE_URL}/settings`, { waitUntil: "domcontentloaded" });
     await waitForSong("Third Rail");
     await page.waitForFunction((wanted) => {
       const audio = document.querySelector<HTMLAudioElement>(".player audio");
       return audio && Math.abs(audio.volume - wanted) < 0.01;
-    }, 0.8 * albumLevel);
+    }, base * albumLevel);
     const levelling = page.getByLabel("Level the volume between songs");
     await levelling.uncheck();
     await page.waitForFunction(
-      () => Math.abs((document.querySelector<HTMLAudioElement>(".player audio")?.volume ?? 0) - 0.8) < 0.01,
+      (wanted) => Math.abs((document.querySelector<HTMLAudioElement>(".player audio")?.volume ?? 0) - wanted) < 0.01,
+      base,
     );
     await levelling.check();
     await page.waitForFunction((wanted) => {
       const audio = document.querySelector<HTMLAudioElement>(".player audio");
       return audio && Math.abs(audio.volume - wanted) < 0.01;
-    }, 0.8 * albumLevel);
-    assert.ok(Math.abs((await volume()) - 0.8 * albumLevel) < 0.01);
+    }, base * albumLevel);
+    assert.ok(Math.abs((await volume()) - base * albumLevel) < 0.01);
     const crossfade = page.getByLabel("Crossfade between songs");
     await crossfade.selectOption("6");
     await page.reload({ waitUntil: "domcontentloaded" });

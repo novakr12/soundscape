@@ -17,6 +17,7 @@ import {
   nowPlayingLine,
   timeNow,
 } from "@/lib/devices";
+import { VOLUME_STEP } from "@/lib/volume";
 import { type PartyControls, PartySection } from "./listening-party";
 import { NextIcon, PauseIcon, PlayIcon, PreviousIcon } from "./player-icons";
 import { useNow } from "./use-now";
@@ -363,9 +364,10 @@ function RemoteDevice({
               className="device-volume"
               min={0}
               max={1}
-              step={0.05}
+              step={VOLUME_STEP}
               value={shownVolume}
               aria-label={`Volume on ${device.name}`}
+              aria-valuetext={`${Math.round(shownVolume * 100)}%`}
               style={{ "--fill": `${Math.round(shownVolume * 100)}%` } as React.CSSProperties}
               onChange={(event) => {
                 const value = Number(event.target.value);

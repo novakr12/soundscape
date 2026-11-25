@@ -12,6 +12,7 @@ import {
   shownPlayback,
 } from "@/lib/devices";
 import { nextRepeat, SEEK_STEP_SECONDS } from "@/lib/play-queue";
+import { VOLUME_STEP } from "@/lib/volume";
 import CoverPicture from "./cover-picture";
 import { clock, KindIcon, useLater, useResetTimer } from "./devices";
 import { SongLink } from "./music-links";
@@ -325,9 +326,10 @@ export default function RemoteBar({
             type="range"
             min={0}
             max={1}
-            step={0.05}
+            step={VOLUME_STEP}
             value={shownVolume}
             aria-label={`Volume on ${device.name}`}
+            aria-valuetext={`${Math.round(shownVolume * 100)}%`}
             style={{ "--fill": `${Math.round(shownVolume * 100)}%` } as React.CSSProperties}
             onChange={(event) => {
               const value = Number(event.target.value);

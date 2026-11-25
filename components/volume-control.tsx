@@ -1,6 +1,7 @@
 "use client";
 
 import { type RefObject, useEffect, useState } from "react";
+import { audioVolume, VOLUME_STEP } from "@/lib/volume";
 
 const KEY = "soundscape-volume";
 
@@ -72,7 +73,7 @@ export default function VolumeControl({ audio, level }: { audio: RefObject<HTMLA
   useEffect(() => {
     if (!ready) return;
     if (audio.current) {
-      audio.current.volume = volume * level;
+      audio.current.volume = audioVolume(volume, level);
       audio.current.muted = muted;
     }
     try {
@@ -103,9 +104,10 @@ export default function VolumeControl({ audio, level }: { audio: RefObject<HTMLA
         type="range"
         min={0}
         max={1}
-        step={0.05}
+        step={VOLUME_STEP}
         value={shown}
         aria-label="Volume"
+        aria-valuetext={`${Math.round(shown * 100)}%`}
         style={{ "--fill": `${Math.round(shown * 100)}%` } as React.CSSProperties}
         onChange={(event) => {
           setVolume(Number(event.target.value));
