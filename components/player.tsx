@@ -36,6 +36,7 @@ import {
   inOrder,
   insertAfter,
   LONGEST_QUEUE,
+  moveAt,
   nextPosition,
   nextRepeat,
   queueWindow,
@@ -52,6 +53,7 @@ import {
   unshuffle,
 } from "@/lib/play-queue";
 import { DEFAULT_OPTIONS, type PlayerOptions, watchOptions } from "@/lib/player-options";
+import type { QueueSaveResult } from "@/lib/queue-playlist";
 import type { RadioMore, RadioSeed } from "@/lib/radio";
 import { DevicesPanel, type LocalPlayer, PlayingElsewhere, useDeviceLink } from "./devices";
 import { type PartyControls, useParty } from "./listening-party";
@@ -1217,8 +1219,15 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
 
   function remove(at: number) {
     const left = removeAt(orderRef.current, positionRef.current, at);
+    if (left.order === orderRef.current) return;
     const compacted = compactTracks(tracksRef.current, left.order);
     arrange(compacted.tracks, compacted.order, left.position);
+  }
+
+  function move(from: number, to: number) {
+    const moved = moveAt(orderRef.current, positionRef.current, from, to);
+    if (moved.order === orderRef.current) return;
+    arrange(tracksRef.current, moved.order, moved.position);
   }
 
   function jumpTo(at: number) {
@@ -1425,6 +1434,14 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
       jumpTo(positionRef.current + command.ahead);
       return;
     }
+    if (command.do === "remove") {
+      remove(positionRef.current + command.ahead);
+      return;
+    }
+    if (command.do === "move") {
+      move(positionRef.current + command.from, positionRef.current + command.to);
+      return;
+    }
     if (command.do === "volume") {
       window.dispatchEvent(new CustomEvent("soundscape-set-volume", { detail: command.volume }));
       return;
@@ -1463,6 +1480,65 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
   const jumpToGuarded = (at: number) => {
     if (!onlyHost()) jumpTo(at);
   };
+  const removeGuarded = (at: number) => {
+    if (!onlyHost()) remove(at);
+  };
+  const moveGuarded = (from: number, to: number) => {
+    if (!onlyHost()) move(from, to);
+  };
+
+  async function saveQueuePlaylist(name: string, list: PlayerTrack[]): Promise<QueueSaveResult> {
+    const response = await fetch("/api/music/queue-playlist", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        name,
+        tracks: list.map(({ trackId, title, artist, songId }) => ({
+          trackId,
+          title,
+          artist,
+          ...(songId ? { songId } : {}),
+        })),
+      }),
+    });
+    const answer = (await response.json().catch(() => null)) as (QueueSaveResult & { error?: string }) | null;
+    if (!response.ok || !answer) throw new Error(answer?.error ?? "Navidrome didn't answer");
+    return answer;
+  }
+
+  function saveNativeQueue(name: string): Promise<QueueSaveResult> {
+    const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    return new Promise((resolve, reject) => {
+      const cleanup = () => {
+        clearTimeout(timer);
+        window.removeEventListener("soundscape-queue-saved", onSaved);
+      };
+      const timer = setTimeout(() => {
+        cleanup();
+        reject(new Error("Timed out saving playlist"));
+      }, 30_000);
+      const onSaved = (event: Event) => {
+        const detail = (event as CustomEvent<Record<string, unknown> | undefined>).detail;
+        if (!detail || detail.id !== id) return;
+        cleanup();
+        if (detail.ok === true) {
+          resolve({
+            name: typeof detail.name === "string" ? detail.name : name,
+            saved: typeof detail.saved === "number" ? detail.saved : 0,
+            total: typeof detail.total === "number" ? detail.total : 0,
+            missing: typeof detail.missing === "number" ? detail.missing : 0,
+          });
+        } else {
+          reject(new Error(typeof detail.error === "string" ? detail.error : "Could not save playlist"));
+        }
+      };
+      window.addEventListener("soundscape-queue-saved", onSaved);
+      if (!tellNative({ do: "savequeue", id, name })) {
+        cleanup();
+        reject(new Error("The desktop player can't be reached."));
+      }
+    });
+  }
 
   skip.current = {
     next: nextGuarded,
@@ -1751,6 +1827,34 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
               onJump={(at) => {
                 if (at > 0 && !onlyHost()) away.current.send({ do: "jump", ahead: at });
               }}
+              onRemove={
+                followed.kind !== "android"
+                  ? (at) => {
+                      if (at > 0 && !onlyHost()) away.current.send({ do: "remove", ahead: at });
+                    }
+                  : undefined
+              }
+              onMove={
+                followed.kind !== "android"
+                  ? (from, to) => {
+                      if (from > 0 && to > 0 && from !== to && !onlyHost()) {
+                        away.current.send({ do: "move", from, to });
+                      }
+                    }
+                  : undefined
+              }
+              onSavePlaylist={
+                username !== null
+                  ? (name) => {
+                      const track = followed.state.track;
+                      const view = window as Window & { soundscapeNativeQueueSave?: boolean };
+                      if (here && view.soundscapeNativeQueueSave) return saveNativeQueue(name);
+                      return track
+                        ? saveQueuePlaylist(name, [remoteTrack(track), ...followed.state.upNext])
+                        : Promise.reject(new Error("Nothing is playing"));
+                    }
+                  : undefined
+              }
             />
           )}
           {!followed && current && showQueue && (
@@ -1760,7 +1864,9 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
               position={position}
               onClose={() => setShowQueue(false)}
               onJump={jumpToGuarded}
-              onRemove={remove}
+              onRemove={removeGuarded}
+              onMove={moveGuarded}
+              onSavePlaylist={username !== null ? (name) => saveQueuePlaylist(name, queue) : undefined}
             />
           )}
           <PlayerBar

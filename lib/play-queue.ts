@@ -36,6 +36,26 @@ export function removeAt(order: number[], position: number, at: number) {
   return { order: order.filter((_, i) => i !== at), position: at < position ? position - 1 : position };
 }
 
+export function moveAt(order: number[], position: number, from: number, to: number) {
+  if (
+    from === to ||
+    from === position ||
+    to === position ||
+    from < 0 ||
+    to < 0 ||
+    from >= order.length ||
+    to >= order.length
+  ) {
+    return { order, position };
+  }
+  const next = [...order];
+  const [moved] = next.splice(from, 1);
+  next.splice(to, 0, moved);
+  const nextPosition =
+    from < position && to >= position ? position - 1 : from > position && to <= position ? position + 1 : position;
+  return { order: next, position: nextPosition };
+}
+
 export function compactTracks<T>(tracks: readonly T[], order: readonly number[]) {
   const used = new Set(order);
   const remap = new Map<number, number>();

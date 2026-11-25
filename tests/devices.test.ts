@@ -120,6 +120,16 @@ describe("device commands", () => {
     assert.equal(readDeviceCommand({ do: "jump", ahead: 0 }), null);
     assert.equal(readDeviceCommand({ do: "jump", ahead: 11 }), null);
     assert.equal(readDeviceCommand({ do: "jump", ahead: 1.5 }), null);
+    assert.deepEqual(readDeviceCommand({ do: "remove", ahead: 2 }), { do: "remove", ahead: 2 });
+    assert.equal(readDeviceCommand({ do: "remove", ahead: 0 }), null);
+    assert.equal(readDeviceCommand({ do: "remove", ahead: 11 }), null);
+    assert.equal(readDeviceCommand({ do: "remove", ahead: 1.5 }), null);
+    assert.equal(readDeviceCommand({ do: "remove", ahead: "1" }), null);
+    assert.deepEqual(readDeviceCommand({ do: "move", from: 1, to: 3 }), { do: "move", from: 1, to: 3 });
+    assert.equal(readDeviceCommand({ do: "move", from: 2, to: 2 }), null);
+    assert.equal(readDeviceCommand({ do: "move", from: 0, to: 2 }), null);
+    assert.equal(readDeviceCommand({ do: "move", from: 1, to: 11 }), null);
+    assert.equal(readDeviceCommand({ do: "move", from: 1.5, to: 2 }), null);
   });
 
   it("reads sleep timer commands", () => {

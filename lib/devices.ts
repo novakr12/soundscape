@@ -67,7 +67,9 @@ export type DeviceCommand =
   | { do: "repeat"; mode: RepeatMode }
   | { do: "sleep"; kind: "off" | "song" }
   | { do: "sleep"; kind: "time"; seconds: number }
-  | { do: "jump"; ahead: number };
+  | { do: "jump"; ahead: number }
+  | { do: "remove"; ahead: number }
+  | { do: "move"; from: number; to: number };
 
 export const DEVICE_ONLINE_MS = 150_000;
 export const DEVICE_HEARTBEAT_MS = 30_000;
@@ -237,6 +239,27 @@ export function readDeviceCommand(value: unknown): DeviceCommand | null {
     const ahead = finite(value.ahead);
     return ahead !== null && Number.isInteger(ahead) && ahead >= 1 && ahead <= MOST_UP_NEXT
       ? { do: "jump", ahead }
+      : null;
+  }
+  if (name === "remove") {
+    const ahead = finite(value.ahead);
+    return ahead !== null && Number.isInteger(ahead) && ahead >= 1 && ahead <= MOST_UP_NEXT
+      ? { do: "remove", ahead }
+      : null;
+  }
+  if (name === "move") {
+    const from = finite(value.from);
+    const to = finite(value.to);
+    return from !== null &&
+      to !== null &&
+      Number.isInteger(from) &&
+      Number.isInteger(to) &&
+      from >= 1 &&
+      to >= 1 &&
+      from <= MOST_UP_NEXT &&
+      to <= MOST_UP_NEXT &&
+      from !== to
+      ? { do: "move", from, to }
       : null;
   }
   if (name === "take") {

@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import type { Ref, RefObject } from "react";
+import { type FormEvent, type Ref, type RefObject, useState } from "react";
 import { albumIdFor, artistIdFor } from "@/lib/catalog";
 import type { Repeat } from "@/lib/play-queue";
+import { formatQueueSaved, MAX_PLAYLIST_NAME, type QueueSaveResult } from "@/lib/queue-playlist";
 import CoverPicture from "./cover-picture";
 import { SongLink } from "./music-links";
 import type { PlayerTrack } from "./player";
@@ -28,38 +29,192 @@ type QueuePanelProps = {
   onClose: () => void;
   onJump: (at: number) => void;
   onRemove?: (at: number) => void;
+  onMove?: (from: number, to: number) => void;
+  onSavePlaylist?: (name: string) => Promise<QueueSaveResult>;
   title?: string;
 };
 
-export function QueuePanel({ queue, keys, position, onClose, onJump, onRemove, title = "Queue" }: QueuePanelProps) {
+export function QueuePanel({
+  queue,
+  keys,
+  position,
+  onClose,
+  onJump,
+  onRemove,
+  onMove,
+  onSavePlaylist,
+  title = "Queue",
+}: QueuePanelProps) {
+  const [savingOpen, setSavingOpen] = useState(false);
+  const [playlistName, setPlaylistName] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [saveNotice, setSaveNotice] = useState<string | null>(null);
+  const [dragFrom, setDragFrom] = useState<number | null>(null);
+  const [dragOver, setDragOver] = useState<number | null>(null);
+
+  const upcomingCount = Math.max(0, queue.length - position - 1);
+
+  async function handleSaveSubmit(event: FormEvent) {
+    event.preventDefault();
+    const trimmed = playlistName.trim();
+    if (!trimmed || !onSavePlaylist || saving) return;
+    setSaving(true);
+    setSaveError(null);
+    setSaveNotice(null);
+    try {
+      const result = await onSavePlaylist(trimmed);
+      setPlaylistName("");
+      setSavingOpen(false);
+      setSaveNotice(formatQueueSaved(result));
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : "Could not save playlist");
+    } finally {
+      setSaving(false);
+    }
+  }
+
   return (
     <section className="queue-panel" aria-label="Queue">
       <div className="section-head">
         <h2>{title}</h2>
-        <button type="button" className="secondary" onClick={onClose}>
-          Close
-        </button>
+        <div className="queue-head-actions">
+          {onSavePlaylist && queue.length > 0 && (
+            <button
+              type="button"
+              className="secondary"
+              aria-expanded={savingOpen}
+              onClick={() => {
+                setSavingOpen((open) => !open);
+                setSaveError(null);
+              }}
+            >
+              Save playlist
+            </button>
+          )}
+          <button type="button" className="secondary" onClick={onClose}>
+            Close
+          </button>
+        </div>
       </div>
+      {savingOpen && onSavePlaylist && (
+        <form className="queue-save" onSubmit={handleSaveSubmit}>
+          <input
+            value={playlistName}
+            onChange={(event) => setPlaylistName(event.target.value)}
+            placeholder="New playlist name"
+            aria-label="New playlist name"
+            maxLength={MAX_PLAYLIST_NAME}
+            disabled={saving}
+            autoFocus
+          />
+          <button type="submit" disabled={saving || !playlistName.trim()}>
+            {saving ? "Saving…" : "Save"}
+          </button>
+        </form>
+      )}
+      {saveError && (
+        <p className="queue-save-note error" role="alert">
+          {saveError}
+        </p>
+      )}
+      {saveNotice && (
+        <p className="queue-save-note muted" role="status">
+          {saveNotice}
+        </p>
+      )}
       <VisibleList
         items={queue}
         guessedHeight={34}
-        renderItem={(track, at) => (
-          <li key={`${keys[at]}`} className={at === position ? "current" : at < position ? "played" : undefined}>
-            <button type="button" className="queue-song" onClick={() => onJump(at)}>
-              <span>{track.title}</span> <span className="muted">· {track.artist}</span>
-            </button>
-            {onRemove && at !== position && (
-              <button
-                type="button"
-                className="queue-remove"
-                aria-label={`Remove ${track.title} from the queue`}
-                onClick={() => onRemove(at)}
-              >
-                ✕
+        renderItem={(track, at) => {
+          const canMoveRow = Boolean(onMove && at > position && upcomingCount >= 2);
+          const dragIndicator =
+            dragOver === at && dragFrom !== null && dragFrom !== at
+              ? dragFrom > at
+                ? "drag-over-above"
+                : "drag-over"
+              : undefined;
+          const rowClass =
+            [at === position ? "current" : at < position ? "played" : undefined, dragIndicator]
+              .filter(Boolean)
+              .join(" ") || undefined;
+          return (
+            <li
+              key={`${keys[at]}`}
+              className={rowClass}
+              draggable={canMoveRow}
+              onDragStart={
+                canMoveRow
+                  ? (event) => {
+                      event.dataTransfer.effectAllowed = "move";
+                      setDragFrom(at);
+                      setDragOver(at);
+                    }
+                  : undefined
+              }
+              onDragOver={
+                dragFrom !== null && at > position
+                  ? (event) => {
+                      event.preventDefault();
+                      event.dataTransfer.dropEffect = "move";
+                      if (dragOver !== at) setDragOver(at);
+                    }
+                  : undefined
+              }
+              onDrop={
+                dragFrom !== null && at > position
+                  ? (event) => {
+                      event.preventDefault();
+                      const from = dragFrom;
+                      setDragFrom(null);
+                      setDragOver(null);
+                      if (from !== at) onMove?.(from, at);
+                    }
+                  : undefined
+              }
+              onDragEnd={() => {
+                setDragFrom(null);
+                setDragOver(null);
+              }}
+            >
+              <button type="button" className="queue-song" onClick={() => onJump(at)}>
+                <span>{track.title}</span> <span className="muted">· {track.artist}</span>
               </button>
-            )}
-          </li>
-        )}
+              {canMoveRow && (
+                <>
+                  <button
+                    type="button"
+                    className="queue-move"
+                    aria-label={`Move ${track.title} up`}
+                    disabled={at <= position + 1}
+                    onClick={() => onMove?.(at, at - 1)}
+                  >
+                    ↑
+                  </button>
+                  <button
+                    type="button"
+                    className="queue-move"
+                    aria-label={`Move ${track.title} down`}
+                    disabled={at >= queue.length - 1}
+                    onClick={() => onMove?.(at, at + 1)}
+                  >
+                    ↓
+                  </button>
+                </>
+              )}
+              {onRemove && at !== position && (
+                <button
+                  type="button"
+                  className="queue-remove"
+                  aria-label={`Remove ${track.title} from the queue`}
+                  onClick={() => onRemove(at)}
+                >
+                  ✕
+                </button>
+              )}
+            </li>
+          );
+        }}
       />
     </section>
   );

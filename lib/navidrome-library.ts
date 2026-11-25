@@ -1,7 +1,7 @@
 import { artistSearchQueries, matchesArtistRecord, matchesSongForArtist, sortNavidromeAlbums } from "./artist-catalog";
 import { artistIdFor, mainArtist, slug } from "./catalog";
 import { fromReplayGain, type Gain } from "./levelling";
-import { call, isSongId, type Navidrome } from "./navidrome";
+import { call, isSongId, type Navidrome, NavidromeError } from "./navidrome";
 
 export type NavidromeLibrary = { id: string; name: string };
 
@@ -486,6 +486,32 @@ export async function createPlaylistWith(server: Navidrome, name: string, songId
     ["name", name],
     ["songId", songId],
   ]);
+}
+
+const PLAYLIST_BATCH = 50;
+
+export async function createPlaylistWithSongs(server: Navidrome, name: string, songIds: string[]) {
+  if (songIds.length === 0) return null;
+  const created = await call<{ playlist?: { id?: unknown } }>(server, "createPlaylist", [
+    ["name", name],
+    ...songIds.slice(0, PLAYLIST_BATCH).map((id): [string, string] => ["songId", id]),
+  ]);
+  let playlistId =
+    typeof created.playlist?.id === "string" && isSongId(created.playlist.id) ? created.playlist.id : null;
+  if (songIds.length > PLAYLIST_BATCH) {
+    if (!playlistId) {
+      const playlists = await getPlaylists(server);
+      playlistId = playlists.filter((playlist) => playlist.name === name).at(-1)?.id ?? null;
+    }
+    if (!playlistId) throw new NavidromeError("Navidrome didn't return the new playlist.");
+    for (let i = PLAYLIST_BATCH; i < songIds.length; i += PLAYLIST_BATCH) {
+      await call(server, "updatePlaylist", [
+        ["playlistId", playlistId],
+        ...songIds.slice(i, i + PLAYLIST_BATCH).map((id): [string, string] => ["songIdToAdd", id]),
+      ]);
+    }
+  }
+  return playlistId;
 }
 
 export async function getRandomSongs(server: Navidrome, options: { size: number; genre?: string; libraryId?: string }) {

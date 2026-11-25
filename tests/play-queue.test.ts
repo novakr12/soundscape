@@ -8,6 +8,7 @@ import {
   insertAfter,
   LONGEST_QUEUE,
   lockScreenPosition,
+  moveAt,
   nextPosition,
   nextRepeat,
   queueWindow,
@@ -73,6 +74,16 @@ describe("play queue", () => {
     assert.deepEqual(removeAt([0, 1, 2, 3], 2, 0), { order: [1, 2, 3], position: 1 });
     assert.deepEqual(removeAt([0, 1, 2, 3], 1, 3), { order: [0, 1, 2], position: 1 });
     assert.deepEqual(removeAt([0, 1, 2], 1, 1), { order: [0, 1, 2], position: 1 });
+    assert.deepEqual(moveAt([0, 1, 2, 3, 4], 1, 3, 2), { order: [0, 1, 3, 2, 4], position: 1 });
+    assert.deepEqual(moveAt([0, 1, 2, 3, 4], 1, 2, 4), { order: [0, 1, 3, 4, 2], position: 1 });
+    assert.deepEqual(moveAt([0, 1, 2, 3], 2, 0, 3), { order: [1, 2, 3, 0], position: 1 });
+    assert.deepEqual(moveAt([0, 1, 2, 3], 1, 3, 0), { order: [3, 0, 1, 2], position: 2 });
+    const unchanged = [0, 1, 2, 3];
+    assert.equal(moveAt(unchanged, 1, 2, 2).order, unchanged);
+    assert.equal(moveAt(unchanged, 1, 1, 2).order, unchanged);
+    assert.equal(moveAt(unchanged, 1, 2, 1).order, unchanged);
+    assert.equal(moveAt(unchanged, 1, -1, 2).order, unchanged);
+    assert.equal(moveAt(unchanged, 1, 2, 4).order, unchanged);
     assert.deepEqual(unshuffle([4, 0, 7, 2], 2), { order: [0, 2, 4, 7], position: 3 });
     assert.deepEqual(compactTracks(["a", "b", "c", "d"], [3, 1]), { tracks: ["b", "d"], order: [1, 0] });
     const list = Array.from({ length: 12 }, (_, i) => `t${i}`);
