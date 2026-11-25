@@ -301,6 +301,7 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
   const [showLyrics, setShowLyrics] = useState(false);
   const [showDevices, setShowDevices] = useState(false);
   const [showTheater, setShowTheater] = useState(false);
+  const [theaterMounted, setTheaterMounted] = useState(false);
   const showTheaterRef = useRef(false);
   showTheaterRef.current = showTheater;
   const [theaterLyrics, setTheaterLyrics] = useState(true);
@@ -1615,6 +1616,11 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
     if (!hasTheaterTrack) setShowTheater(false);
   }, [hasTheaterTrack]);
 
+  useEffect(() => {
+    if (showTheater && !followed && current) setTheaterMounted(true);
+    else if (!current || followed) setTheaterMounted(false);
+  }, [showTheater, followed, current]);
+
   function togglePanel(panel: "queue" | "lyrics" | "devices" | "theater") {
     if (panel === "lyrics" && showTheaterRef.current) {
       setTheaterLyrics((open) => !open);
@@ -1885,8 +1891,9 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
               onSavePlaylist={username !== null ? (name) => saveQueuePlaylist(name, queue) : undefined}
             />
           )}
-          {!followed && current && showTheater && (
+          {!followed && current && (showTheater || theaterMounted) && (
             <NowPlayingTheater
+              open={showTheater}
               track={current}
               contextLabel={
                 [!full && "30-second preview", queue.length > 1 && `${position + 1} of ${queue.length}`]
@@ -1902,8 +1909,10 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
               showLyrics={theaterLyrics}
               onToggleLyrics={() => setTheaterLyrics((open) => !open)}
               canLove={username !== null}
-              visualizer={<PlayerVisualizer audio={audioRef} className="theater-visualizer" dotLift={24} />}
-              seek={<SeekBar audio={audioRef} known={current.duration} />}
+              visualizer={
+                <PlayerVisualizer audio={audioRef} paused={!showTheater} className="theater-visualizer" dotLift={24} />
+              }
+              seek={<SeekBar audio={audioRef} known={current.duration} active={showTheater} />}
               transport={
                 <div className="player-skip">
                   <button
@@ -1925,7 +1934,7 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
                   >
                     <PreviousIcon />
                   </button>
-                  <PlayPauseButton audio={audioRef} />
+                  <PlayPauseButton audio={audioRef} active={showTheater} />
                   <button
                     type="button"
                     className="icon-button"

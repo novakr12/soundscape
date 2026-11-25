@@ -24,7 +24,17 @@ function notifyLove(key: string, loved: boolean) {
   window.dispatchEvent(new CustomEvent(LOVE_EVENT, { detail: { key, loved } }));
 }
 
-export default function PlayerLove({ artist, title, enabled }: { artist: string; title: string; enabled: boolean }) {
+export default function PlayerLove({
+  artist,
+  title,
+  enabled,
+  active = true,
+}: {
+  artist: string;
+  title: string;
+  enabled: boolean;
+  active?: boolean;
+}) {
   const cleanArtist = artist.trim();
   const cleanTitle = title.trim();
   const key = cleanArtist && cleanTitle ? loveKey(cleanArtist, cleanTitle) : "";
@@ -34,7 +44,7 @@ export default function PlayerLove({ artist, title, enabled }: { artist: string;
   keyRef.current = key;
 
   useEffect(() => {
-    if (!enabled || !key) return;
+    if (!enabled || !active || !key) return;
     setLoved(lovedCache.get(key) ?? false);
     setPending(false);
     const stop = new AbortController();
@@ -47,7 +57,7 @@ export default function PlayerLove({ artist, title, enabled }: { artist: string;
       })
       .catch(() => {});
     return () => stop.abort();
-  }, [enabled, cleanArtist, cleanTitle, key]);
+  }, [enabled, active, cleanArtist, cleanTitle, key]);
 
   useEffect(() => {
     if (!key) return;

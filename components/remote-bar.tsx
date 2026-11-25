@@ -91,6 +91,7 @@ export default function RemoteBar({
   const [seeking, setSeeking] = useState<number | null>(null);
   const [volume, setVolume] = useState<number | null>(null);
   const [volumePeek, setVolumePeek] = useState(0);
+  const [theaterMounted, setTheaterMounted] = useState(false);
   const beforeMute = useRef(0.8);
 
   useEffect(() => {
@@ -271,6 +272,11 @@ export default function RemoteBar({
         : null,
     [trackId, trackTitle, trackArtist, trackAlbum, trackCover, trackSongId, albumHref, artistHref],
   );
+
+  useEffect(() => {
+    if (showTheater && theaterTrack) setTheaterMounted(true);
+    else if (!theaterTrack) setTheaterMounted(false);
+  }, [showTheater, theaterTrack]);
 
   return (
     <>
@@ -481,11 +487,12 @@ export default function RemoteBar({
           />
         </div>
       </div>
-      {showTheater && theaterTrack && (
+      {theaterTrack && (showTheater || theaterMounted) && (
         <NowPlayingTheater
+          open={showTheater}
           track={theaterTrack}
           contextLabel={here ? undefined : `Playing on ${device.name}`}
-          playing={shown.playing}
+          playing={showTheater && shown.playing}
           time={liveTime}
           onSeek={(seconds) => {
             send({ do: "seek", time: seconds });
@@ -496,7 +503,14 @@ export default function RemoteBar({
           onToggleLyrics={onToggleTheaterLyrics}
           canLove={canLove}
           visualizer={
-            here ? <PlayerVisualizer playing={shown.playing} className="theater-visualizer" dotLift={24} /> : undefined
+            here ? (
+              <PlayerVisualizer
+                playing={shown.playing}
+                paused={!showTheater}
+                className="theater-visualizer"
+                dotLift={24}
+              />
+            ) : undefined
           }
           seek={
             <div className="player-seek">

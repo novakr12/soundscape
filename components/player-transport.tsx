@@ -73,10 +73,17 @@ const PLAY_STATE_EVENTS = [
 const SEEK_EVENTS = ["timeupdate", "seeking", "emptied", "loadedmetadata", "durationchange"];
 const STILL_AFTER_MS = 600;
 
-export function PlayPauseButton({ audio }: { audio: RefObject<HTMLAudioElement | null> }) {
+export function PlayPauseButton({
+  audio,
+  active = true,
+}: {
+  audio: RefObject<HTMLAudioElement | null>;
+  active?: boolean;
+}) {
   const [{ paused, loading }, setState] = useState({ paused: true, loading: false });
 
   useEffect(() => {
+    if (!active) return;
     let last: { element: HTMLAudioElement | null; time: number; movedAt: number } = {
       element: null,
       time: -1,
@@ -102,7 +109,7 @@ export function PlayPauseButton({ audio }: { audio: RefObject<HTMLAudioElement |
       );
     };
     return whilePlaying(audio, follow, PLAY_STATE_EVENTS);
-  }, [audio]);
+  }, [audio, active]);
 
   return (
     <button
@@ -328,10 +335,19 @@ export function PlayerVisualizer({
   );
 }
 
-export function SeekBar({ audio, known }: { audio: RefObject<HTMLAudioElement | null>; known?: number }) {
+export function SeekBar({
+  audio,
+  known,
+  active = true,
+}: {
+  audio: RefObject<HTMLAudioElement | null>;
+  known?: number;
+  active?: boolean;
+}) {
   const [{ time, rawLength }, setState] = useState({ time: 0, rawLength: 0 });
 
   useEffect(() => {
+    if (!active) return;
     const follow = () => {
       const element = audio.current;
       const nextTime = element ? element.currentTime : 0;
@@ -343,7 +359,7 @@ export function SeekBar({ audio, known }: { audio: RefObject<HTMLAudioElement | 
       );
     };
     return whilePlaying(audio, follow, SEEK_EVENTS);
-  }, [audio]);
+  }, [audio, active]);
 
   const length = songLength(rawLength, known) || 0;
   const at = length > 0 ? Math.min(time, length) : time;

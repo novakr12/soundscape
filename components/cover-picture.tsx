@@ -164,7 +164,7 @@ export default function CoverPicture({
   const url = sizedCover(src, shown) ?? src;
 
   if (canvas && failed !== url) {
-    return <CanvasCover key={url} url={url} shown={shown} className={className} lazy={lazy} onFail={setFailed} />;
+    return <CanvasCover url={url} shown={shown} className={className} lazy={lazy} onFail={setFailed} />;
   }
   return (
     <img

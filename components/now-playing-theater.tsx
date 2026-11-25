@@ -124,6 +124,7 @@ async function sampleCoverColor(src: string, signal: AbortSignal): Promise<strin
 }
 
 type NowPlayingTheaterProps = {
+  open?: boolean;
   track: PlayerTrack;
   contextLabel?: string;
   playing?: boolean;
@@ -142,6 +143,7 @@ type NowPlayingTheaterProps = {
 };
 
 export default function NowPlayingTheater({
+  open = true,
   track,
   contextLabel,
   playing,
@@ -167,6 +169,8 @@ export default function NowPlayingTheater({
   const lyricsScrollRef = useRef<HTMLDivElement>(null);
   const lyricsListRef = useRef<HTMLOListElement>(null);
   const [tint, setTint] = useState<{ src: string; color: string | null }>({ src: "", color: null });
+  const [coverSrc, setCoverSrc] = useState<string | undefined>(() => (open ? track.cover : undefined));
+  if (open && coverSrc !== track.cover) setCoverSrc(track.cover);
   const [canFullscreen, setCanFullscreen] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const enteredFullscreenRef = useRef(false);
@@ -176,10 +180,11 @@ export default function NowPlayingTheater({
     time,
     playing,
     audio,
-    enabled: showLyrics,
+    enabled: open && showLyrics,
   });
 
   useEffect(() => {
+    if (!open) return;
     const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     document.body.classList.add("theater-open");
     closeRef.current?.focus();
@@ -232,9 +237,10 @@ export default function NowPlayingTheater({
       }
       if (previousFocus?.isConnected) previousFocus.focus();
     };
-  }, []);
+  }, [open]);
 
   useEffect(() => {
+    if (!open) return;
     const cover = track.cover;
     if (!cover) {
       setTint({ src: "", color: null });
@@ -247,10 +253,10 @@ export default function NowPlayingTheater({
     return () => {
       stop.abort();
     };
-  }, [track.cover]);
+  }, [open, track.cover]);
 
   useEffect(() => {
-    if (!showLyrics || activeLine < 0) return;
+    if (!open || !showLyrics || activeLine < 0) return;
     const box = lyricsScrollRef.current;
     const line = lyricsListRef.current?.children[activeLine] as HTMLElement | undefined;
     if (!box || !line) return;
@@ -258,7 +264,7 @@ export default function NowPlayingTheater({
       top: line.offsetTop - box.clientHeight / 2 + line.clientHeight / 2,
       behavior: reducedMotionRef.current ? "auto" : "smooth",
     });
-  }, [showLyrics, activeLine]);
+  }, [open, showLyrics, activeLine]);
 
   function toggleFullscreen() {
     const view = window as Window & { soundscapeNativeFullscreen?: boolean };
@@ -328,7 +334,14 @@ export default function NowPlayingTheater({
   }, [loading, failed, lyrics, activeLine]);
 
   return (
-    <section className="theater" role="dialog" aria-modal="true" aria-label="Now playing">
+    <section
+      className="theater"
+      role="dialog"
+      aria-modal={open || undefined}
+      aria-hidden={!open || undefined}
+      aria-label="Now playing"
+      hidden={!open}
+    >
       <div
         className="theater-bg"
         aria-hidden="true"
@@ -375,8 +388,8 @@ export default function NowPlayingTheater({
       <div className={showLyrics ? "theater-stage with-lyrics" : "theater-stage"}>
         <div className="theater-art-col">
           <div className="theater-cover">
-            {track.cover ? (
-              <CoverPicture src={track.cover} shown={320} className="theater-cover-art" />
+            {coverSrc ? (
+              <CoverPicture src={coverSrc} shown={320} className="theater-cover-art" />
             ) : (
               <div className="theater-cover-empty muted" aria-hidden="true">
                 ♪
@@ -420,7 +433,7 @@ export default function NowPlayingTheater({
                   )}
                 </p>
               </div>
-              <PlayerLove artist={track.artist} title={track.title} enabled={canLove} />
+              <PlayerLove artist={track.artist} title={track.title} enabled={canLove} active={open} />
             </div>
             {visualizer && <div className="theater-viz-wrap">{visualizer}</div>}
           </div>

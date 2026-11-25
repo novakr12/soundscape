@@ -2697,6 +2697,127 @@ tr.selected {
   font-variant-numeric: tabular-nums;
 }
 
+@media (max-width: 1399px) {
+  .player {
+    grid-template-columns: minmax(12rem, 1fr) minmax(13rem, 1.15fr) auto;
+    gap: 0.75rem;
+  }
+
+  .player .player-song {
+    gap: 0.5rem;
+  }
+
+  .player .player-skip {
+    gap: 0.35rem;
+  }
+
+  .player .player-side {
+    gap: 0.125rem;
+  }
+
+  .player .volume {
+    padding-right: 0;
+    gap: 0.25rem;
+  }
+
+  .player .volume input[type="range"] {
+    width: 4.5rem;
+  }
+}
+
+@media (max-width: 1020px) {
+  main {
+    padding-bottom: 8rem;
+  }
+
+  .player {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.45rem 0.75rem;
+    padding-top: 0.6rem;
+    padding-bottom: calc(0.6rem + env(safe-area-inset-bottom));
+  }
+
+  .player .player-song {
+    flex: 1 1 0;
+    min-width: 0;
+    gap: 0.55rem;
+  }
+
+  .player .player-cover-button img,
+  .player .player-cover-button .cover-canvas,
+  .player > .player-song > img,
+  .player > .player-song > .cover-canvas {
+    width: 40px !important;
+    height: 40px !important;
+  }
+
+  .player .player-side {
+    flex: none;
+    gap: 0.1rem;
+  }
+
+  .player .player-side .icon-button {
+    width: 1.85rem;
+    height: 1.85rem;
+  }
+
+  .player .sleep-menu summary {
+    width: auto;
+    min-width: 1.85rem;
+    height: 1.85rem;
+    padding: 0 0.25rem;
+  }
+
+  .player .volume {
+    padding-right: 0;
+    gap: 0.2rem;
+  }
+
+  .player .volume input[type="range"] {
+    width: 4.25rem;
+  }
+
+  .player .player-center {
+    order: 3;
+    flex: 1 1 100%;
+    flex-direction: row;
+    align-items: center;
+    gap: 0.75rem;
+    max-width: none;
+  }
+
+  .player .player-skip {
+    gap: 0.25rem;
+  }
+
+  .player .player-play {
+    width: 2.1rem;
+    height: 2.1rem;
+  }
+
+  .player .player-seek {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .queue-panel {
+    bottom: 8rem;
+  }
+
+  .remote-here {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.8rem;
+  }
+}
+
+@media (min-width: 760px) and (max-width: 840px) {
+  .player .player-visualizer {
+    display: none;
+  }
+}
+
 @media (max-width: 640px) {
   main {
     padding-bottom: 10rem;
@@ -2712,14 +2833,25 @@ tr.selected {
     flex: 1 1 0;
   }
 
-  .player-center {
+  .player .player-center {
     order: 3;
     flex: 1 1 100%;
+    flex-direction: column;
+    gap: 0.1rem;
     max-width: none;
   }
 
-  .player-skip {
+  .player .player-skip {
     gap: 1.25rem;
+  }
+
+  .player .player-play {
+    width: 2.4rem;
+    height: 2.4rem;
+  }
+
+  .player .player-seek {
+    flex: none;
   }
 
   .player .volume {
@@ -3277,6 +3409,10 @@ body.theater-open {
   color: var(--fg);
   overflow: hidden;
   animation: theater-enter 180ms ease-out;
+}
+
+.theater[hidden] {
+  display: none;
 }
 
 .theater-bg {
