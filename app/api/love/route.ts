@@ -1,10 +1,10 @@
 import { isLoved, loveSong, songId } from "@/lib/loved";
-import { tokenUser, unauthorized } from "@/lib/token-auth";
+import { sessionOrTokenUser, unauthorized } from "@/lib/token-auth";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
-  const userId = await tokenUser(request);
+  const userId = await sessionOrTokenUser(request);
   if (!userId) return unauthorized();
   const params = new URL(request.url).searchParams;
   const trackId = await songId(params.get("artist") ?? "", params.get("title") ?? "");
@@ -12,7 +12,7 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const userId = await tokenUser(request);
+  const userId = await sessionOrTokenUser(request);
   if (!userId) return unauthorized();
   const body = await request.json().catch(() => null);
   const { artist, title, loved } = body ?? {};

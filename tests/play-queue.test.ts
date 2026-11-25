@@ -128,24 +128,49 @@ describe("play queue", () => {
 describe("keyboard shortcuts", () => {
   const plain = { shift: false, other: false, repeat: false };
 
-  it("maps space and the arrow keys to player actions", () => {
+  it("maps space, arrow keys, player toggles and help to player actions", () => {
     assert.equal(shortcutFor(" ", plain), "toggle");
     assert.equal(shortcutFor("ArrowLeft", plain), "back");
     assert.equal(shortcutFor("ArrowRight", plain), "forward");
     assert.equal(shortcutFor("ArrowLeft", { ...plain, shift: true }), "previous");
     assert.equal(shortcutFor("ArrowRight", { ...plain, shift: true }), "next");
+    assert.equal(shortcutFor("ArrowUp", plain), null);
+    assert.equal(shortcutFor("ArrowDown", plain), null);
+    assert.equal(shortcutFor("ArrowUp", { ...plain, shift: true }), "volume-up");
+    assert.equal(shortcutFor("ArrowDown", { ...plain, shift: true }), "volume-down");
+    assert.equal(shortcutFor("m", plain), "mute");
+    assert.equal(shortcutFor("M", plain), "mute");
+    assert.equal(shortcutFor("l", plain), "lyrics");
+    assert.equal(shortcutFor("L", plain), "lyrics");
+    assert.equal(shortcutFor("q", plain), "queue");
+    assert.equal(shortcutFor("Q", plain), "queue");
+    assert.equal(shortcutFor("s", plain), "shuffle");
+    assert.equal(shortcutFor("S", plain), "shuffle");
+    assert.equal(shortcutFor("r", plain), "repeat");
+    assert.equal(shortcutFor("R", plain), "repeat");
+    assert.equal(shortcutFor("?", { ...plain, shift: true }), "help");
+    assert.equal(shortcutFor("?", plain), "help");
+    assert.equal(shortcutFor("m", { ...plain, shift: true }), null);
     assert.equal(shortcutFor("a", plain), null);
   });
 
   it("leaves shortcuts with other modifier keys to the browser", () => {
     assert.equal(shortcutFor(" ", { ...plain, other: true }), null);
     assert.equal(shortcutFor("ArrowLeft", { ...plain, other: true }), null);
+    assert.equal(shortcutFor("ArrowUp", { shift: true, other: true, repeat: false }), null);
+    assert.equal(shortcutFor("m", { ...plain, other: true }), null);
+    assert.equal(shortcutFor("?", { shift: true, other: true, repeat: false }), null);
   });
 
-  it("does not repeat play/pause or song changes while a key is held, but keeps seeking", () => {
+  it("does not repeat toggles or song changes while held, but keeps seeking and volume stepping", () => {
     assert.equal(shortcutFor(" ", { ...plain, repeat: true }), null);
     assert.equal(shortcutFor("ArrowRight", { shift: true, other: false, repeat: true }), null);
+    assert.equal(shortcutFor("m", { ...plain, repeat: true }), null);
+    assert.equal(shortcutFor("l", { ...plain, repeat: true }), null);
+    assert.equal(shortcutFor("?", { shift: true, other: false, repeat: true }), null);
     assert.equal(shortcutFor("ArrowRight", { ...plain, repeat: true }), "forward");
+    assert.equal(shortcutFor("ArrowUp", { shift: true, other: false, repeat: true }), "volume-up");
+    assert.equal(shortcutFor("ArrowDown", { shift: true, other: false, repeat: true }), "volume-down");
   });
 
   it("keeps seeking inside the song", () => {

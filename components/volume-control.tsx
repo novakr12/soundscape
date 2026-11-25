@@ -1,7 +1,8 @@
 "use client";
 
-import { type RefObject, useEffect, useState } from "react";
-import { audioVolume, VOLUME_STEP } from "@/lib/volume";
+import { type RefObject, useCallback, useEffect, useRef, useState } from "react";
+import { audioVolume, stepVolume, VOLUME_STEP } from "@/lib/volume";
+import { SpeakerIcon } from "./player-icons";
 
 const KEY = "soundscape-volume";
 
@@ -15,27 +16,90 @@ function saved(): { volume: number; muted: boolean } {
   return { volume: 0.8, muted: false };
 }
 
-function Speaker({ level }: { level: number }) {
+export function VolumeBar({
+  value,
+  onChange,
+  onToggleMute,
+  sliderLabel,
+  muteLabel,
+  unmuteLabel,
+  peekKey = 0,
+}: {
+  value: number;
+  onChange: (value: number) => void;
+  onToggleMute: () => void;
+  sliderLabel: string;
+  muteLabel: string;
+  unmuteLabel: string;
+  peekKey?: number;
+}) {
+  const [dragging, setDragging] = useState(false);
+  const [peek, setPeek] = useState(false);
+  const peekTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+
+  const flash = useCallback(() => {
+    setPeek(true);
+    clearTimeout(peekTimer.current);
+    peekTimer.current = setTimeout(() => setPeek(false), 900);
+  }, []);
+
+  useEffect(() => () => clearTimeout(peekTimer.current), []);
+
+  useEffect(() => {
+    if (!dragging) return;
+    const stop = () => setDragging(false);
+    window.addEventListener("pointerup", stop);
+    window.addEventListener("pointercancel", stop);
+    window.addEventListener("blur", stop);
+    return () => {
+      window.removeEventListener("pointerup", stop);
+      window.removeEventListener("pointercancel", stop);
+      window.removeEventListener("blur", stop);
+    };
+  }, [dragging]);
+
+  useEffect(() => {
+    if (peekKey > 0) flash();
+  }, [peekKey, flash]);
+
+  const percent = Math.round(value * 100);
+  const muted = value === 0;
   return (
-    <svg
-      viewBox="0 0 24 24"
-      width="20"
-      height="20"
-      aria-hidden="true"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-    >
-      <path d="M4 9h4l5-4v14l-5-4H4z" fill="currentColor" strokeLinejoin="round" />
-      {level === 0 ? (
-        <path d="M17 9l5 6M22 9l-5 6" strokeLinecap="round" />
-      ) : (
-        <>
-          <path d="M16.5 9.5a3.5 3.5 0 0 1 0 5" strokeLinecap="round" />
-          {level > 0.5 && <path d="M19 7a7 7 0 0 1 0 10" strokeLinecap="round" />}
-        </>
-      )}
-    </svg>
+    <div className="volume" data-active={dragging || peek || undefined}>
+      <button
+        type="button"
+        className="icon-button"
+        onClick={() => {
+          flash();
+          onToggleMute();
+        }}
+        aria-label={muted ? unmuteLabel : muteLabel}
+        aria-pressed={muted}
+        title={muted ? "Unmute (M)" : "Mute (M)"}
+      >
+        <SpeakerIcon level={value} />
+      </button>
+      <span className="volume-slider">
+        <input
+          type="range"
+          min={0}
+          max={1}
+          step={VOLUME_STEP}
+          value={value}
+          aria-label={sliderLabel}
+          aria-valuetext={`${percent}%`}
+          style={{ "--fill": `${percent}%` } as React.CSSProperties}
+          onPointerDown={() => setDragging(true)}
+          onChange={(event) => {
+            flash();
+            onChange(Number(event.target.value));
+          }}
+        />
+        <span className="volume-value" aria-hidden="true">
+          {percent}%
+        </span>
+      </span>
+    </div>
   );
 }
 
@@ -43,6 +107,20 @@ export default function VolumeControl({ audio, level }: { audio: RefObject<HTMLA
   const [volume, setVolume] = useState(0.8);
   const [muted, setMuted] = useState(false);
   const [ready, setReady] = useState(false);
+  const [peekKey, setPeekKey] = useState(0);
+  const stateRef = useRef({ volume, muted });
+  stateRef.current = { volume, muted };
+
+  const toggleMute = useCallback(() => {
+    const current = stateRef.current;
+    if (current.muted || current.volume === 0) {
+      setMuted(false);
+      if (current.volume === 0) setVolume(0.5);
+    } else {
+      setMuted(true);
+    }
+    setPeekKey((n) => n + 1);
+  }, []);
 
   useEffect(() => {
     const value = saved();
@@ -58,9 +136,24 @@ export default function VolumeControl({ audio, level }: { audio: RefObject<HTMLA
       setVolume(value);
       setMuted(false);
     };
+    const mute = () => toggleMute();
+    const step = (event: Event) => {
+      const delta = (event as CustomEvent<unknown>).detail;
+      if (typeof delta !== "number" || !Number.isFinite(delta)) return;
+      const base = stateRef.current.muted ? 0 : stateRef.current.volume;
+      setVolume(stepVolume(base, delta));
+      setMuted(false);
+      setPeekKey((n) => n + 1);
+    };
     window.addEventListener("soundscape-set-volume", change);
-    return () => window.removeEventListener("soundscape-set-volume", change);
-  }, []);
+    window.addEventListener("soundscape-toggle-mute", mute);
+    window.addEventListener("soundscape-step-volume", step);
+    return () => {
+      window.removeEventListener("soundscape-set-volume", change);
+      window.removeEventListener("soundscape-toggle-mute", mute);
+      window.removeEventListener("soundscape-step-volume", step);
+    };
+  }, [toggleMute]);
 
   useEffect(() => {
     const element = audio.current;
@@ -83,37 +176,17 @@ export default function VolumeControl({ audio, level }: { audio: RefObject<HTMLA
 
   const shown = muted ? 0 : volume;
   return (
-    <div className="volume">
-      <button
-        type="button"
-        className="icon-button"
-        onClick={() => {
-          if (muted || volume === 0) {
-            setMuted(false);
-            if (volume === 0) setVolume(0.5);
-          } else {
-            setMuted(true);
-          }
-        }}
-        aria-label={shown === 0 ? "Unmute" : "Mute"}
-        aria-pressed={shown === 0}
-      >
-        <Speaker level={shown} />
-      </button>
-      <input
-        type="range"
-        min={0}
-        max={1}
-        step={VOLUME_STEP}
-        value={shown}
-        aria-label="Volume"
-        aria-valuetext={`${Math.round(shown * 100)}%`}
-        style={{ "--fill": `${Math.round(shown * 100)}%` } as React.CSSProperties}
-        onChange={(event) => {
-          setVolume(Number(event.target.value));
-          setMuted(false);
-        }}
-      />
-    </div>
+    <VolumeBar
+      value={shown}
+      onChange={(next) => {
+        setVolume(next);
+        setMuted(false);
+      }}
+      onToggleMute={toggleMute}
+      sliderLabel="Volume"
+      muteLabel="Mute"
+      unmuteLabel="Unmute"
+      peekKey={peekKey}
+    />
   );
 }

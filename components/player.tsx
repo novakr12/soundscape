@@ -42,6 +42,7 @@ import {
   type Repeat,
   removeAt,
   restoreQueue,
+  type Shortcut,
   seekTarget,
   shuffleAfter,
   shuffleAll,
@@ -56,8 +57,9 @@ import { DevicesPanel, type LocalPlayer, PlayingElsewhere, useDeviceLink } from 
 import { type PartyControls, useParty } from "./listening-party";
 import LyricsPanel from "./lyrics-panel";
 import { PlayerBar, QueuePanel } from "./player-bar";
-import { usePlayerKeys } from "./player-keys";
+import { type PlayerKeyHandlers, usePlayerKeys } from "./player-keys";
 import RemoteBar from "./remote-bar";
+import ShortcutsDialog from "./shortcuts-dialog";
 import type { Sleep } from "./sleep-timer";
 import { useMediaSession } from "./use-media-session";
 
@@ -291,6 +293,7 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
   const [showQueue, setShowQueue] = useState(false);
   const [showLyrics, setShowLyrics] = useState(false);
   const [showDevices, setShowDevices] = useState(false);
+  const [showShortcuts, setShowShortcuts] = useState(false);
   const actions = useRef<Actions>(null as unknown as Actions);
   const steady = useMemo<Actions>(
     () => ({
@@ -322,7 +325,18 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
   const party = useParty(username, () => nativeRef.current?.id ?? link.me?.id ?? null);
   const partyRef = useRef(party);
   partyRef.current = party;
-  const remoteKeys = useRef<(shortcut: string) => boolean>(() => false);
+  const remoteKeys = useRef<(shortcut: Shortcut) => boolean>(() => false);
+  const keyHandlers = useRef<PlayerKeyHandlers>({
+    next: () => {},
+    previous: () => {},
+    toggleShuffle: () => {},
+    cycleRepeat: () => {},
+    toggleQueue: () => {},
+    toggleLyrics: () => {},
+    toggleMute: () => {},
+    stepVolume: () => {},
+    openHelp: () => {},
+  });
   const away = useRef<{ device: Device | null; offset: number; send: (command: DeviceCommand) => void }>({
     device: null,
     offset: 0,
@@ -505,7 +519,7 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
     } catch {}
   }, []);
 
-  usePlayerKeys(audioRef, tracksRef, skip, remoteKeys);
+  usePlayerKeys(audioRef, tracksRef, keyHandlers, remoteKeys);
 
   useEffect(() => {
     const view = window as Window & { soundscapePlayer?: unknown; soundscapeBridgeRemote?: unknown };
@@ -1449,6 +1463,17 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
     refill,
     sleep: fallAsleep,
   };
+  keyHandlers.current = {
+    next: nextGuarded,
+    previous: previousGuarded,
+    toggleShuffle,
+    cycleRepeat,
+    toggleQueue: () => togglePanel("queue"),
+    toggleLyrics: () => togglePanel("lyrics"),
+    toggleMute: () => window.dispatchEvent(new Event("soundscape-toggle-mute")),
+    stepVolume: (delta) => window.dispatchEvent(new CustomEvent("soundscape-step-volume", { detail: delta })),
+    openHelp: () => setShowShortcuts(true),
+  };
   actions.current = {
     play: (track) => {
       leavePartyFirst();
@@ -1676,6 +1701,7 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
               onLyrics={() => togglePanel("lyrics")}
               showDevices={showDevices}
               onDevices={() => togglePanel("devices")}
+              canLove={username !== null}
             />
           )}
           {!followed && current && showLyrics && (
@@ -1750,7 +1776,9 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
             showDevices={showDevices}
             elsewhere={elsewhere !== null}
             onDevices={() => togglePanel("devices")}
+            canLove={username !== null}
           />
+          <ShortcutsDialog open={showShortcuts} onClose={() => setShowShortcuts(false)} />
         </PlayerContext.Provider>
       </PlayerTrackIdContext.Provider>
     </PlayerActionsContext.Provider>

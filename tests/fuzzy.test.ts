@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { finderPages, findPages, withoutRepeats } from "../lib/finder";
+import { finderAction, finderPages, findPages, withoutRepeats } from "../lib/finder";
 import { fold, fuzzyScore, fuzzySort } from "../lib/fuzzy";
 
 describe("fuzzyScore", () => {
@@ -81,5 +81,14 @@ describe("findPages", () => {
     assert.deepEqual(labels("levelling"), ["Settings"]);
     assert.deepEqual(labels("lastfm"), ["Import"]);
     assert.deepEqual(labels("coer band"), []);
+  });
+});
+
+describe("finderAction", () => {
+  it("maps modifier keys to open, play, play next and add to queue", () => {
+    assert.equal(finderAction({ shift: false, alt: false, ctrlOrMeta: false }), "open");
+    assert.equal(finderAction({ shift: true, alt: false, ctrlOrMeta: false }), "play");
+    assert.equal(finderAction({ shift: false, alt: true, ctrlOrMeta: false }), "next");
+    assert.equal(finderAction({ shift: false, alt: false, ctrlOrMeta: true }), "queue");
   });
 });

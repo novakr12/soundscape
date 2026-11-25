@@ -192,14 +192,44 @@ export function heardStep(before: number | null, now: number) {
 
 export const SEEK_STEP_SECONDS = 5;
 
-export type Shortcut = "toggle" | "back" | "forward" | "previous" | "next";
+export type Shortcut =
+  | "toggle"
+  | "back"
+  | "forward"
+  | "previous"
+  | "next"
+  | "mute"
+  | "volume-up"
+  | "volume-down"
+  | "lyrics"
+  | "queue"
+  | "shuffle"
+  | "repeat"
+  | "help";
 
 export function shortcutFor(key: string, keys: { shift: boolean; other: boolean; repeat: boolean }): Shortcut | null {
   if (keys.other) return null;
+  if (key === "?") return keys.repeat ? null : "help";
   if (key === " " || key === "Spacebar") return keys.shift || keys.repeat ? null : "toggle";
   if (key === "ArrowLeft") return keys.shift ? (keys.repeat ? null : "previous") : "back";
   if (key === "ArrowRight") return keys.shift ? (keys.repeat ? null : "next") : "forward";
-  return null;
+  if (key === "ArrowUp") return keys.shift ? "volume-up" : null;
+  if (key === "ArrowDown") return keys.shift ? "volume-down" : null;
+  if (keys.shift || keys.repeat) return null;
+  switch (key.toLowerCase()) {
+    case "m":
+      return "mute";
+    case "l":
+      return "lyrics";
+    case "q":
+      return "queue";
+    case "s":
+      return "shuffle";
+    case "r":
+      return "repeat";
+    default:
+      return null;
+  }
 }
 
 export function seekTarget(now: number, step: number, duration: number) {

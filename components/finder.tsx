@@ -2,10 +2,11 @@
 
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { type FinderResults, finderPages, findPages, NO_RESULTS } from "@/lib/finder";
+import { type FinderAction, type FinderResults, finderAction, finderPages, findPages, NO_RESULTS } from "@/lib/finder";
 import { MIN_QUERY_LENGTH } from "@/lib/search-limits";
 import Cover from "./cover";
 import { type PlayerTrack, usePlayerActions } from "./player";
+import { PlayIcon, PlayNextIcon, QueueAddIcon } from "./player-icons";
 
 export const OPEN_FINDER = "soundscape-open-finder";
 const WAIT_MS = 120;
@@ -32,7 +33,7 @@ function typing(target: EventTarget | null) {
 
 export default function Finder({ username, admin }: { username: string | null; admin: boolean }) {
   const router = useRouter();
-  const { play } = usePlayerActions();
+  const { play, playNext, addToQueue } = usePlayerActions();
   const dialog = useRef<HTMLDialogElement>(null);
   const input = useRef<HTMLInputElement>(null);
   const [open, setOpen] = useState(false);
@@ -178,12 +179,24 @@ export default function Finder({ username, admin }: { username: string | null; a
 
   const chosen = Math.min(active, Math.max(items.length - 1, 0));
 
-  function choose(item: Item | undefined, playIt: boolean) {
+  function choose(item: Item | undefined, action: FinderAction) {
     if (!item) return;
-    if (playIt && item.track) {
-      play(item.track);
-      close();
-      return;
+    if (item.track) {
+      if (action === "play") {
+        play(item.track);
+        close();
+        return;
+      }
+      if (action === "next") {
+        playNext(item.track);
+        close();
+        return;
+      }
+      if (action === "queue") {
+        addToQueue(item.track);
+        close();
+        return;
+      }
     }
     if (item.href) {
       router.push(item.href);
@@ -202,7 +215,14 @@ export default function Finder({ username, admin }: { username: string | null; a
       setActive((chosen + step + items.length) % items.length);
     } else if (event.key === "Enter") {
       event.preventDefault();
-      choose(items[chosen], event.shiftKey);
+      choose(
+        items[chosen],
+        finderAction({
+          shift: event.shiftKey,
+          alt: event.altKey,
+          ctrlOrMeta: event.ctrlKey || event.metaKey,
+        }),
+      );
     } else if (event.key === "Escape") {
       event.preventDefault();
       close();
@@ -255,7 +275,16 @@ export default function Finder({ username, admin }: { username: string | null; a
                 className={at === chosen ? "active" : undefined}
                 onMouseMove={() => at !== chosen && setActive(at)}
                 onMouseDown={(event) => event.preventDefault()}
-                onClick={(event) => choose(item, event.shiftKey)}
+                onClick={(event) =>
+                  choose(
+                    item,
+                    finderAction({
+                      shift: event.shiftKey,
+                      alt: event.altKey,
+                      ctrlOrMeta: event.ctrlKey || event.metaKey,
+                    }),
+                  )
+                }
               >
                 {item.icon ? (
                   <span className="finder-icon" aria-hidden="true">
@@ -284,20 +313,47 @@ export default function Finder({ username, admin }: { username: string | null; a
                 </span>
                 <span className="finder-kind muted">{item.kind}</span>
                 {item.track && (
-                  <button
-                    type="button"
-                    className="icon-button finder-play"
-                    aria-label={`Play ${item.title}`}
-                    tabIndex={-1}
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      choose(item, true);
-                    }}
-                  >
-                    <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true">
-                      <path d="M8 5v14l11-7z" />
-                    </svg>
-                  </button>
+                  <span className="finder-actions">
+                    <button
+                      type="button"
+                      className="icon-button finder-action"
+                      aria-label={`Play ${item.title} next`}
+                      title="Play next (Alt+Enter)"
+                      tabIndex={-1}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        choose(item, "next");
+                      }}
+                    >
+                      <PlayNextIcon size={16} />
+                    </button>
+                    <button
+                      type="button"
+                      className="icon-button finder-action"
+                      aria-label={`Add ${item.title} to queue`}
+                      title="Add to queue (Ctrl+Enter)"
+                      tabIndex={-1}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        choose(item, "queue");
+                      }}
+                    >
+                      <QueueAddIcon size={16} />
+                    </button>
+                    <button
+                      type="button"
+                      className="icon-button finder-play"
+                      aria-label={`Play ${item.title}`}
+                      title="Play now (Shift+Enter)"
+                      tabIndex={-1}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        choose(item, "play");
+                      }}
+                    >
+                      <PlayIcon size={18} />
+                    </button>
+                  </span>
                 )}
               </div>
             ))}
@@ -307,7 +363,7 @@ export default function Finder({ username, admin }: { username: string | null; a
           </div>
           <p className="finder-help muted">
             <kbd>↑</kbd> <kbd>↓</kbd> move · <kbd>Enter</kbd> open · <kbd>Shift</kbd>+<kbd>Enter</kbd> play ·{" "}
-            <kbd>Esc</kbd> close
+            <kbd>Alt</kbd>+<kbd>Enter</kbd> next · <kbd>Ctrl</kbd>+<kbd>Enter</kbd> queue · <kbd>Esc</kbd> close
           </p>
         </>
       )}

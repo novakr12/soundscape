@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { type RefObject, useEffect, useState } from "react";
+import { type RefObject, useEffect, useRef, useState } from "react";
 import { albumIdFor, artistIdFor } from "@/lib/catalog";
 import {
   type Device,
@@ -11,8 +11,8 @@ import {
   type RepeatMode,
   shownPlayback,
 } from "@/lib/devices";
-import { nextRepeat, SEEK_STEP_SECONDS } from "@/lib/play-queue";
-import { VOLUME_STEP } from "@/lib/volume";
+import { nextRepeat, SEEK_STEP_SECONDS, type Shortcut } from "@/lib/play-queue";
+import { stepVolume, toggleMuteVolume, VOLUME_KEY_STEP } from "@/lib/volume";
 import CoverPicture from "./cover-picture";
 import { clock, KindIcon, useLater, usePaced, useResetTimer } from "./devices";
 import { SongLink } from "./music-links";
@@ -27,9 +27,11 @@ import {
   RepeatIcon,
   ShuffleIcon,
 } from "./player-icons";
+import PlayerLove from "./player-love";
 import { PlayerVisualizer } from "./player-transport";
 import { useBarEntrance } from "./use-bar-entrance";
 import { useNow } from "./use-now";
+import { VolumeBar } from "./volume-control";
 
 const REPEAT_LABELS: Record<RepeatMode, string> = {
   off: "Repeat is off",
@@ -50,6 +52,7 @@ export default function RemoteBar({
   showLyrics,
   onQueue,
   onLyrics,
+  canLove,
 }: {
   device: Device;
   here?: boolean;
@@ -58,17 +61,20 @@ export default function RemoteBar({
   onPlayHere: () => void;
   onDevices: () => void;
   showDevices: boolean;
-  keys: RefObject<(shortcut: string) => boolean>;
+  keys: RefObject<(shortcut: Shortcut) => boolean>;
   showQueue: boolean;
   showLyrics: boolean;
   onQueue: () => void;
   onLyrics: () => void;
+  canLove: boolean;
 }) {
   const [asked, setAsked] = useState<{ shuffle?: boolean; repeat?: RepeatMode; since: number } | null>(null);
   const now = useNow(500);
   const [guess, setGuess] = useState<Guess | null>(null);
   const [seeking, setSeeking] = useState<number | null>(null);
   const [volume, setVolume] = useState<number | null>(null);
+  const [volumePeek, setVolumePeek] = useState(0);
+  const beforeMute = useRef(0.8);
 
   useEffect(() => {
     if (device.at > 0) {
@@ -83,6 +89,7 @@ export default function RemoteBar({
   const length = state.duration ?? 0;
   const at = seeking ?? (length > 0 ? Math.min(shown.time, length) : shown.time);
   const shownVolume = volume ?? state.volume;
+  if (shownVolume > 0) beforeMute.current = shownVolume;
   const fresh = asked && now - asked.since < GUESS_KEEP_MS ? asked : null;
   const shuffle = fresh?.shuffle ?? state.shuffle;
   const repeat = fresh?.repeat ?? state.repeat;
@@ -100,6 +107,36 @@ export default function RemoteBar({
     },
     here ? 25 : 150,
   );
+
+  function applyVolume(next: number, flash = false) {
+    volumeReset.cancel();
+    setVolume(next);
+    volumeLive(next);
+    if (flash) setVolumePeek((n) => n + 1);
+  }
+
+  function toggleMute() {
+    const next = toggleMuteVolume(shownVolume, beforeMute.current);
+    beforeMute.current = next.remembered;
+    applyVolume(next.volume, true);
+  }
+
+  function stepRemoteVolume(delta: number) {
+    applyVolume(stepVolume(shownVolume, delta), true);
+  }
+
+  function toggleShuffle() {
+    if (shuffle === null) return;
+    send({ do: "shuffle", on: !shuffle });
+    setAsked({ ...fresh, shuffle: !shuffle, since: now });
+  }
+
+  function cycleRepeat() {
+    if (repeat === null) return;
+    const mode = nextRepeat(repeat);
+    send({ do: "repeat", mode });
+    setAsked({ ...fresh, repeat: mode, since: now });
+  }
 
   function toggle() {
     const playing = !shown.playing;
@@ -119,10 +156,36 @@ export default function RemoteBar({
   }
 
   keys.current = (shortcut) => {
+    if (shortcut === "mute") {
+      toggleMute();
+      return true;
+    }
+    if (shortcut === "volume-up" || shortcut === "volume-down") {
+      stepRemoteVolume(shortcut === "volume-up" ? VOLUME_KEY_STEP : -VOLUME_KEY_STEP);
+      return true;
+    }
+    if (shortcut === "shuffle") {
+      if (shuffle === null) return false;
+      toggleShuffle();
+      return true;
+    }
+    if (shortcut === "repeat") {
+      if (repeat === null) return false;
+      cycleRepeat();
+      return true;
+    }
+    if (shortcut === "queue") {
+      if (state.upNext.length === 0) return false;
+      onQueue();
+      return true;
+    }
     if (!track) return false;
-    if (shortcut === "toggle") toggle();
+    if (shortcut === "lyrics") onLyrics();
+    else if (shortcut === "toggle") toggle();
     else if (shortcut === "next" || shortcut === "previous") skip(shortcut);
-    else seekBy(shortcut === "back" ? -SEEK_STEP_SECONDS : SEEK_STEP_SECONDS);
+    else if (shortcut === "back" || shortcut === "forward")
+      seekBy(shortcut === "back" ? -SEEK_STEP_SECONDS : SEEK_STEP_SECONDS);
+    else return false;
     return true;
   };
 
@@ -189,6 +252,7 @@ export default function RemoteBar({
             </span>
           )}
         </div>
+        {track && <PlayerLove artist={track.artist} title={track.title} enabled={canLove} />}
       </div>
       <div className="player-center">
         <div className="player-skip">
@@ -199,11 +263,8 @@ export default function RemoteBar({
               data-player="shuffle"
               aria-label={`Shuffle on ${device.name}`}
               aria-pressed={shuffle}
-              title={shuffle ? "Shuffle is on" : "Shuffle is off"}
-              onClick={() => {
-                send({ do: "shuffle", on: !shuffle });
-                setAsked({ ...fresh, shuffle: !shuffle, since: now });
-              }}
+              title={shuffle ? "Shuffle is on (S)" : "Shuffle is off (S)"}
+              onClick={toggleShuffle}
             >
               <ShuffleIcon size={18} />
             </button>
@@ -213,6 +274,7 @@ export default function RemoteBar({
             className="icon-button"
             data-player="previous"
             aria-label={`Previous song on ${device.name}`}
+            title="Previous song (Shift+←)"
             disabled={!track}
             onClick={() => skip("previous")}
           >
@@ -233,6 +295,7 @@ export default function RemoteBar({
             className="icon-button"
             data-player="next"
             aria-label={`Next song on ${device.name}`}
+            title="Next song (Shift+→)"
             disabled={!track}
             onClick={() => skip("next")}
           >
@@ -246,12 +309,8 @@ export default function RemoteBar({
               data-repeat={repeat}
               aria-label={`Repeat on ${device.name}: ${repeat}`}
               aria-pressed={repeat !== "off"}
-              title={REPEAT_LABELS[repeat]}
-              onClick={() => {
-                const mode = nextRepeat(repeat);
-                send({ do: "repeat", mode });
-                setAsked({ ...fresh, repeat: mode, since: now });
-              }}
+              title={`${REPEAT_LABELS[repeat]} (R)`}
+              onClick={cycleRepeat}
             >
               <RepeatIcon size={18} one={repeat === "one"} />
             </button>
@@ -292,7 +351,7 @@ export default function RemoteBar({
             aria-label={`Queue on ${device.name}`}
             aria-expanded={showQueue}
             aria-pressed={showQueue}
-            title="Queue"
+            title="Queue (Q)"
             onClick={onQueue}
           >
             <QueueIcon size={18} />
@@ -306,7 +365,7 @@ export default function RemoteBar({
             aria-label="Lyrics"
             aria-expanded={showLyrics}
             aria-pressed={showLyrics}
-            title="Lyrics"
+            title="Lyrics (L)"
             onClick={onLyrics}
           >
             <LyricsIcon size={18} />
@@ -324,24 +383,15 @@ export default function RemoteBar({
         >
           <DevicesIcon size={18} />
         </button>
-        <div className="volume">
-          <input
-            type="range"
-            min={0}
-            max={1}
-            step={VOLUME_STEP}
-            value={shownVolume}
-            aria-label={`Volume on ${device.name}`}
-            aria-valuetext={`${Math.round(shownVolume * 100)}%`}
-            style={{ "--fill": `${Math.round(shownVolume * 100)}%` } as React.CSSProperties}
-            onChange={(event) => {
-              const value = Number(event.target.value);
-              volumeReset.cancel();
-              setVolume(value);
-              volumeLive(value);
-            }}
-          />
-        </div>
+        <VolumeBar
+          value={shownVolume}
+          onChange={(value) => applyVolume(value)}
+          onToggleMute={toggleMute}
+          sliderLabel={`Volume on ${device.name}`}
+          muteLabel={`Mute ${device.name}`}
+          unmuteLabel={`Unmute ${device.name}`}
+          peekKey={volumePeek}
+        />
       </div>
     </div>
   );

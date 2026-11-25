@@ -117,3 +117,63 @@ export function DevicesIcon(props: IconProps) {
     </Icon>
   );
 }
+
+export function SpeakerIcon({ level, size = 20 }: IconProps & { level: number }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width={size}
+      height={size}
+      aria-hidden="true"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+    >
+      <path d="M4 9h4l5-4v14l-5-4H4z" fill="currentColor" strokeLinejoin="round" />
+      {level === 0 ? (
+        <path d="M17 9l5 6M22 9l-5 6" strokeLinecap="round" />
+      ) : (
+        <>
+          <path d="M16.5 9.5a3.5 3.5 0 0 1 0 5" strokeLinecap="round" />
+          {level > 0.5 && <path d="M19 7a7 7 0 0 1 0 10" strokeLinecap="round" />}
+        </>
+      )}
+    </svg>
+  );
+}
+
+export function HeartIcon({ filled = false, size = 18 }: IconProps & { filled?: boolean }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width={size}
+      height={size}
+      aria-hidden="true"
+      fill={filled ? "currentColor" : "none"}
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M12 20.4l-1.35-1.23C5.4 14.36 2 11.28 2 7.5 2 4.42 4.42 2 7.5 2c1.74 0 3.41.81 4.5 2.09C13.09 2.81 14.76 2 16.5 2 19.58 2 22 4.42 22 7.5c0 3.78-3.4 6.86-8.65 11.68L12 20.4z" />
+    </svg>
+  );
+}
+
+export function PlayNextIcon(props: IconProps) {
+  return (
+    <Line {...props}>
+      <path d="M4 6h10M4 12h16M4 18h16" />
+      <path d="M17 4.5v5l4-2.5z" fill="currentColor" strokeWidth="1.2" />
+    </Line>
+  );
+}
+
+export function QueueAddIcon(props: IconProps) {
+  return (
+    <Line {...props}>
+      <path d="M4 6h12M4 11h12M4 16h7" />
+      <path d="M17 13v6M14 16h6" />
+    </Line>
+  );
+}

@@ -64,6 +64,15 @@ export function withoutRepeats(library: FinderLibrarySong[], songs: SongResult[]
 const PAGES_SHOWN = 4;
 const KEYWORD_FROM = 3;
 
+export type FinderAction = "open" | "play" | "next" | "queue";
+
+export function finderAction(keys: { shift: boolean; alt: boolean; ctrlOrMeta: boolean }): FinderAction {
+  if (keys.ctrlOrMeta) return "queue";
+  if (keys.alt) return "next";
+  if (keys.shift) return "play";
+  return "open";
+}
+
 export function findPages(query: string, pages: FinderPage[]) {
   const wanted = fold(query.trim());
   const byName = fuzzySort(wanted, pages, (page) => page.label);

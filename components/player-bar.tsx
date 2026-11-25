@@ -8,6 +8,7 @@ import CoverPicture from "./cover-picture";
 import { SongLink } from "./music-links";
 import type { PlayerTrack } from "./player";
 import { DevicesIcon, LyricsIcon, NextIcon, PreviousIcon, QueueIcon, RepeatIcon, ShuffleIcon } from "./player-icons";
+import PlayerLove from "./player-love";
 import { PlayerVisualizer, PlayPauseButton, SeekBar } from "./player-transport";
 import SleepTimer, { type Sleep } from "./sleep-timer";
 import { useBarEntrance } from "./use-bar-entrance";
@@ -91,6 +92,7 @@ type PlayerBarProps = {
   showDevices: boolean;
   elsewhere: boolean;
   onDevices: () => void;
+  canLove: boolean;
 };
 
 export function PlayerBar({
@@ -120,6 +122,7 @@ export function PlayerBar({
   showDevices,
   elsewhere,
   onDevices,
+  canLove,
 }: PlayerBarProps) {
   const entrance = useBarEntrance(Boolean(current) && !away);
   const fallbackArtistId = current ? artistIdFor(current.artist) : "";
@@ -178,6 +181,7 @@ export function PlayerBar({
           )}
           {error && <span className="error">{error}</span>}
         </div>
+        {current && <PlayerLove artist={current.artist} title={current.title} enabled={canLove} />}
       </div>
       <div className="player-center">
         <div className="player-skip">
@@ -187,7 +191,7 @@ export function PlayerBar({
             data-player="shuffle"
             aria-label="Shuffle"
             aria-pressed={shuffle}
-            title={shuffle ? "Shuffle is on" : "Shuffle is off"}
+            title={shuffle ? "Shuffle is on (S)" : "Shuffle is off (S)"}
             onClick={onShuffle}
           >
             <ShuffleIcon size={18} />
@@ -221,7 +225,7 @@ export function PlayerBar({
             data-repeat={repeat}
             aria-label={REPEAT_LABELS[repeat]}
             aria-pressed={repeat !== "off"}
-            title={REPEAT_LABELS[repeat]}
+            title={`${REPEAT_LABELS[repeat]} (R)`}
             onClick={onRepeat}
           >
             <RepeatIcon size={18} one={repeat === "one"} />
@@ -237,7 +241,7 @@ export function PlayerBar({
           aria-label="Queue"
           aria-expanded={showQueue}
           aria-pressed={showQueue}
-          title="Queue"
+          title="Queue (Q)"
           onClick={onQueue}
         >
           <QueueIcon size={18} />
@@ -249,7 +253,7 @@ export function PlayerBar({
           aria-label="Lyrics"
           aria-expanded={showLyrics}
           aria-pressed={showLyrics}
-          title="Lyrics"
+          title="Lyrics (L)"
           onClick={onLyrics}
         >
           <LyricsIcon size={18} />
