@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { canvasPixels, centreCrop } from "@/lib/cover-canvas";
+import { canvasPixels, centreCrop, releaseCanvas } from "@/lib/cover-canvas";
 import { sizedCover } from "@/lib/cover-size";
 import { useCanvasCovers } from "./canvas-covers";
 
@@ -50,11 +50,14 @@ function fetchCoverBlob(url: string): Promise<Blob> {
   return pending;
 }
 
-function inTurn<T>(work: () => Promise<T>): Promise<T> {
+function inTurn<T>(work: () => Promise<T>, signal?: AbortSignal): Promise<T | undefined> {
+  if (signal?.aborted) return Promise.resolve(undefined);
   const turn = line.then(async () => {
+    if (signal?.aborted) return undefined;
     if (performance.now() - sliceStart > SLICE_MS) {
       await new Promise((resolve) => setTimeout(resolve, PAUSE_MS));
       sliceStart = performance.now();
+      if (signal?.aborted) return undefined;
     }
     return work();
   });
@@ -64,23 +67,24 @@ function inTurn<T>(work: () => Promise<T>): Promise<T> {
 
 async function draw(canvas: HTMLCanvasElement, url: string, shown: number, signal: AbortSignal) {
   const blob = await fetchCoverBlob(url);
-  if (signal.aborted) return;
-  await inTurn(() => paint(canvas, blob, shown, signal));
+  if (signal.aborted || !canvas.isConnected) return;
+  await inTurn(() => paint(canvas, blob, shown, signal), signal);
 }
 
 async function paint(canvas: HTMLCanvasElement, blob: Blob, shown: number, signal: AbortSignal) {
-  if (signal.aborted) return;
+  if (signal.aborted || !canvas.isConnected) return;
   const picture = await createImageBitmap(blob);
   const pixels = canvasPixels(shown, window.devicePixelRatio);
   let scaled: ImageBitmap | null = null;
   try {
+    if (signal.aborted || !canvas.isConnected) return;
     const crop = centreCrop(picture.width, picture.height);
     scaled = await createImageBitmap(picture, crop.x, crop.y, crop.width, crop.height, {
       resizeWidth: pixels,
       resizeHeight: pixels,
       resizeQuality: "high",
     });
-    if (signal.aborted) return;
+    if (signal.aborted || !canvas.isConnected) return;
     canvas.width = pixels;
     canvas.height = pixels;
     const context = canvas.getContext("2d");
@@ -129,8 +133,7 @@ function CanvasCover({
         watcher.unobserve(canvas);
       }
       stop.abort();
-      canvas.width = 0;
-      canvas.height = 0;
+      releaseCanvas(canvas);
     };
   }, [url, shown, lazy, onFail]);
 

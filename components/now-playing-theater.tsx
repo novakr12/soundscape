@@ -5,6 +5,7 @@ import { type CSSProperties, type ReactNode, type RefObject, useEffect, useMemo,
 import { extractAmbientColor } from "@/lib/ambient-color";
 import { nativePort } from "@/lib/app-bridge";
 import { albumIdFor, artistIdFor } from "@/lib/catalog";
+import { releaseCanvas } from "@/lib/cover-canvas";
 import { sizedCover } from "@/lib/cover-size";
 import CoverPicture from "./cover-picture";
 import { SongLink } from "./music-links";
@@ -25,21 +26,38 @@ function rememberTint(url: string, color: string | null) {
   tintCache.set(url, color);
 }
 
-function sampleImageData(source: CanvasImageSource): string | null {
-  const canvas = document.createElement("canvas");
-  canvas.width = SAMPLE_SIZE;
-  canvas.height = SAMPLE_SIZE;
-  try {
+let sampleCanvas: HTMLCanvasElement | null = null;
+let sampleContext: CanvasRenderingContext2D | null = null;
+
+function getSampleSurface() {
+  if (!sampleCanvas) {
+    const canvas = document.createElement("canvas");
+    canvas.width = SAMPLE_SIZE;
+    canvas.height = SAMPLE_SIZE;
     const context = canvas.getContext("2d", { willReadFrequently: true }) ?? canvas.getContext("2d");
-    if (!context) return null;
-    context.drawImage(source, 0, 0, SAMPLE_SIZE, SAMPLE_SIZE);
-    const data = context.getImageData(0, 0, SAMPLE_SIZE, SAMPLE_SIZE).data;
+    if (!context) {
+      releaseCanvas(canvas);
+      return null;
+    }
+    sampleCanvas = canvas;
+    sampleContext = context;
+  }
+  return sampleContext ? { canvas: sampleCanvas, context: sampleContext } : null;
+}
+
+function sampleImageData(source: CanvasImageSource): string | null {
+  const surface = getSampleSurface();
+  if (!surface) return null;
+  try {
+    surface.context.clearRect(0, 0, SAMPLE_SIZE, SAMPLE_SIZE);
+    surface.context.drawImage(source, 0, 0, SAMPLE_SIZE, SAMPLE_SIZE);
+    const data = surface.context.getImageData(0, 0, SAMPLE_SIZE, SAMPLE_SIZE).data;
     return extractAmbientColor(data);
   } catch {
+    releaseCanvas(surface.canvas);
+    sampleCanvas = null;
+    sampleContext = null;
     return null;
-  } finally {
-    canvas.width = 0;
-    canvas.height = 0;
   }
 }
 

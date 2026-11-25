@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { canvasPixels, centreCrop, drawsCoversOnCanvas } from "../lib/cover-canvas";
+import { canvasPixels, centreCrop, drawsCoversOnCanvas, releaseCanvas } from "../lib/cover-canvas";
 
 describe("covers drawn on a canvas", () => {
   it("draws at the screen's pixel density but never larger than the picture asked for", () => {
@@ -23,5 +23,58 @@ describe("covers drawn on a canvas", () => {
     assert.ok(!drawsCoversOnCanvas("Mozilla/5.0 (X11; Linux x86_64; rv:140.0) Gecko/20100101 Firefox/140.0"));
     assert.ok(!drawsCoversOnCanvas("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/142.0 Safari/537.36"));
     assert.ok(!drawsCoversOnCanvas(null));
+  });
+
+  it("shrinks released canvases through 1x1 before clearing to 0x0 so Servo drops their backing buffer", () => {
+    const traceChanges = (initialWidth: number, initialHeight: number) => {
+      const steps: Array<[number, number]> = [];
+      let currentWidth = initialWidth;
+      let currentHeight = initialHeight;
+      const canvas = {
+        get width() {
+          return currentWidth;
+        },
+        set width(value: number) {
+          currentWidth = value;
+          steps.push([currentWidth, currentHeight]);
+        },
+        get height() {
+          return currentHeight;
+        },
+        set height(value: number) {
+          currentHeight = value;
+          steps.push([currentWidth, currentHeight]);
+        },
+      };
+      releaseCanvas(canvas);
+      return steps;
+    };
+
+    assert.deepEqual(traceChanges(300, 300), [
+      [1, 300],
+      [1, 1],
+      [0, 1],
+      [0, 0],
+    ]);
+    assert.deepEqual(traceChanges(300, 1), [
+      [1, 1],
+      [1, 1],
+      [0, 1],
+      [0, 0],
+    ]);
+    assert.deepEqual(traceChanges(1, 300), [
+      [1, 300],
+      [1, 1],
+      [0, 1],
+      [0, 0],
+    ]);
+    assert.deepEqual(traceChanges(1, 1), [
+      [0, 1],
+      [0, 0],
+    ]);
+    assert.deepEqual(traceChanges(0, 0), [
+      [0, 0],
+      [0, 0],
+    ]);
   });
 });

@@ -15,3 +15,12 @@ export function centreCrop(width: number, height: number): Crop {
 export function drawsCoversOnCanvas(userAgent: string | null | undefined) {
   return /\bServo\//.test(userAgent ?? "");
 }
+
+export function releaseCanvas(canvas: { width: number; height: number }) {
+  if (canvas.width > 1 || canvas.height > 1) {
+    canvas.width = 1;
+    canvas.height = 1;
+  }
+  canvas.width = 0;
+  canvas.height = 0;
+}
