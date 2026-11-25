@@ -1,4 +1,5 @@
 import { DEFAULT_ACCENT, isAccent, paintAccent } from "./accent";
+import { DEFAULT_EQUALIZER, type EqualizerOptions, readEqualizer } from "./equalizer";
 
 export const VISUALIZER_STYLES = ["bars", "wave", "dots"] as const;
 export type VisualizerStyle = (typeof VISUALIZER_STYLES)[number];
@@ -19,6 +20,7 @@ export type PlayerOptions = {
   visualizerBars: VisualizerBarCount;
   accent: string;
   accentIcon: boolean;
+  equalizer: EqualizerOptions;
 };
 
 export const CROSSFADE_CHOICES = [0, 2, 4, 6, 8, 12];
@@ -36,6 +38,7 @@ export const DEFAULT_OPTIONS: PlayerOptions = {
   visualizerBars: 8,
   accent: DEFAULT_ACCENT,
   accentIcon: false,
+  equalizer: DEFAULT_EQUALIZER,
 };
 
 export function readOptions(raw: unknown): PlayerOptions {
@@ -60,6 +63,7 @@ export function readOptions(raw: unknown): PlayerOptions {
       : DEFAULT_OPTIONS.visualizerBars,
     accent: isAccent(saved.accent) ? saved.accent.toLowerCase() : DEFAULT_OPTIONS.accent,
     accentIcon: typeof saved.accentIcon === "boolean" ? saved.accentIcon : DEFAULT_OPTIONS.accentIcon,
+    equalizer: readEqualizer(saved.equalizer),
   };
 }
 

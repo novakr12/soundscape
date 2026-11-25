@@ -45,7 +45,7 @@ export function finderPages(username: string | null, admin: boolean): FinderPage
           {
             label: "Settings",
             href: "/settings",
-            words: "preferences privacy password player levelling crossfade app desktop",
+            words: "preferences privacy password player levelling crossfade equalizer eq app desktop",
           },
         ]
       : [

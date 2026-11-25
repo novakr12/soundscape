@@ -70,6 +70,7 @@ describe("volume levelling", () => {
       visualizerBars: 8,
       accent: "#1db954",
       accentIcon: false,
+      equalizer: { enabled: false, bands: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0] },
     });
     assert.deepEqual(
       readOptions({
@@ -82,6 +83,7 @@ describe("volume levelling", () => {
         visualizerBars: 12,
         accent: "#8b5cf6",
         accentIcon: true,
+        equalizer: { enabled: true, bands: [4, 3, 1.5, 0, -1, 0, 1.5, 3, 3.5, 4] },
       }),
       {
         levelling: false,
@@ -93,6 +95,7 @@ describe("volume levelling", () => {
         visualizerBars: 12,
         accent: "#8b5cf6",
         accentIcon: true,
+        equalizer: { enabled: true, bands: [4, 3, 1.5, 0, -1, 0, 1.5, 3, 3.5, 4] },
       },
     );
     assert.deepEqual(
@@ -106,6 +109,7 @@ describe("volume levelling", () => {
         visualizerBars: 99,
         accent: "green",
         accentIcon: "yes",
+        equalizer: { enabled: "yes", bands: [1, 2] },
       }),
       {
         levelling: true,
@@ -117,6 +121,7 @@ describe("volume levelling", () => {
         visualizerBars: 8,
         accent: "#1db954",
         accentIcon: false,
+        equalizer: { enabled: false, bands: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0] },
       },
     );
   });

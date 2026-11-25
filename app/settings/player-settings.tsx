@@ -13,6 +13,7 @@ import {
   type VisualizerStyle,
   watchOptions,
 } from "@/lib/player-options";
+import EqualizerSettings from "./equalizer-settings";
 
 export default function PlayerSettings() {
   const [options, setOptions] = useState<PlayerOptions>(DEFAULT_OPTIONS);
@@ -133,6 +134,7 @@ export default function PlayerSettings() {
           <p className="muted">More bands show more detail and take a little more room next to the song.</p>
         </>
       )}
+      <EqualizerSettings equalizer={options.equalizer} onChange={(equalizer) => change({ equalizer })} />
     </>
   );
 }
