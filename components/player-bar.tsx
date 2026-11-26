@@ -1,9 +1,27 @@
 "use client";
 
 import Link from "next/link";
-import { type FormEvent, type Ref, type RefObject, useState } from "react";
+import {
+  type FormEvent,
+  type PointerEvent as ReactPointerEvent,
+  type Ref,
+  type RefObject,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import { albumIdFor, artistIdFor } from "@/lib/catalog";
 import type { Repeat } from "@/lib/play-queue";
+import {
+  autoScrollStep,
+  DRAG_THRESHOLD_PX,
+  type DropIndicator,
+  dropSlotForY,
+  indicatorForSlot,
+  type QueueRowRect,
+  targetIndexForSlot,
+} from "@/lib/queue-drag";
 import { formatQueueSaved, MAX_PLAYLIST_NAME, type QueueSaveResult } from "@/lib/queue-playlist";
 import CoverPicture from "./cover-picture";
 import { SongLink } from "./music-links";
@@ -43,6 +61,36 @@ type QueuePanelProps = {
   title?: string;
 };
 
+type DragSession = {
+  pointerId: number;
+  from: number;
+  trackId: string;
+  title: string;
+  artist: string;
+  startY: number;
+  clientY: number;
+  offsetY: number;
+  left: number;
+  width: number;
+  activated: boolean;
+  slot: number | null;
+  lastRendered: number;
+};
+
+type DragVisual = {
+  from: number;
+  title: string;
+  artist: string;
+  left: number;
+  width: number;
+  indicator: DropIndicator | null;
+};
+
+function panelTopBound(panel: HTMLElement, panelRect: DOMRect): number {
+  const head = panel.querySelector<HTMLElement>(":scope > .section-head");
+  return head ? Math.max(panelRect.top, head.getBoundingClientRect().bottom) : panelRect.top;
+}
+
 export function QueuePanel({
   queue,
   keys,
@@ -59,10 +107,263 @@ export function QueuePanel({
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveNotice, setSaveNotice] = useState<string | null>(null);
-  const [dragFrom, setDragFrom] = useState<number | null>(null);
-  const [dragOver, setDragOver] = useState<number | null>(null);
+  const [dragVisual, setDragVisual] = useState<DragVisual | null>(null);
+
+  const panelRef = useRef<HTMLElement>(null);
+  const ghostRef = useRef<HTMLDivElement>(null);
+  const ghostYRef = useRef(0);
+  const suppressClickRef = useRef(false);
+  const suppressResetTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const dragRef = useRef<DragSession | null>(null);
+  const scrollFrameRef = useRef(0);
+  const listenersCleanupRef = useRef<(() => void) | null>(null);
+  const latestRef = useRef({ queue, position, onMove });
+  latestRef.current = { queue, position, onMove };
 
   const upcomingCount = Math.max(0, queue.length - position - 1);
+
+  const measureTarget = useCallback((clientY: number, from: number) => {
+    const panel = panelRef.current;
+    if (!panel) return null;
+    const { queue: currentQueue, position: currentPos } = latestRef.current;
+    const minIndex = currentPos + 1;
+    const maxIndex = currentQueue.length - 1;
+    if (minIndex > maxIndex) return null;
+
+    const rows: QueueRowRect[] = [];
+    for (const item of panel.querySelectorAll<HTMLLIElement>("li[data-queue-index]")) {
+      const index = Number(item.dataset.queueIndex);
+      if (!Number.isInteger(index) || index < minIndex || index > maxIndex) continue;
+      const rect = item.getBoundingClientRect();
+      rows.push({ index, top: rect.top, bottom: rect.bottom });
+    }
+    if (rows.length === 0) return null;
+    rows.sort((a, b) => a.index - b.index);
+    const lastRendered = rows[rows.length - 1].index;
+    const slot = dropSlotForY(rows, clientY, minIndex, maxIndex);
+    const indicator = indicatorForSlot(from, slot, lastRendered);
+    return { slot, lastRendered, indicator };
+  }, []);
+
+  const updateIndicator = useCallback(
+    (drag: DragSession) => {
+      const measured = measureTarget(drag.clientY, drag.from);
+      if (!measured) return;
+      drag.slot = measured.slot;
+      drag.lastRendered = measured.lastRendered;
+      setDragVisual((prev) => {
+        if (!prev || prev.from !== drag.from) return prev;
+        const same =
+          prev.indicator?.index === measured.indicator?.index && prev.indicator?.edge === measured.indicator?.edge;
+        return same ? prev : { ...prev, indicator: measured.indicator };
+      });
+    },
+    [measureTarget],
+  );
+
+  const stopAutoScroll = useCallback(() => {
+    if (scrollFrameRef.current) {
+      cancelAnimationFrame(scrollFrameRef.current);
+      scrollFrameRef.current = 0;
+    }
+  }, []);
+
+  const tickAutoScroll = useCallback(() => {
+    scrollFrameRef.current = 0;
+    const drag = dragRef.current;
+    const panel = panelRef.current;
+    if (!drag?.activated || !panel) return;
+    const panelRect = panel.getBoundingClientRect();
+    const step = autoScrollStep(drag.clientY, panelTopBound(panel, panelRect), panelRect.bottom);
+    if (step === 0) return;
+
+    const before = panel.scrollTop;
+    panel.scrollTop = before + step;
+    if (panel.scrollTop !== before) updateIndicator(drag);
+    scrollFrameRef.current = requestAnimationFrame(tickAutoScroll);
+  }, [updateIndicator]);
+
+  const syncAutoScroll = useCallback(() => {
+    const drag = dragRef.current;
+    const panel = panelRef.current;
+    if (!drag?.activated || !panel) {
+      stopAutoScroll();
+      return;
+    }
+    const panelRect = panel.getBoundingClientRect();
+    if (autoScrollStep(drag.clientY, panelTopBound(panel, panelRect), panelRect.bottom) !== 0) {
+      if (!scrollFrameRef.current) {
+        scrollFrameRef.current = requestAnimationFrame(tickAutoScroll);
+      }
+    } else {
+      stopAutoScroll();
+    }
+  }, [stopAutoScroll, tickAutoScroll]);
+
+  const clearDrag = useCallback(
+    (commit: boolean) => {
+      const drag = dragRef.current;
+      dragRef.current = null;
+      stopAutoScroll();
+      listenersCleanupRef.current?.();
+      listenersCleanupRef.current = null;
+      if (drag?.activated) {
+        try {
+          if (panelRef.current?.hasPointerCapture?.(drag.pointerId)) {
+            panelRef.current.releasePointerCapture(drag.pointerId);
+          }
+        } catch {}
+        if (commit && drag.slot !== null) {
+          const latest = latestRef.current;
+          const valid =
+            drag.from > latest.position &&
+            drag.from < latest.queue.length &&
+            latest.queue[drag.from]?.trackId === drag.trackId;
+          if (valid) {
+            const to = targetIndexForSlot(drag.from, drag.slot, latest.position + 1, latest.queue.length - 1);
+            if (to !== drag.from) latest.onMove?.(drag.from, to);
+          }
+        }
+        clearTimeout(suppressResetTimerRef.current);
+        suppressResetTimerRef.current = setTimeout(() => {
+          suppressClickRef.current = false;
+        }, 0);
+      }
+      setDragVisual(null);
+    },
+    [stopAutoScroll],
+  );
+
+  const activateDrag = useCallback(
+    (drag: DragSession) => {
+      if (drag.activated) return;
+      drag.activated = true;
+      suppressClickRef.current = true;
+      ghostYRef.current = drag.clientY - drag.offsetY;
+      try {
+        panelRef.current?.setPointerCapture?.(drag.pointerId);
+      } catch {}
+      try {
+        window.getSelection()?.removeAllRanges();
+      } catch {}
+      const measured = measureTarget(drag.clientY, drag.from);
+      if (measured) {
+        drag.slot = measured.slot;
+        drag.lastRendered = measured.lastRendered;
+      }
+      setDragVisual({
+        from: drag.from,
+        title: drag.title,
+        artist: drag.artist,
+        left: drag.left,
+        width: drag.width,
+        indicator: measured?.indicator ?? null,
+      });
+    },
+    [measureTarget],
+  );
+
+  function startRowPointer(event: ReactPointerEvent<HTMLLIElement>, at: number, track: PlayerTrack) {
+    if (!event.isPrimary) return;
+    if (event.pointerType === "mouse" && event.button !== 0) return;
+    if (dragRef.current) return;
+    if (!(event.target instanceof Element) || event.target.closest(".queue-move, .queue-remove")) return;
+
+    const fromHandle = Boolean(event.target.closest(".queue-grip"));
+    if (event.pointerType === "touch" && !fromHandle) return;
+
+    const rect = event.currentTarget.getBoundingClientRect();
+    const session: DragSession = {
+      pointerId: event.pointerId,
+      from: at,
+      trackId: track.trackId,
+      title: track.title,
+      artist: track.artist,
+      startY: event.clientY,
+      clientY: event.clientY,
+      offsetY: event.clientY - rect.top,
+      left: rect.left,
+      width: rect.width,
+      activated: false,
+      slot: at,
+      lastRendered: at,
+    };
+    dragRef.current = session;
+
+    const onPointerMove = (moveEvent: PointerEvent) => {
+      const current = dragRef.current;
+      if (!current || moveEvent.pointerId !== current.pointerId) return;
+      current.clientY = moveEvent.clientY;
+      if (!current.activated) {
+        if (Math.abs(moveEvent.clientY - current.startY) < DRAG_THRESHOLD_PX) return;
+        activateDrag(current);
+      }
+      ghostYRef.current = moveEvent.clientY - current.offsetY;
+      if (ghostRef.current) {
+        ghostRef.current.style.transform = `translate3d(0, ${Math.round(ghostYRef.current)}px, 0)`;
+      }
+      updateIndicator(current);
+      syncAutoScroll();
+    };
+
+    const onPointerUp = (upEvent: PointerEvent) => {
+      if (upEvent.pointerId !== session.pointerId) return;
+      clearDrag(true);
+    };
+
+    const onPointerCancel = (cancelEvent: PointerEvent) => {
+      if (cancelEvent.pointerId !== session.pointerId) return;
+      clearDrag(false);
+    };
+
+    const onKeyDown = (keyEvent: KeyboardEvent) => {
+      if (keyEvent.key !== "Escape") return;
+      keyEvent.preventDefault();
+      clearDrag(false);
+    };
+
+    const onBlur = () => clearDrag(false);
+
+    window.addEventListener("pointermove", onPointerMove);
+    window.addEventListener("pointerup", onPointerUp);
+    window.addEventListener("pointercancel", onPointerCancel);
+    window.addEventListener("keydown", onKeyDown);
+    window.addEventListener("blur", onBlur);
+    listenersCleanupRef.current = () => {
+      window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("pointerup", onPointerUp);
+      window.removeEventListener("pointercancel", onPointerCancel);
+      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("blur", onBlur);
+    };
+
+    if (fromHandle) {
+      event.preventDefault();
+      activateDrag(session);
+    }
+  }
+
+  useEffect(() => {
+    return () => {
+      clearTimeout(suppressResetTimerRef.current);
+      dragRef.current = null;
+      stopAutoScroll();
+      listenersCleanupRef.current?.();
+      listenersCleanupRef.current = null;
+    };
+  }, [stopAutoScroll]);
+
+  useEffect(() => {
+    const drag = dragRef.current;
+    if (!drag) return;
+    const stillMovable =
+      Boolean(onMove) &&
+      queue.length - position - 1 >= 2 &&
+      drag.from > position &&
+      drag.from < queue.length &&
+      queue[drag.from]?.trackId === drag.trackId;
+    if (!stillMovable) clearDrag(false);
+  }, [queue, position, onMove, clearDrag]);
 
   async function handleSaveSubmit(event: FormEvent) {
     event.preventDefault();
@@ -84,7 +385,18 @@ export function QueuePanel({
   }
 
   return (
-    <section className="queue-panel" aria-label="Queue">
+    <section
+      ref={panelRef}
+      className={dragVisual ? "queue-panel queue-dragging" : "queue-panel"}
+      aria-label="Queue"
+      onClickCapture={(event) => {
+        if (!suppressClickRef.current) return;
+        suppressClickRef.current = false;
+        clearTimeout(suppressResetTimerRef.current);
+        event.preventDefault();
+        event.stopPropagation();
+      }}
+    >
       <div className="section-head">
         <h2>{title}</h2>
         <div className="queue-head-actions">
@@ -137,55 +449,26 @@ export function QueuePanel({
         guessedHeight={34}
         renderItem={(track, at) => {
           const canMoveRow = Boolean(onMove && at > position && upcomingCount >= 2);
+          const isDragging = dragVisual?.from === at;
+          const indicator = dragVisual?.indicator;
           const dragIndicator =
-            dragOver === at && dragFrom !== null && dragFrom !== at
-              ? dragFrom > at
-                ? "drag-over-above"
-                : "drag-over"
-              : undefined;
+            indicator?.index === at ? (indicator.edge === "above" ? "drag-over-above" : "drag-over") : undefined;
           const rowClass =
-            [at === position ? "current" : at < position ? "played" : undefined, dragIndicator]
+            [
+              at === position ? "current" : at < position ? "played" : undefined,
+              isDragging ? "dragging" : undefined,
+              dragIndicator,
+            ]
               .filter(Boolean)
               .join(" ") || undefined;
           return (
             <li
               key={`${keys[at]}`}
               className={rowClass}
-              draggable={canMoveRow}
-              onDragStart={
-                canMoveRow
-                  ? (event) => {
-                      event.dataTransfer.effectAllowed = "move";
-                      setDragFrom(at);
-                      setDragOver(at);
-                    }
-                  : undefined
-              }
-              onDragOver={
-                dragFrom !== null && at > position
-                  ? (event) => {
-                      event.preventDefault();
-                      event.dataTransfer.dropEffect = "move";
-                      if (dragOver !== at) setDragOver(at);
-                    }
-                  : undefined
-              }
-              onDrop={
-                dragFrom !== null && at > position
-                  ? (event) => {
-                      event.preventDefault();
-                      const from = dragFrom;
-                      setDragFrom(null);
-                      setDragOver(null);
-                      if (from !== at) onMove?.(from, at);
-                    }
-                  : undefined
-              }
-              onDragEnd={() => {
-                setDragFrom(null);
-                setDragOver(null);
-              }}
+              data-queue-index={canMoveRow ? at : undefined}
+              onPointerDown={canMoveRow ? (event) => startRowPointer(event, at, track) : undefined}
             >
+              {canMoveRow && <span className="queue-grip" aria-hidden="true" title="Drag to reorder" />}
               <button type="button" className="queue-song" onClick={() => onJump(at)}>
                 <span>{track.title}</span> <span className="muted">· {track.artist}</span>
               </button>
@@ -225,6 +508,23 @@ export function QueuePanel({
           );
         }}
       />
+      {dragVisual && (
+        <div
+          ref={ghostRef}
+          className="queue-drag-ghost"
+          aria-hidden="true"
+          style={{
+            left: dragVisual.left,
+            width: dragVisual.width,
+            transform: `translate3d(0, ${Math.round(ghostYRef.current)}px, 0)`,
+          }}
+        >
+          <span className="queue-grip" aria-hidden="true" />
+          <span className="queue-drag-ghost-text">
+            <span>{dragVisual.title}</span> <span className="muted">· {dragVisual.artist}</span>
+          </span>
+        </div>
+      )}
     </section>
   );
 }
