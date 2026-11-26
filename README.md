@@ -4,9 +4,18 @@
 
 <h1 align="center">Soundscape</h1>
 
-A self-hosted music tracker. It records what you play from Navidrome, Jellyfin or any ListenBrainz-compatible player, shows live charts, stats and a yearly recap, and recommends music from listeners with similar taste.
+A self-hosted music tracker and player for Navidrome, Jellyfin, and any ListenBrainz-compatible player. Built with Next.js and PostgreSQL.
 
-Built with Next.js and PostgreSQL.
+Companion apps: [Linux Desktop](https://github.com/novakr12/soundscape-desktop) · [Android](https://github.com/novakr12/soundscape-android)
+
+## Features
+
+- **Tracking & stats**: live plays, charts, leaderboards, friends, new-release radar, yearly recaps, and Last.fm import/scrobbling.
+- **Player**: Navidrome full-song streaming (with Deezer/Apple Music previews as fallback), ReplayGain, crossfade, 10-band equalizer, visualizer, and sleep timer.
+- **Now Playing & lyrics**: full-screen theater view with ambient cover tint and synced lyrics (Navidrome or [LRCLIB](https://lrclib.net)).
+- **Queue & radio**: drag-and-drop queue reordering, save queue as a Navidrome playlist, and song/artist radio.
+- **Devices & listening parties**: remote playback and queue handoff across browsers, Linux Desktop, and Android, plus synced listening parties.
+- **Notifications**: browser and mobile push notifications for followers, releases, milestones, and weekly recaps (requires HTTPS).
 
 ## Run it
 
@@ -23,55 +32,37 @@ echo "AUTH_SECRET=$(openssl rand -base64 32)" > .env
 docker compose -f docker-compose.yml -f compose.prod.yml up -d --build
 ```
 
-Your own changes to the production setup go in `compose.local.yml`, which `scripts/update.sh` reads when it exists and git leaves alone. For example, to reach the database from this computer on port 5433:
+Open the app, sign up, and follow **Connect** to link your player or Navidrome (use a Docker-reachable URL such as `http://host.docker.internal:4533`). Local production overrides belong in `compose.local.yml`, which `scripts/update.sh` applies if present. `/health` returns `200` when PostgreSQL is reachable and `503` otherwise.
 
-```yaml
-services:
-  postgres:
-    ports: !override
-      - "127.0.0.1:5433:5432"
-```
+## Configuration (`.env`)
 
-Then open the app, sign up, and follow the **Connect** page to point your player at Soundscape.
-
-To choose who can create accounts, set `SIGNUPS` in `.env`: `open` (anyone, the default), `invite` (only with an invite link, which any member can create in Settings) or `closed`.
-
-To see the admin page (accounts, library status, backups and maintenance buttons), add your username to `ADMIN_USERS` in `.env`, for example `ADMIN_USERS=admin`. Admins can also rename and merge artists and songs from their pages; plays sent later under the old name follow automatically.
-
-Phone and browser notifications are turned on per device in Settings. They need Soundscape to be opened over https, for example through Tailscale Serve; on iPhone, add Soundscape to the Home Screen first. Push services may contact whoever runs the server, so you can set `PUSH_CONTACT=mailto:you@example.com` in `.env`.
-
-Song previews come from Deezer, and from Apple Music for songs Deezer doesn't have. If you've connected Navidrome on the Connect page (use an address the Soundscape container can reach, such as `http://host.docker.internal:4533` when Navidrome runs on the same computer; Tailscale `.ts.net` names don't work from inside Docker) and it has the song, Preview plays the whole song from your own library instead. Soundscape streams it through the server, so your Navidrome login never reaches the browser, and it falls back to the 30-second preview if Navidrome can't play it. The lyrics button in the player shows the words, line by line in time when they're synced. They come from Navidrome when your files have them, otherwise from [LRCLIB](https://lrclib.net), which is sent the song's artist, title and album. 📻 Start radio on a song or artist page fills the queue from your Navidrome with that artist and the artists Soundscape listeners play alongside it, and keeps adding songs as you go. Full songs from Navidrome are levelled with the ReplayGain tags Navidrome reads from your files, by album while a whole album plays and by song otherwise; turn it off under Player on the Settings page. The same place has an optional crossfade; songs from one album always follow each other without a gap. Apple's catalogue differs a little by country; set `APPLE_MUSIC_COUNTRY` in `.env` to a two-letter store code such as `de` (the default is `us`).
-
-Every Soundscape player you're logged in to, in a browser tab, the desktop app or the Android app, shows up under **Devices** in the player (the screen-and-phone button). From there you can see what each one is playing, pause it, skip, seek and change its volume, take its music over with **Play here**, or hand yours to it with **Play my music there**. When something plays on another device and nothing plays on this one, a small "Playing on…" button at the bottom turns the player into a remote for it: the player shows that device's song and its buttons, seek bar and volume control it, until you press **Play here**. While it follows another device, anything you start (a song, an album, a playlist, shuffle or radio) plays on that device, **Play next** and **Add to queue** add to that device's queue, and the shuffle, repeat, queue and lyrics buttons work on it too. After **Play my music there** the player does the same. In the Android app (0.9.0 and newer) the lock screen follows along too. It works through your Soundscape server, so the devices don't need to be on the same network. The Android app (0.7.0 and newer) stays in the list while it plays in the background with the screen off. The Android app (0.8.0 and newer) also works in Android Auto, with your Navidrome albums, playlists, a shuffle, search and its downloads. A browser tab that hasn't been clicked yet may not be allowed to start sound by itself; Devices says so, and pressing play on it once fixes that.
-
-**Start a listening party** at the top of Devices to share what you play: send friends the link or invite people you follow, and when they join, their player (browser, desktop app or Android app, even in the background) plays the same song at the same spot as yours. Guests stream your songs from your Navidrome through the server while they're at your party. Only you control playback; guests can **Add to queue** and **Play next**, and the party shows who added what. Starting their own music takes a guest out of the party, and ending it pauses everyone.
-
-`/health` answers 200 when PostgreSQL is reachable and 503 when it is not, for uptime monitors such as Uptime Kuma. Docker uses it too: `docker ps` shows the app as `healthy` or `unhealthy`.
-
-To import from Last.fm, create a free API key at [last.fm/api/account/create](https://www.last.fm/api/account/create) and add `LASTFM_API_KEY=your-key` to `.env`.
-
-Every few hours Soundscape asks MusicBrainz about new albums and EPs from each listener's 30 most played artists (each artist at most once a week). New ones from the last month show up under Recommendations and as a notification.
-
-To also scrobble to Last.fm, add the shared secret from the same page as `LASTFM_SHARED_SECRET=your-secret`. Each person then clicks Connect Last.fm on the Connect page. Soundscape passes on what they're playing right now and every play that reaches it live (from Navidrome, the desktop app, phone apps and the play button), retries every few minutes while Last.fm is down, and drops plays once they're older than the two weeks Last.fm accepts. Imported history is never sent. If a player already scrobbles to Last.fm itself, turn that off to avoid doubles.
-
-## Useful commands
-
-| Command | What it does |
+| Variable | Description |
 |---|---|
-| `npm test` / `npm run test:api` | Unit / API tests |
-| `npm run test:e2e` | Browser smoke test against a running server (`BASE_URL`, needs `npx playwright install chromium` once) |
-| `npm run lint` / `npm run format` | Check / fix formatting and lint rules with Biome |
-| `npm run db:covers` | Fill in missing album covers |
-| `npm run db:albums` | Fill in albums from ListenBrainz and Deezer |
-| `npm run db:genres` | Fill in artist genres from MusicBrainz (new artists also get theirs every hour) |
-| `npm run db:photos` | Fill in artist photos from Deezer (new artists also get theirs every hour) |
-| `npm run db:artist-info` | Fill in artist bios and links from MusicBrainz and Wikipedia (also every hour) |
-| `npm run db:dedupe` | Remove plays counted twice, e.g. from both ListenBrainz and Last.fm (`-- --apply` to remove) |
-| `scripts/update.sh` | Update production: pull, rebuild, restart and wait until it answers |
-| `scripts/backup.sh` / `scripts/restore.sh <file>` | Back up / restore all data |
+| `AUTH_SECRET` | Session signing secret (required in production) |
+| `SIGNUPS` | Account registration: `open` (default), `invite`, or `closed` |
+| `ADMIN_USERS` | Comma-separated admin usernames (enables Admin page and artist/song merge & rename) |
+| `LASTFM_API_KEY` | Last.fm API key for history import and scrobbling |
+| `LASTFM_SHARED_SECRET` | Last.fm shared secret for live scrobbling |
+| `PUSH_CONTACT` | `mailto:` contact address for web push services |
+| `APPLE_MUSIC_COUNTRY` | Two-letter Apple Music store code for previews (default `us`) |
 
-In production, run `npm` commands in the tools container, for example `docker compose -f docker-compose.yml -f compose.prod.yml run --rm --build tools npm run db:photos`. The app image itself only contains what it needs to run.
+## Commands
+
+| Command                                                                          | Description                                            |
+| -------------------------------------------------------------------------------- | ------------------------------------------------------ |
+| `npm test` / `npm run test:api` / `npm run test:e2e`                             | Unit / API / Playwright smoke tests (`BASE_URL`)       |
+| `npm run lint` / `npm run format` / `npm run typecheck`                          | Biome lint/format and TypeScript check                 |
+| `npm run db:covers` / `db:albums` / `db:genres` / `db:photos` / `db:artist-info` | Backfill covers, albums, genres, photos, and bios      |
+| `npm run db:dedupe`                                                              | Find or remove duplicate pl--ays (`--apply` to delete) |
+| `scripts/update.sh`                                                              | Pull, rebuild, and restart production                  |
+| `scripts/backup.sh` / `scripts/restore.sh <file>`                                | Back up or restore data                                |
+
+In production, run `npm` commands inside the `tools` container:
+
+```bash
+docker compose -f docker-compose.yml -f compose.prod.yml run --rm --build tools <command>
+```
 
 ## License
 
-[AGPL-3.0-or-later](LICENSE). Copies and modified versions must keep the "Soundscape by novakr12" credit, see [NOTICE](NOTICE).
+[AGPL-3.0-or-later](LICENSE). Copies and modified versions must preserve the "Soundscape by novakr12" credit; see [NOTICE](NOTICE).
