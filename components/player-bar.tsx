@@ -389,6 +389,11 @@ export function QueuePanel({
       ref={panelRef}
       className={dragVisual ? "queue-panel queue-dragging" : "queue-panel"}
       aria-label="Queue"
+      onContextMenu={(event) => {
+        if (dragRef.current?.activated || (event.target instanceof Element && event.target.closest(".queue-grip"))) {
+          event.preventDefault();
+        }
+      }}
       onClickCapture={(event) => {
         if (!suppressClickRef.current) return;
         suppressClickRef.current = false;

@@ -649,6 +649,7 @@ main {
   width: min(26rem, calc(100% - 2rem));
   max-height: min(60vh, 32rem);
   overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 0 1rem 0.75rem;
   border: 1px solid color-mix(in srgb, var(--muted) 30%, transparent);
   border-radius: 12px;
@@ -1006,7 +1007,10 @@ main {
 }
 
 .queue-panel.queue-dragging {
+  -webkit-user-select: none;
   user-select: none;
+  -webkit-touch-callout: none;
+  touch-action: none;
   cursor: grabbing;
 }
 
@@ -1022,7 +1026,9 @@ main {
   cursor: grab;
   color: color-mix(in srgb, var(--muted) 75%, transparent);
   touch-action: none;
+  -webkit-user-select: none;
   user-select: none;
+  -webkit-touch-callout: none;
 }
 
 .queue-grip::before {
@@ -1045,6 +1051,14 @@ main {
 .queue-panel li:hover .queue-grip,
 .queue-grip:hover {
   color: var(--fg);
+}
+
+@media (pointer: coarse) {
+  .queue-grip {
+    width: 2.25rem;
+    height: 2.5rem;
+    margin-left: -0.4rem;
+  }
 }
 
 .queue-panel li.dragging {
