@@ -4,7 +4,7 @@ import { addDays, localDay, startOfDay } from "./time";
 const YEARS_BACK = 10;
 const SONGS = 3;
 
-export type ThatDaySong = { trackId: string; title: string; artist: string; plays: number };
+export type ThatDaySong = { trackId: string; title: string; artist: string; cover?: string; plays: number };
 export type ThatDay = { year: number; yearsAgo: number; plays: number; songs: ThatDaySong[] };
 
 function sameDay(year: number, today: string) {
@@ -35,6 +35,7 @@ export async function onThisDay(userId: string, now = new Date()): Promise<ThatD
       SELECT r.year,
              p.track_id,
              t.title AS track_title,
+             t.cover AS track_cover,
              a.name AS artist_name,
              count(*)::int AS plays,
              min(p.played_at) AS first_at,
@@ -44,9 +45,9 @@ export async function onThisDay(userId: string, now = new Date()): Promise<ThatD
       JOIN plays p ON p.user_id = ${userId} AND p.played_at >= r.from_at AND p.played_at < r.to_at
       JOIN tracks t ON t.id = p.track_id
       JOIN artists a ON a.id = t.artist_id
-      GROUP BY r.year, p.track_id, t.title, a.name
+      GROUP BY r.year, p.track_id, t.title, t.cover, a.name
     )
-    SELECT year, day_plays, track_id, track_title, artist_name, plays
+    SELECT year, day_plays, track_id, track_title, track_cover, artist_name, plays
     FROM grouped
     WHERE rank <= ${SONGS}
     ORDER BY year DESC, rank ASC`;
@@ -67,6 +68,7 @@ export async function onThisDay(userId: string, now = new Date()): Promise<ThatD
       trackId: row.track_id,
       title: row.track_title,
       artist: row.artist_name,
+      ...(typeof row.track_cover === "string" && row.track_cover ? { cover: row.track_cover } : {}),
       plays: row.plays,
     });
   }

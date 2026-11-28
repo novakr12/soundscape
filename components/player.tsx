@@ -55,6 +55,7 @@ import {
 import { DEFAULT_OPTIONS, type PlayerOptions, watchOptions } from "@/lib/player-options";
 import type { QueueSaveResult } from "@/lib/queue-playlist";
 import type { RadioMore, RadioSeed } from "@/lib/radio";
+import { paintTheme, syncThemeColor } from "@/lib/theme";
 import { DevicesPanel, type LocalPlayer, PlayingElsewhere, useDeviceLink } from "./devices";
 import { type PartyControls, useParty } from "./listening-party";
 import LyricsPanel from "./lyrics-panel";
@@ -595,11 +596,13 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
   useEffect(
     () =>
       watchOptions((next) => {
+        paintTheme(next.theme, document.documentElement);
+        syncThemeColor(next.theme, document);
         paintAccent(next.accent, document.documentElement);
         try {
-          nativePort(window as Window & { soundscapeNative?: unknown })?.postMessage(
-            JSON.stringify({ do: "icon", accent: next.accentIcon ? next.accent : null }),
-          );
+          const bridge = nativePort(window as Window & { soundscapeNative?: unknown });
+          bridge?.postMessage(JSON.stringify({ do: "icon", accent: next.accentIcon ? next.accent : null }));
+          bridge?.postMessage(JSON.stringify({ do: "theme", theme: next.theme }));
         } catch {}
         optionsRef.current = next;
         setOptions(next);
@@ -1676,13 +1679,13 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
 
   function learn(track: PlayerTrack, id: number) {
     if (track.songId) {
-      if (!track.album || !track.albumHref) learnAlbum(track, id);
+      if (!track.album || !track.albumHref || !track.cover) learnAlbum(track, id);
       return;
     }
     fetch(`${sourceFor(track)}?info`)
       .then((response) => (response.ok ? response.json() : { full: false }))
-      .then((info: { full?: boolean; album?: string; albumHref?: string }) => {
-        const known = info.album ? withAlbum(track, info.album, info.albumHref) : track;
+      .then((info: { full?: boolean; album?: string; albumHref?: string; cover?: string }) => {
+        const known = withTrackInfo(track, info);
         if (id === playing.current && !fellBack.current) describe(known, info.full === true);
       })
       .catch(() => {});
@@ -1691,10 +1694,10 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
   function learnAlbum(track: PlayerTrack, id: number) {
     fetch(`/api/listen/${encodeURIComponent(track.trackId)}?info`)
       .then((response) => (response.ok ? response.json() : {}))
-      .then((info: { album?: string; albumHref?: string }) => {
-        if (!info.album) return;
-        const known = withAlbum(track, info.album, info.albumHref);
-        if (id === playing.current && !fellBack.current) describe(known, true);
+      .then((info: { album?: string; albumHref?: string; cover?: string }) => {
+        if (!info.album && !info.cover) return;
+        const known = withTrackInfo(track, info);
+        if (known !== track && id === playing.current && !fellBack.current) describe(known, true);
       })
       .catch(() => {});
   }
@@ -1723,25 +1726,37 @@ export function PlayerProvider({ children, username }: { children: React.ReactNo
     setTracks(nextTracks);
   }
 
-  function withAlbum(track: PlayerTrack, album: string, albumHref?: string) {
-    const needsAlbum = !track.album;
-    const needsHref = Boolean(albumHref && !track.albumHref);
-    if (!needsAlbum && !needsHref) return track;
-    const nextTracks = tracksRef.current.map((each) => {
-      if (each.trackId !== track.trackId) return each;
-      const addAlbum = !each.album ? { album } : {};
-      const addHref = albumHref && !each.albumHref ? { albumHref } : {};
-      return Object.keys(addAlbum).length > 0 || Object.keys(addHref).length > 0
-        ? { ...each, ...addAlbum, ...addHref }
-        : each;
-    });
-    tracksRef.current = nextTracks;
-    setTracks(nextTracks);
+  function applyTrackInfo(
+    track: PlayerTrack,
+    info: { album?: string; albumHref?: string; cover?: string },
+  ): PlayerTrack | null {
+    const album = info.album && !track.album ? info.album : undefined;
+    const albumHref = info.albumHref && !track.albumHref ? info.albumHref : undefined;
+    const cover = info.cover && !track.cover ? info.cover : undefined;
+    if (!album && !albumHref && !cover) return null;
     return {
       ...track,
-      ...(needsAlbum ? { album } : {}),
-      ...(needsHref ? { albumHref } : {}),
+      ...(album ? { album } : {}),
+      ...(albumHref ? { albumHref } : {}),
+      ...(cover ? { cover } : {}),
     };
+  }
+
+  function withTrackInfo(track: PlayerTrack, info: { album?: string; albumHref?: string; cover?: string }) {
+    const updated = applyTrackInfo(track, info);
+    let changed = false;
+    const nextTracks = tracksRef.current.map((each) => {
+      if (each.trackId !== track.trackId) return each;
+      const next = applyTrackInfo(each, info);
+      if (!next) return each;
+      changed = true;
+      return next;
+    });
+    if (changed) {
+      tracksRef.current = nextTracks;
+      setTracks(nextTracks);
+    }
+    return updated ?? track;
   }
 
   function watchLoading(id: number) {

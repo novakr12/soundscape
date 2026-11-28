@@ -80,10 +80,11 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ d
                   · {day.year} · {plural(day.plays, "play")}
                 </span>
               </h3>
-              <ol className="chart playable">
+              <ol className="chart playable with-covers">
                 {day.songs.map((song, index) => (
                   <li key={song.trackId}>
                     <span className="muted">{index + 1}</span>
+                    <Cover src={song.cover} />
                     <span>
                       <SongLink trackId={song.trackId}>{song.title}</SongLink>{" "}
                       <span className="muted">

@@ -3,7 +3,7 @@ import { checkFullSong, findFullSong } from "@/lib/navidrome";
 import { redirectTo } from "@/lib/relative-redirect";
 import { routeParam } from "@/lib/route-param";
 import { sessionOrTokenUser } from "@/lib/token-auth";
-import { findKnownAlbum, knownAlbum, libraryAlbum } from "@/lib/track-album";
+import { findKnownAlbum, knownTrackInfo, libraryAlbum, resolveTrackCover } from "@/lib/track-album";
 
 export const dynamic = "force-dynamic";
 
@@ -17,13 +17,18 @@ export async function GET(request: Request, { params }: Context) {
   const trackId = routeParam((await params).trackId);
   const noStore = { "cache-control": "private, no-store" };
   if (new URL(request.url).searchParams.has("info")) {
-    const [found, known] = await Promise.all([checkFullSong(userId, trackId), knownAlbum(trackId)]);
-    const { songId: _, album, albumId, ...check } = found;
+    const [found, known] = await Promise.all([checkFullSong(userId, trackId), knownTrackInfo(trackId)]);
+    const { songId: _, album, albumId, coverArt, ...check } = found;
     const resolvedAlbum =
-      known ??
+      known.album ??
       (album && found.lookedFor ? await findKnownAlbum(found.lookedFor.artist, album) : null) ??
       libraryAlbum({ album, albumId });
-    return NextResponse.json({ ...check, ...(resolvedAlbum ?? {}) }, { headers: noStore });
+    const cover = resolveTrackCover({
+      cover: known.cover,
+      navidromeCover: known.navidromeCover,
+      coverArt,
+    });
+    return NextResponse.json({ ...check, ...(resolvedAlbum ?? {}), ...(cover ? { cover } : {}) }, { headers: noStore });
   }
   const songId = await findFullSong(userId, trackId);
   const target = songId

@@ -1,5 +1,6 @@
 import { DEFAULT_ACCENT, isAccent, paintAccent } from "./accent";
 import { DEFAULT_EQUALIZER, type EqualizerOptions, readEqualizer } from "./equalizer";
+import { DEFAULT_THEME, isThemeMode, paintTheme, type ThemeMode } from "./theme";
 
 export const VISUALIZER_STYLES = ["bars", "wave", "dots"] as const;
 export type VisualizerStyle = (typeof VISUALIZER_STYLES)[number];
@@ -18,6 +19,7 @@ export type PlayerOptions = {
   visualizerStyle: VisualizerStyle;
   visualizerBounce: VisualizerBounce;
   visualizerBars: VisualizerBarCount;
+  theme: ThemeMode;
   accent: string;
   accentIcon: boolean;
   equalizer: EqualizerOptions;
@@ -36,6 +38,7 @@ export const DEFAULT_OPTIONS: PlayerOptions = {
   visualizerStyle: "bars",
   visualizerBounce: "lively",
   visualizerBars: 8,
+  theme: DEFAULT_THEME,
   accent: DEFAULT_ACCENT,
   accentIcon: false,
   equalizer: DEFAULT_EQUALIZER,
@@ -61,6 +64,7 @@ export function readOptions(raw: unknown): PlayerOptions {
     visualizerBars: (VISUALIZER_BAR_CHOICES as readonly unknown[]).includes(saved.visualizerBars)
       ? (saved.visualizerBars as VisualizerBarCount)
       : DEFAULT_OPTIONS.visualizerBars,
+    theme: isThemeMode(saved.theme) ? saved.theme : DEFAULT_OPTIONS.theme,
     accent: isAccent(saved.accent) ? saved.accent.toLowerCase() : DEFAULT_OPTIONS.accent,
     accentIcon: typeof saved.accentIcon === "boolean" ? saved.accentIcon : DEFAULT_OPTIONS.accentIcon,
     equalizer: readEqualizer(saved.equalizer),
@@ -68,6 +72,7 @@ export function readOptions(raw: unknown): PlayerOptions {
 }
 
 export const ACCENT_SCRIPT = `try{(${paintAccent.toString()})(JSON.parse(localStorage.getItem(${JSON.stringify(KEY)})||"null")?.accent,document.documentElement)}catch{}`;
+export const THEME_SCRIPT = `try{(${paintTheme.toString()})(JSON.parse(localStorage.getItem(${JSON.stringify(KEY)})||"null")?.theme,document.documentElement)}catch{}`;
 
 export function loadOptions(): PlayerOptions {
   try {

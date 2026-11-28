@@ -195,6 +195,7 @@ export type FullSongCheck = {
   songId?: string;
   album?: string;
   albumId?: string;
+  coverArt?: string;
 };
 
 function remember(userId: string, trackId: string, songId: string | null, now: number) {
@@ -299,7 +300,7 @@ export async function checkFullSong(userId: string, trackId: string, now = Date.
   const songId = search.match && isSongId(search.match.id) ? search.match.id : null;
   remember(userId, trackId, songId, now);
   if (songId) {
-    const { album, albumId } = search.match ?? {};
+    const { album, albumId, coverArt } = search.match ?? {};
     return {
       full: true,
       reason: "found",
@@ -307,6 +308,7 @@ export async function checkFullSong(userId: string, trackId: string, now = Date.
       songId,
       ...(typeof album === "string" ? { album } : {}),
       ...(typeof albumId === "string" ? { albumId } : {}),
+      ...(typeof coverArt === "string" && isSongId(coverArt) ? { coverArt } : {}),
     };
   }
   return {

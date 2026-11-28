@@ -13,6 +13,7 @@ import InviteForm from "./invite-form";
 import NowPlayingShare from "./now-playing-share";
 import PlayerSettings from "./player-settings";
 import PushSettings from "./push-settings";
+import ThemeSettings from "./theme-settings";
 
 export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ password?: string }> }) {
   const userId = await requireUserId();
@@ -45,6 +46,11 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
         <form action={togglePrivacy}>
           <button type="submit">{hidden ? "Make profile public" : "Make profile private"}</button>
         </form>
+      </section>
+
+      <section>
+        <h2>Theme</h2>
+        <ThemeSettings />
       </section>
 
       <section>
